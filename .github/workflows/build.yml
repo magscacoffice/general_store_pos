@@ -26,6 +26,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Create Android Platform Files
+        run: flutter create . --platforms=android
+
       - name: Fix minSdkVersion in build.gradle
         run: |
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
