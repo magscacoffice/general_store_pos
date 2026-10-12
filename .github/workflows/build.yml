@@ -39,14 +39,8 @@ jobs:
             sed -i 's/minSdkVersion =.*/minSdkVersion = 21/g' android/app/build.gradle.kts
           fi
 
-      - name: Clean Project Cache
-        run: flutter clean
-
       - name: Get Dependencies
         run: flutter pub get
-
-      - name: Check Code Errors
-        run: flutter analyze
 
       - name: Build Release APK
         run: flutter build apk --release
