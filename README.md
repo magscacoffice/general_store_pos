@@ -1,0 +1,1 @@
+# general_store_pos
