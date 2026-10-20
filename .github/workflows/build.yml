@@ -40,19 +40,24 @@ jobs:
             fi
           fi
 
-      - name: Update SDK Versions in Gradle Files
+      - name: Force Subprojects compileSdk to 36 in android/build.gradle
         run: |
-          GRADLE_KTS="android/app/build.gradle.kts"
-          if [ -f "$GRADLE_KTS" ]; then
-            sed -i 's/compileSdk =.*/compileSdk = 36/g' "$GRADLE_KTS"
-            sed -i 's/targetSdk =.*/targetSdk = 36/g' "$GRADLE_KTS"
-            sed -i 's/minSdk =.*/minSdk = 21/g' "$GRADLE_KTS"
-          fi
-          GRADLE_GROOVY="android/app/build.gradle"
-          if [ -f "$GRADLE_GROOVY" ]; then
-            sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' "$GRADLE_GROOVY"
-            sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' "$GRADLE_GROOVY"
-            sed -i 's/minSdkVersion.*/minSdkVersion 21/g' "$GRADLE_GROOVY"
+          GRADLE_FILE="android/build.gradle"
+          if [ -f "$GRADLE_FILE" ]; then
+            echo "" >> "$GRADLE_FILE"
+            echo "subprojects {" >> "$GRADLE_FILE"
+            echo "    afterEvaluate { project ->" >> "$GRADLE_FILE"
+            echo "        if (project.hasProperty('android')) {" >> "$GRADLE_FILE"
+            echo "            project.android {" >> "$GRADLE_FILE"
+            echo "                if (namespace == null) {" >> "$GRADLE_FILE"
+            echo "                    namespace project.group" >> "$GRADLE_FILE"
+            echo "                }" >> "$GRADLE_FILE"
+            echo "                compileSdkVersion 36" >> "$GRADLE_FILE"
+            echo "                targetSdkVersion 36" >> "$GRADLE_FILE"
+            echo "            }" >> "$GRADLE_FILE"
+            echo "        }" >> "$GRADLE_FILE"
+            echo "    }" >> "$GRADLE_FILE"
+            echo "}" >> "$GRADLE_FILE"
           fi
 
       - name: Get Dependencies
