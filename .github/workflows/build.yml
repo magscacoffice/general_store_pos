@@ -26,31 +26,20 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Android Platform Files & Add Camera Permission
+      - name: Install Android SDK 36 Platforms
         run: |
-          flutter create . --platforms=android
-          
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_PATH" ]; then
-            if ! grep -q "android.permission.CAMERA" "$MANIFEST_PATH"; then
-              sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="hardware.camera.any" android:required="false"/>' "$MANIFEST_PATH"
-            fi
-          fi
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;34.0.0"
 
-      - name: Install Android SDK 36 Platform
+      - name: Explicitly Set SDK Versions to 36 in Gradle Files
         run: |
-          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36"
-
-      - name: Force Update Gradle SDK Versions to 36
-        run: |
-          # build.gradle (Groovy) فکس کرنا
+          # build.gradle ፋይል فکس کرنا
           if [ -f "android/app/build.gradle" ]; then
             sed -i 's/minSdkVersion.*/minSdkVersion 21/g' android/app/build.gradle
             sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' android/app/build.gradle
             sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' android/app/build.gradle
           fi
 
-          # build.gradle.kts (Kotlin DSL) فکس کرنا
+          # build.gradle.kts ፋይል فکس کرنا
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i 's/minSdk =.*/minSdk = 21/g' android/app/build.gradle.kts
             sed -i 's/minSdkVersion =.*/minSdkVersion = 21/g' android/app/build.gradle.kts
