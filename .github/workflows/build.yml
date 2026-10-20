@@ -40,20 +40,56 @@ jobs:
             fi
           fi
 
-      - name: Get Dependencies (Download Plugins)
-        run: flutter pub get
-
-      - name: Force SDK 36 on ALL Packages and Sub-modules (Including flutter_blue_plus)
+      - name: Clean and Fix build.gradle.kts Explicitly
         run: |
-          # پراجیکٹ کے اپنے اور تمام تھرڈ پارٹی پلگ انز کے اندر جتنی بھی build.gradle یا build.gradle.kts فائلیں ہیں، ان سب میں SDK 36 زبردستی سیٹ کرنا
-          find . -name "build.gradle" -o -name "build.gradle.kts" | while read file; do
-            sed -i 's/compileSdkVersion\s*[0-9]*/compileSdkVersion 36/g' "$file"
-            sed -i 's/compileSdk\s*=\s*[0-9]*/compileSdk = 36/g' "$file"
-            sed -i 's/targetSdkVersion\s*[0-9]*/targetSdkVersion 36/g' "$file"
-            sed -i 's/targetSdk\s*=\s*[0-9]*/targetSdk = 36/g' "$file"
-            sed -i 's/minSdkVersion\s*[0-9]*/minSdkVersion 21/g' "$file"
-            sed -i 's/minSdk\s*=\s*[0-9]*/minSdk = 21/g' "$file"
-          done
+          # اگر build.gradle.kts موجود ہے تو اسے بالکل صاف کر کے صحیح SDK 36 اور minSdk 21 لکھنا
+          GRADLE_KTS="android/app/build.gradle.kts"
+          if [ -f "$GRADLE_KTS" ]; then
+            echo "Cleaning and rewriting build.gradle.kts..."
+            cat << 'EOF' > "$GRADLE_KTS"
+            plugins {
+                id("com.android.application")
+                id("kotlin-android")
+                id("dev.flutter.flutter-gradle-plugin")
+            }
+
+            android {
+                namespace = "com.example.general_store_pos"
+                compileSdk = 36
+                ndkVersion = flutter.ndkVersion
+
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_1_8
+                    targetCompatibility = JavaVersion.VERSION_1_8
+                }
+
+                kotlinOptions {
+                    jvmTarget = '1.8'
+                }
+
+                defaultConfig {
+                    applicationId = "com.example.general_store_pos"
+                    minSdk = 21
+                    targetSdk = 36
+                    versionCode = flutterVersionCode.toInt()
+                    versionName = flutterVersionName
+                }
+
+                 buildTypes {
+                    release {
+                        signingConfig = signingConfigs.getByName("debug")
+                    }
+                }
+            }
+
+            flutter {
+                source = "../.."
+            }
+            EOF
+          fi
+
+      - name: Get Dependencies
+        run: flutter pub get
 
       - name: Build Release APK
         run: flutter build apk --release
