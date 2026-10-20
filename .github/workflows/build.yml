@@ -26,10 +26,13 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Android Platform Files & Add Camera Permission
+      - name: Install Android SDK 36 Platform
+        run: |
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Create Android Platform Files & Camera Permissions
         run: |
           flutter create . --platforms=android
-          
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST_PATH" ]; then
             if ! grep -q "android.permission.CAMERA" "$MANIFEST_PATH"; then
@@ -37,25 +40,20 @@ jobs:
             fi
           fi
 
-      - name: Install Android SDK 36 Platform
-        run: |
-          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Update Gradle Properties and Build Script for SDK 36
-        run: |
-          # build.gradle فائل میں تمام جگہ compileSdk اور targetSdk 36 بنانا
-          find android/ -name "build.gradle" -exec sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' {} +
-          find android/ -name "build.gradle" -exec sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' {} +
-          find android/ -name "build.gradle" -exec sed -i 's/minSdkVersion.*/minSdkVersion 21/g' {} +
-
-          # build.gradle.kts فائل میں تمام جگہ compileSdk اور targetSdk 36 بنانا
-          find android/ -name "build.gradle.kts" -exec sed -i 's/compileSdk =.*/compileSdk = 36/g' {} +
-          find android/ -name "build.gradle.kts" -exec sed -i 's/targetSdk =.*/targetSdk = 36/g' {} +
-          find android/ -name "build.gradle.kts" -exec sed -i 's/minSdk =.*/minSdk = 21/g' {} +
-          find android/ -name "build.gradle.kts" -exec sed -i 's/minSdkVersion =.*/minSdkVersion = 21/g' {} +
-
-      - name: Get Dependencies
+      - name: Get Dependencies (Download Plugins)
         run: flutter pub get
+
+      - name: Force SDK 36 on ALL Packages and Sub-modules (Including flutter_blue_plus)
+        run: |
+          # پراجیکٹ کے اپنے اور تمام تھرڈ پارٹی پلگ انز کے اندر جتنی بھی build.gradle یا build.gradle.kts فائلیں ہیں، ان سب میں SDK 36 زبردستی سیٹ کرنا
+          find . -name "build.gradle" -o -name "build.gradle.kts" | while read file; do
+            sed -i 's/compileSdkVersion\s*[0-9]*/compileSdkVersion 36/g' "$file"
+            sed -i 's/compileSdk\s*=\s*[0-9]*/compileSdk = 36/g' "$file"
+            sed -i 's/targetSdkVersion\s*[0-9]*/targetSdkVersion 36/g' "$file"
+            sed -i 's/targetSdk\s*=\s*[0-9]*/targetSdk = 36/g' "$file"
+            sed -i 's/minSdkVersion\s*[0-9]*/minSdkVersion 21/g' "$file"
+            sed -i 's/minSdk\s*=\s*[0-9]*/minSdk = 21/g' "$file"
+          done
 
       - name: Build Release APK
         run: flutter build apk --release
