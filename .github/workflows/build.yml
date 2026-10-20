@@ -40,51 +40,19 @@ jobs:
             fi
           fi
 
-      - name: Clean and Fix build.gradle.kts Explicitly
+      - name: Update SDK Versions in Gradle Files
         run: |
           GRADLE_KTS="android/app/build.gradle.kts"
           if [ -f "$GRADLE_KTS" ]; then
-            echo "Cleaning and rewriting build.gradle.kts..."
-            cat << 'EOF' > "$GRADLE_KTS"
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
-}
-
-android {
-    namespace = "com.example.general_store_pos"
-    compileSdk = 36
-    ndkVersion = flutter.ndkVersion
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-
-    defaultConfig {
-        applicationId = "com.example.general_store_pos"
-        minSdk = 21
-        targetSdk = 36
-        versionCode = flutterVersionCode.toInt()
-        versionName = flutterVersionName
-    }
-
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-}
-
-flutter {
-    source = "../.."
-}
-EOF
+            sed -i 's/compileSdk =.*/compileSdk = 36/g' "$GRADLE_KTS"
+            sed -i 's/targetSdk =.*/targetSdk = 36/g' "$GRADLE_KTS"
+            sed -i 's/minSdk =.*/minSdk = 21/g' "$GRADLE_KTS"
+          fi
+          GRADLE_GROOVY="android/app/build.gradle"
+          if [ -f "$GRADLE_GROOVY" ]; then
+            sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' "$GRADLE_GROOVY"
+            sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' "$GRADLE_GROOVY"
+            sed -i 's/minSdkVersion.*/minSdkVersion 21/g' "$GRADLE_GROOVY"
           fi
 
       - name: Get Dependencies
