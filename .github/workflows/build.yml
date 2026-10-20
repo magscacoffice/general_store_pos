@@ -37,14 +37,19 @@ jobs:
             fi
           fi
 
-      - name: Fix minSdkVersion in build.gradle / build.gradle.kts
+      - name: Update compileSdk and minSdkVersion in Gradle
         run: |
+          # minSdk کو 21 اور compileSdk / targetSdk کو 34 کرنا تاکہ بلیو ٹوتھ اور سکینر کا ایرر نہ آئے
           if [ -f "android/app/build.gradle" ]; then
             sed -i 's/minSdkVersion.*/minSdkVersion 21/g' android/app/build.gradle
+            sed -i 's/targetSdkVersion.*/targetSdkVersion 34/g' android/app/build.gradle
+            sed -i 's/compileSdkVersion.*/compileSdkVersion 34/g' android/app/build.gradle
           fi
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i 's/minSdk =.*/minSdk = 21/g' android/app/build.gradle.kts
             sed -i 's/minSdkVersion =.*/minSdkVersion = 21/g' android/app/build.gradle.kts
+            sed -i 's/targetSdk =.*/targetSdk = 34/g' android/app/build.gradle.kts
+            sed -i 's/compileSdk =.*/compileSdk = 34/g' android/app/build.gradle.kts
           fi
 
       - name: Get Dependencies
