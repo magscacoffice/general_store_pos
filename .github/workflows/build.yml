@@ -37,19 +37,22 @@ jobs:
             fi
           fi
 
-      - name: Update compileSdk and minSdkVersion in Gradle
+      - name: Install Android SDK 36 Platform
         run: |
-          # minSdk کو 21 اور compileSdk / targetSdk کو 34 کرنا تاکہ بلیو ٹوتھ اور سکینر کا ایرر نہ آئے
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36"
+
+      - name: Update SDK versions to 36 in Gradle
+        run: |
           if [ -f "android/app/build.gradle" ]; then
             sed -i 's/minSdkVersion.*/minSdkVersion 21/g' android/app/build.gradle
-            sed -i 's/targetSdkVersion.*/targetSdkVersion 34/g' android/app/build.gradle
-            sed -i 's/compileSdkVersion.*/compileSdkVersion 34/g' android/app/build.gradle
+            sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' android/app/build.gradle
           fi
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i 's/minSdk =.*/minSdk = 21/g' android/app/build.gradle.kts
             sed -i 's/minSdkVersion =.*/minSdkVersion = 21/g' android/app/build.gradle.kts
-            sed -i 's/targetSdk =.*/targetSdk = 34/g' android/app/build.gradle.kts
-            sed -i 's/compileSdk =.*/compileSdk = 34/g' android/app/build.gradle.kts
+            sed -i 's/targetSdk =.*/targetSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/compileSdk =.*/compileSdk = 36/g' android/app/build.gradle.kts
           fi
 
       - name: Get Dependencies
