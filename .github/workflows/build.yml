@@ -30,58 +30,20 @@ jobs:
         run: |
           echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Create Android Platform Files & Camera Permissions
+      - name: Update compileSdk and targetSdk to 36 in Existing Gradle Files
         run: |
-          flutter create . --platforms=android
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_PATH" ]; then
-            if ! grep -q "android.permission.CAMERA" "$MANIFEST_PATH"; then
-              sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="hardware.camera.any" android:required="false"/>' "$MANIFEST_PATH"
-            fi
+          GRADLE_KTS="android/app/build.gradle.kts"
+          if [ -f "$GRADLE_KTS" ]; then
+            sed -i 's/compileSdk =.*/compileSdk = 36/g' "$GRADLE_KTS"
+            sed -i 's/targetSdk =.*/targetSdk = 36/g' "$GRADLE_KTS"
+            sed -i 's/minSdk =.*/minSdk = 21/g' "$GRADLE_KTS"
           fi
-
-      - name: Write Clean build.gradle.kts without Sed Corruption
-        run: |
-          cat << 'EOF' > android/app/build.gradle.kts
-          plugins {
-              id("com.android.application")
-              id("kotlin-android")
-              id("dev.flutter.flutter-gradle-plugin")
-          }
-
-          android {
-              namespace = "com.example.general_store_pos"
-              compileSdk = 36
-              ndkVersion = flutter.ndkVersion
-
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_1_8
-                  targetCompatibility = JavaVersion.VERSION_1_8
-              }
-
-              kotlinOptions {
-                  jvmTarget = "1.8"
-              }
-
-              defaultConfig {
-                  applicationId = "com.example.general_store_pos"
-                  minSdk = 21
-                  targetSdk = 36
-                  versionCode = flutterVersionCode.toInt()
-                  versionName = flutterVersionName
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.getByName("debug")
-                  }
-              }
-          }
-
-          flutter {
-              source = "../.."
-          }
-          EOF
+          GRADLE_GROOVY="android/app/build.gradle"
+          if [ -f "$GRADLE_GROOVY" ]; then
+            sed -i 's/compileSdkVersion.*/compileSdkVersion 36/g' "$GRADLE_GROOVY"
+            sed -i 's/targetSdkVersion.*/targetSdkVersion 36/g' "$GRADLE_GROOVY"
+            sed -i 's/minSdkVersion.*/minSdkVersion 21/g' "$GRADLE_GROOVY"
+          fi
 
       - name: Get Dependencies
         run: flutter pub get
