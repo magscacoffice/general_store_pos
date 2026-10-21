@@ -162,6 +162,7 @@ class _SalesScreenState extends State<SalesScreen> {
 }
 
 // Separate Scanner Widget with proper controller initialization to fix black screen
+// Separate Scanner Widget with explicit runtime permission check
 class DedicatedScannerScreen extends StatefulWidget {
   const DedicatedScannerScreen({super.key});
 
@@ -171,10 +172,13 @@ class DedicatedScannerScreen extends StatefulWidget {
 
 class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
   late MobileScannerController controller;
+  bool _hasPermission = false;
+  bool _isCheckingPermission = true;
 
   @override
   void initState() {
-    super.initState(); // Yahan 'initState' aayega
+    super.initState();
+    _checkCameraPermission();
     controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
@@ -182,11 +186,103 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
     );
   }
 
+  Future<void> _checkCameraPermission() async {
+    final status = await Permission.camera.request();
+    setState(() {
+      _hasPermission = status.isGranted;
+      _isCheckingPermission = false;
+    });
+  }
+
   @override
   void dispose() {
     controller.dispose();
     super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isCheckingPermission) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Scan Item Barcode'),
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_hasPermission) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Scan Item Barcode'),
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.camera_alt, size: 60, color: Colors.red),
+                const SizedBox(height: 15),
+                const Text(
+                  'Camera permission zaroori hai barcode scan karne ke liye!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _checkPermissionAndOpenSettings,
+                  child: const Text('Permission Deni Hogi'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan Item Barcode'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: MobileScanner(
+        controller: controller,
+        errorBuilder: (context, error, child) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                'Camera Error: ${error.errorCode}\n\nKripya phone ki settings mein ja kar camera permission allow karein.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
+            ),
+          );
+        },
+        onDetect: (BarcodeCapture capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            final String? code = barcode.rawValue;
+            if (code != null && code.isNotEmpty) {
+              Navigator.pop(context, code);
+              break;
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _checkPermissionAndOpenSettings() async {
+    await openAppSettings();
+  }
+}
   
   // Baqi code waisa hi rahega...
 
