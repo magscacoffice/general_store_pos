@@ -191,4 +191,4 @@ class ScannerScreen extends StatelessWidget {
       ),
     );
   }
-}git add .
+}
