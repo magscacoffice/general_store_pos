@@ -13,30 +13,16 @@ class _SalesScreenState extends State<SalesScreen> {
   final List<Map<String, dynamic>> _cart = [];
   double _totalAmount = 0.0;
 
-  // Barcode scan karke product ko cart mein add karna
+  // Barcode scan karne ke liye dedicated screen par jana
   void _scanAndAddToCart() async {
     final scannedCode = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Item Barcode Scan Karein')),
-          body: MobileScanner(
-            onDetect: (BarcodeCapture capture) {
-              final barcodes = capture.barcodes;
-              for (final barcode in barcodes) {
-                final code = barcode.rawValue;
-                if (code != null && code.isNotEmpty) {
-                  Navigator.pop(context, code);
-                  break;
-                }
-              }
-            },
-          ),
-        ),
+        builder: (context) => const DedicatedScannerScreen(),
       ),
     );
 
-    if (scannedCode != null) {
+    if (scannedCode != null && scannedCode.isNotEmpty) {
       // Database se product search karein
       final products = await DBHelper.getProducts();
       final matchingProduct = products.firstWhere(
@@ -46,7 +32,6 @@ class _SalesScreenState extends State<SalesScreen> {
 
       if (matchingProduct.isNotEmpty) {
         setState(() {
-          // Check karein kya item pehle se cart mein hai
           final index = _cart.indexWhere((item) => item['barcode'] == scannedCode);
           if (index >= 0) {
             _cart[index]['quantity'] += 1;
@@ -78,7 +63,7 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
-  // Sale complete karke database mein save karna
+  // Checkout karke database mein sale save karna
   void _completeCheckout() async {
     if (_cart.isEmpty) return;
 
@@ -171,6 +156,66 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Separate Scanner Widget with proper controller initialization to fix black screen
+class DedicatedScannerScreen extends StatefulWidget {
+  const DedicatedScannerScreen({super.key});
+
+  @override
+  State<DedicatedScannerScreen> createState() => _DedicatedScannerScreenState();
+}
+
+class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
+  late MobileScannerController controller;
+
+  @override
+  void initState() {
+    super.init();
+    controller = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan Item Barcode'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: MobileScanner(
+        controller: controller,
+        errorBuilder: (context, error, child) {
+          return Center(
+            child: Text(
+              'Camera Error: ${error.errorCode}',
+              style: const TextStyle(color: Colors.red, fontSize: 16),
+            ),
+          );
+        },
+        onDetect: (BarcodeCapture capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            final String? code = barcode.rawValue;
+            if (code != null && code.isNotEmpty) {
+              Navigator.pop(context, code);
+              break;
+            }
+          }
+        },
       ),
     );
   }
