@@ -30,26 +30,13 @@ jobs:
         run: |
           echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Inject Global Subprojects SDK 36 Override into android/build.gradle
+      - name: Skip and Remove flutter_blue_plus from pubspec.yaml
         run: |
-          GRADLE_FILE="android/build.gradle"
-          if [ -f "$GRADLE_FILE" ]; then
-            echo "" >> "$GRADLE_FILE"
-            echo "subprojects {" >> "$GRADLE_FILE"
-            echo "    afterEvaluate { project ->" >> "$GRADLE_FILE"
-            echo "        if (project.hasProperty('android')) {" >> "$GRADLE_FILE"
-            echo "            project.android {" >> "$GRADLE_FILE"
-            echo "                compileSdkVersion 36" >> "$GRADLE_FILE"
-            echo "                if (defaultConfig.targetSdkVersion == null || defaultConfig.targetSdkVersion.apiLevel < 36) {" >> "$GRADLE_FILE"
-            echo "                    targetSdkVersion 36" >> "$GRADLE_FILE"
-            echo "                }" >> "$GRADLE_FILE"
-            echo "            }" >> "$GRADLE_FILE"
-            echo "        }" >> "$GRADLE_FILE"
-            echo "    }" >> "$GRADLE_FILE"
-            echo "}" >> "$GRADLE_FILE"
+          if [ -f "pubspec.yaml" ]; then
+            sed -i '/flutter_blue_plus/d' pubspec.yaml
           fi
 
-      - name: Update App-level Gradle SDK Versions
+      - name: Update Gradle SDK Versions to 36
         run: |
           GRADLE_KTS="android/app/build.gradle.kts"
           if [ -f "$GRADLE_KTS" ]; then
