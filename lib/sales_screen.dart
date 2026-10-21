@@ -174,7 +174,7 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
 
   @override
   void initState() {
-    super.init();
+    super.initState(); // Yahan 'initState' aayega
     controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
@@ -187,6 +187,8 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
     controller.dispose();
     super.dispose();
   }
+  
+  // Baqi code waisa hi rahega...
 
   @override
   Widget build(BuildContext context) {
