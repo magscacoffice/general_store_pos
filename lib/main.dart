@@ -18,21 +18,22 @@ class GeneralStoreApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const DashboardScreen(), // پہلے ڈیش بورڈ کھلے گا
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+// 1. ڈیش بورڈ اسکرین
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _DashboardScreenState extends State<DashboardScreen> {
+  // بارکوڈ اسکین کرنے کا فنکشن
   Future<void> _openScanner() async {
-    // 1. Camera permission check aur request
     var status = await Permission.camera.status;
     if (!status.isGranted) {
       status = await Permission.camera.request();
@@ -41,42 +42,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     if (status.isGranted) {
-      // 2. Permission milne par camera scanner open karein
       final scannedCode = await Navigator.push<String>(
         context,
         MaterialPageRoute(
-          builder: (context) => Scaffold(
-            appBar: AppBar(
-              title: const Text('Scan Barcode / QR Code'),
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            body: MobileScanner(
-              onDetect: (BarcodeCapture capture) {
-                final List<Barcode> barcodes = capture.barcodes;
-                for (final barcode in barcodes) {
-                  final String? code = barcode.rawValue;
-                  if (code != null && code.isNotEmpty) {
-                    Navigator.pop(context, code);
-                    break;
-                  }
-                }
-              },
-            ),
-          ),
+          builder: (context) => const ScannerScreen(),
         ),
       );
 
       if (scannedCode != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scanned Code: $scannedCode')),
+          SnackBar(content: Text('اسکین شدہ کوڈ: $scannedCode')),
         );
       }
     } else {
-      // 3. Permission na milne par alert
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Camera permission zaroori hai barcode scan karne ke liye!'),
+          content: Text('بارکوڈ اسکین کرنے کے لیے کیمرے کی اجازت ضروری ہے!'),
         ),
       );
     }
@@ -86,26 +67,64 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Khan Baba General Store'),
+        title: const Text('خان بابا جنرل اسٹور'),
         centerTitle: true,
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.store, size: 80, color: Colors.blue),
             const SizedBox(height: 20),
+            const Icon(Icons.storefront, size: 80, color: Colors.blue),
+            const SizedBox(height: 10),
             const Text(
-              'Welcome to Khan Baba General Store',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              'Khan Baba General Store POS',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              onPressed: _openScanner,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Scan Barcode / QR Code'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            const SizedBox(height: 40),
+
+            // ڈیش بورڈ کے مختلف کارڈز / آپشنز
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 15,
+                mainAxisSpacing: 15,
+                children: [
+                  _buildDashboardCard(
+                    icon: Icons.qr_code_scanner,
+                    title: 'نیو سیل / اسکینر',
+                    color: Colors.green,
+                    onTap: _openScanner, // صرف بٹن دبانے پر اسکینر کھلے گا
+                  ),
+                  _buildDashboardCard(
+                    icon: Icons.inventory_2,
+                    title: 'اسٹاک / انوینٹری',
+                    color: Colors.orange,
+                    onTap: () {
+                      // انوینٹری کا کوڈ یہاں آئے گا
+                    },
+                  ),
+                  _buildDashboardCard(
+                    icon: Icons.receipt_long,
+                    title: 'سیل ہسٹری',
+                    color: Colors.purple,
+                    onTap: () {
+                      // ہسٹری کا کوڈ یہاں آئے گا
+                    },
+                  ),
+                  _buildDashboardCard(
+                    icon: Icons.settings,
+                    title: 'سیٹنگز',
+                    color: Colors.blueGrey,
+                    onTap: () {
+                      // سیٹنگز کا کوڈ یہاں آئے گا
+                    },
+                  ),
+                ],
               ),
             ),
           ],
@@ -113,4 +132,63 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildDashboardCard({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 45, color: color),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+// 2. الگ اسکینر اسکرین (جو صرف نیو سیل/اسکینر بٹن کلک کرنے پر ہی کھلے گی)
+class ScannerScreen extends StatelessWidget {
+  const ScannerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('بارکوڈ اسکین کریں'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+      body: MobileScanner(
+        controller: MobileScannerController(
+          detectionSpeed: DetectionSpeed.normal,
+          facing: CameraFacing.back,
+        ),
+        onDetect: (BarcodeCapture capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            final String? code = barcode.rawValue;
+            if (code != null && code.isNotEmpty) {
+              Navigator.pop(context, code);
+              break;
+            }
+          }
+        },
+      ),
+    );
+  }
+}git add .
