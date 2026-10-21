@@ -51,4 +51,15 @@ class DBHelper {
     final db = await database;
     return await db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
+
+  // Sales Operations (Yahan naye functions shamil kiye gaye hain)
+  static Future<int> insertSale(Map<String, dynamic> sale) async {
+    final db = await database;
+    return await db.insert('sales', sale);
+  }
+
+  static Future<List<Map<String, dynamic>>> getSales() async {
+    final db = await database;
+    return await db.query('sales', orderBy: 'id DESC');
+  }
 }

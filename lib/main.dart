@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'inventory_screen.dart';
+import 'sales_screen.dart';
+import 'history_screen.dart';
 
 void main() {
   runApp(const GeneralStoreApp());
@@ -99,19 +101,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.qr_code_scanner,
                     title: 'نیو سیل / اسکینر',
                     color: Colors.green,
-                    onTap: _openScanner, // صرف بٹن دبانے پر اسکینر کھلے گا
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SalesScreen()),
+                      );
+                    },
                   ),
                   _buildDashboardCard(
                     icon: Icons.inventory_2,
                     title: 'اسٹاک / انوینٹری',
                     color: Colors.orange,
                     onTap: () {
-                      // انوینٹری اسکرین پر جانے کے لیے نیविगेशन
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => const InventoryScreen(),
-                        ),
+                        MaterialPageRoute(builder: (context) => const InventoryScreen()),
                       );
                     },
                   ),
@@ -120,7 +124,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: 'سیل ہسٹری',
                     color: Colors.purple,
                     onTap: () {
-                      // ہسٹری کا کوڈ یہاں آئے گا
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const HistoryScreen()),
+                      );
                     },
                   ),
                   _buildDashboardCard(
@@ -168,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// 2. الگ اسکینر اسکرین (جو صرف نیو سیل/اسکینر بٹن کلک کرنے پر ہی کھلے گی)
+// 2. الگ اسکینر اسکرین (جو ضرورت پڑنے پر کھلے گی)
 class ScannerScreen extends StatelessWidget {
   const ScannerScreen({super.key});
 
