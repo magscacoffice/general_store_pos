@@ -30,7 +30,17 @@ jobs:
         run: |
           echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Update compileSdk and targetSdk to 36 in Existing Gradle Files
+      - name: Create Android Platform Files & Camera Permissions
+        run: |
+          flutter create . --platforms=android
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            if ! grep -q "android.permission.CAMERA" "$MANIFEST_PATH"; then
+              sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-feature android:name="hardware.camera.any" android:required="false"/>' "$MANIFEST_PATH"
+            fi
+          fi
+
+      - name: Update SDK Versions in Gradle Files
         run: |
           GRADLE_KTS="android/app/build.gradle.kts"
           if [ -f "$GRADLE_KTS" ]; then
