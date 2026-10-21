@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'inventory_screen.dart';
 
 void main() {
   runApp(const GeneralStoreApp());
@@ -105,7 +106,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: 'اسٹاک / انوینٹری',
                     color: Colors.orange,
                     onTap: () {
-                      // انوینٹری کا کوڈ یہاں آئے گا
+                      // انوینٹری اسکرین پر جانے کے لیے نیविगेशन
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const InventoryScreen(),
+                        ),
+                      );
                     },
                   ),
                   _buildDashboardCard(
