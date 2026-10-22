@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'db_helper.dart';
 
 class SalesScreen extends StatefulWidget {
@@ -161,7 +162,6 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 }
 
-// Separate Scanner Widget with proper controller initialization to fix black screen
 // Separate Scanner Widget with explicit runtime permission check
 class DedicatedScannerScreen extends StatefulWidget {
   const DedicatedScannerScreen({super.key});
@@ -235,7 +235,9 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: _checkPermissionAndOpenSettings,
+                  onPressed: () async {
+                    await openAppSettings();
+                  },
                   child: const Text('Permission Deni Hogi'),
                 ),
               ],
@@ -262,45 +264,6 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.red, fontSize: 16),
               ),
-            ),
-          );
-        },
-        onDetect: (BarcodeCapture capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          for (final barcode in barcodes) {
-            final String? code = barcode.rawValue;
-            if (code != null && code.isNotEmpty) {
-              Navigator.pop(context, code);
-              break;
-            }
-          }
-        },
-      ),
-    );
-  }
-
-  void _checkPermissionAndOpenSettings() async {
-    await openAppSettings();
-  }
-}
-  
-  // Baqi code waisa hi rahega...
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Item Barcode'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: MobileScanner(
-        controller: controller,
-        errorBuilder: (context, error, child) {
-          return Center(
-            child: Text(
-              'Camera Error: ${error.errorCode}',
-              style: const TextStyle(color: Colors.red, fontSize: 16),
             ),
           );
         },
