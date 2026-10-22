@@ -1,10 +1,12 @@
-import 'party_screen.dart';
+import 'backup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'inventory_screen.dart';
 import 'sales_screen.dart';
 import 'history_screen.dart';
+import 'party_screen.dart';
+import 'expense_screen.dart';
 
 void main() {
   runApp(const GeneralStoreApp());
@@ -22,12 +24,11 @@ class GeneralStoreApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const DashboardScreen(), // پہلے ڈیش بورڈ کھلے گا
+      home: const DashboardScreen(),
     );
   }
 }
 
-// 1. ڈیش بورڈ اسکرین
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -36,7 +37,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // بارکوڈ اسکین کرنے کا فنکشن
   Future<void> _openScanner() async {
     var status = await Permission.camera.status;
     if (!status.isGranted) {
@@ -48,9 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (status.isGranted) {
       final scannedCode = await Navigator.push<String>(
         context,
-        MaterialPageRoute(
-          builder: (context) => const ScannerScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const ScannerScreen()),
       );
 
       if (scannedCode != null && mounted) {
@@ -60,9 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('بارکوڈ اسکین کرنے کے لیے کیمرے کی اجازت ضروری ہے!'),
-        ),
+        const SnackBar(content: Text('بارکوڈ اسکین کرنے کے لیے کیمرے کی اجازت ضروری ہے!')),
       );
     }
   }
@@ -81,68 +77,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 20),
-            const Icon(Icons.storefront, size: 80, color: Colors.blue),
             const SizedBox(height: 10),
+            const Icon(Icons.storefront, size: 70, color: Colors.blue),
+            const SizedBox(height: 5),
             const Text(
               'Khan Baba General Store POS',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 40),
-
-            // ڈیش بورڈ کے مختلف کارڈز / آپشنز
+            const SizedBox(height: 20),
             Expanded(
               child: GridView.count(
                 crossAxisCount: 2,
-                crossAxisSpacing: 15,
-                mainAxisSpacing: 15,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 children: [
-                  _buildDashboardCard(
+                  _buildCard(
+  icon: Icons.backup,
+  title: 'بیک اپ اور ریسٹور',
+  color: Colors.teal,
+  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
+),
+                  _buildCard(
                     icon: Icons.qr_code_scanner,
                     title: 'نیو سیل / اسکینر',
                     color: Colors.green,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SalesScreen()),
-                      );
-                    },
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesScreen())),
                   ),
-                  _buildDashboardCard(
+                  _buildCard(
                     icon: Icons.inventory_2,
                     title: 'اسٹاک / انوینٹری',
                     color: Colors.orange,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const InventoryScreen()),
-                      );
-                    },
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())),
                   ),
-                  _buildDashboardCard(
+                  _buildCard(
                     icon: Icons.receipt_long,
                     title: 'سیل ہسٹری',
                     color: Colors.purple,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const HistoryScreen()),
-                      );
-                    },
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
                   ),
-                  _buildDashboardCard(
+                  _buildCard(
                     icon: Icons.people,
-                    title: 'پارٹی / کھاتہ',
-                    color: Colors.redAccent,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PartyScreen(type: 'customer'),
-                        ),
-                      );
-                    },
+                    title: 'کسٹمرز (گراہک)',
+                    color: Colors.amber[800]!,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PartyScreen(type: 'customer'))),
+                  ),
+                  _buildCard(
+                    icon: Icons.local_shipping,
+                    title: 'سپلائرز (سماان والے)',
+                    color: Colors.indigo,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PartyScreen(type: 'supplier'))),
+                  ),
+                  _buildCard(
+                    icon: Icons.money_off,
+                    title: 'روزمرہ اخراجات',
+                    color: Colors.red,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseScreen())),
                   ),
                 ],
               ),
@@ -153,12 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildDashboardCard({
-    required IconData icon,
-    required String title,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildCard({required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -168,12 +153,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 45, color: color),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            Icon(icon, size: 40, color: color),
+            const SizedBox(height: 10),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -181,27 +163,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// 2. الگ اسکینر اسکرین (جو ضرورت پڑنے پر کھلے گی)
 class ScannerScreen extends StatelessWidget {
   const ScannerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('بارکوڈ اسکین کریں'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('بارکوڈ اسکین کریں'), backgroundColor: Colors.blue, foregroundColor: Colors.white),
       body: MobileScanner(
-        controller: MobileScannerController(
-          detectionSpeed: DetectionSpeed.normal,
-          facing: CameraFacing.back,
-        ),
-        onDetect: (BarcodeCapture capture) {
-          final List<Barcode> barcodes = capture.barcodes;
+        onDetect: (capture) {
+          final barcodes = capture.barcodes;
           for (final barcode in barcodes) {
-            final String? code = barcode.rawValue;
+            final code = barcode.rawValue;
             if (code != null && code.isNotEmpty) {
               Navigator.pop(context, code);
               break;

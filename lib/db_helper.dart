@@ -14,9 +14,8 @@ class DBHelper {
     String path = join(await getDatabasesPath(), 'khan_baba_pos.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
-        // Products Table
         await db.execute('''
           CREATE TABLE products(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +26,6 @@ class DBHelper {
           )
         ''');
 
-        // Sales Table
         await db.execute('''
           CREATE TABLE sales(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +34,6 @@ class DBHelper {
           )
         ''');
 
-        // Parties (Customer / Supplier) Table
         await db.execute('''
           CREATE TABLE parties(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +43,27 @@ class DBHelper {
             balance REAL DEFAULT 0.0
           )
         ''');
+
+        await db.execute('''
+          CREATE TABLE expenses(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            amount REAL NOT NULL,
+            date TEXT NOT NULL
+          )
+        ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS expenses(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              amount REAL NOT NULL,
+              date TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
@@ -77,7 +95,7 @@ class DBHelper {
     return await db.query('sales', orderBy: 'id DESC');
   }
 
-  // Party (Customer/Supplier) Operations
+  // Party Operations (Customers & Suppliers)
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
     return await db.insert('parties', party);
@@ -86,5 +104,21 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
     return await db.query('parties', where: 'type = ?', whereArgs: [type], orderBy: 'id DESC');
+  }
+
+  static Future<int> deleteParty(int id) async {
+    final db = await database;
+    return await db.delete('parties', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Expense Operations (Kharcha)
+  static Future<int> insertExpense(Map<String, dynamic> expense) async {
+    final db = await database;
+    return await db.insert('expenses', expense);
+  }
+
+  static Future<List<Map<String, dynamic>>> getExpenses() async {
+    final db = await database;
+    return await db.query('expenses', orderBy: 'id DESC');
   }
 }

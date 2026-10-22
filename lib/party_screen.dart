@@ -32,11 +32,11 @@ class _PartyScreenState extends State<PartyScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Naya ${widget.type == 'customer' ? 'Customer' : 'Supplier'} Add Karein'),
+        title: Text(widget.type == 'customer' ? 'Naya Customer Add Karein' : 'Naya Supplier Add Karein'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Naam')),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Naam *')),
             TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone Number')),
           ],
         ),
@@ -46,8 +46,8 @@ class _PartyScreenState extends State<PartyScreen> {
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
                 await DBHelper.insertParty({
-                  'name': nameController.text,
-                  'phone': phoneController.text,
+                  'name': nameController.text.trim(),
+                  'phone': phoneController.text.trim(),
                   'type': widget.type,
                   'balance': 0.0,
                 });
@@ -64,28 +64,48 @@ class _PartyScreenState extends State<PartyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    bool isCustomer = widget.type == 'customer';
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.type == 'customer' ? 'Customers Khata' : 'Suppliers Khata'),
-        backgroundColor: Colors.orange,
+        title: Text(isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)'),
+        backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
         foregroundColor: Colors.white,
       ),
-      body: ListView.builder(
-        itemCount: _parties.length,
-        itemBuilder: (context, index) {
-          final party = _parties[index];
-          return Card(
-            child: ListTile(
-              title: Text(party['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Phone: ${party['phone']}'),
-              trailing: Text('Rs. ${party['balance']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+      body: _parties.isEmpty
+          ? Center(child: Text(isCustomer ? 'Koi customer mojood nahi hai.' : 'Koi supplier mojood nahi hai.'))
+          : ListView.builder(
+              itemCount: _parties.length,
+              itemBuilder: (context, index) {
+                final party = _parties[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
+                      child: Text(party['name'][0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                    ),
+                    title: Text(party['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Phone: ${party['phone']}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Rs. ${party['balance']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.grey),
+                          onPressed: () async {
+                            await DBHelper.deleteParty(party['id']);
+                            _loadParties();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddPartyDialog,
-        backgroundColor: Colors.orange,
+        backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
         child: const Icon(Icons.person_add),
       ),
     );
