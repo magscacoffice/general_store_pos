@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'db_helper.dart';
+import 'printer_screen.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
@@ -64,7 +65,7 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
-  // Checkout karke database mein sale save karna
+  // Checkout karke database mein sale save karna aur Printer Screen kholna
   void _completeCheckout() async {
     if (_cart.isEmpty) return;
 
@@ -72,6 +73,9 @@ class _SalesScreenState extends State<SalesScreen> {
       'total_amount': _totalAmount,
       'date': DateTime.now().toString().substring(0, 16),
     });
+
+    final printedCart = List<Map<String, dynamic>>.from(_cart);
+    final finalTotal = _totalAmount;
 
     setState(() {
       _cart.clear();
@@ -81,6 +85,17 @@ class _SalesScreenState extends State<SalesScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sale kamyabi ke sath save ho gayi!')),
+      );
+
+      // Print Screen par direct move karna
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PrinterScreen(
+            cartItems: printedCart,
+            totalAmount: finalTotal,
+          ),
+        ),
       );
     }
   }
