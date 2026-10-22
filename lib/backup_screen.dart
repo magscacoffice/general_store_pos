@@ -15,11 +15,11 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   bool _isExporting = false;
 
-  // Local Backup Export (Download folder / Selected location mein save karna)
+  // Local Backup Export
   Future<void> _exportLocalBackup() async {
     setState(() => _isExporting = true);
     try {
-      final dbPath = join(await getDatabasesPath(), 'khan_baba_pos.db');
+      final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {
@@ -31,7 +31,6 @@ class _BackupScreenState extends State<BackupScreen> {
         return;
       }
 
-      // Folder select karne ke liye file picker
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
 
       if (selectedDirectory != null) {
@@ -58,7 +57,7 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
-  // Local Backup Restore (Purana backup file select karke data wapas lana)
+  // Local Backup Restore
   Future<void> _restoreLocalBackup() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles();
@@ -75,9 +74,7 @@ class _BackupScreenState extends State<BackupScreen> {
           return;
         }
 
-        final dbPath = join(await getDatabasesPath(), 'khan_baba_pos.db');
-
-        // Existing db file ko replace karna
+        final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
         await selectedFile.copy(dbPath);
 
         if (mounted) {
@@ -148,28 +145,6 @@ class _BackupScreenState extends State<BackupScreen> {
               onPressed: _restoreLocalBackup,
               icon: const Icon(Icons.upload),
               label: const Text('Local Backup Restore Karein (Import)', style: TextStyle(fontSize: 16)),
-            ),
-            const Divider(height: 40),
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Icon(Icons.cloud_upload, size: 50, color: Colors.blue),
-                    SizedBox(height: 10),
-                    Text(
-                      'Google Drive Backup',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Google Drive integration ke liye Google Cloud Console se API Key aur OAuth Config configure karna zaroori hota hai.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
