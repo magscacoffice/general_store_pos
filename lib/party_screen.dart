@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'db_helper.dart';
 
 class PartyScreen extends StatefulWidget {
@@ -31,33 +32,68 @@ class _PartyScreenState extends State<PartyScreen> {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(widget.type == 'customer' ? 'Naya Customer Add Karein' : 'Naya Supplier Add Karein'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Naam *')),
-            TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone Number')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isNotEmpty) {
-                await DBHelper.insertParty({
-                  'name': nameController.text.trim(),
-                  'phone': phoneController.text.trim(),
-                  'type': widget.type,
-                  'balance': 0.0,
-                });
-                _loadParties();
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(widget.type == 'customer' ? 'Naya Customer Add Karein' : 'Naya Supplier Add Karein'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Naam *'),
+                ),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone Number'),
+                ),
+                const SizedBox(height: 15),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    var status = await Permission.contacts.request();
+                    if (status.isGranted) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Contacts Access Granted. Kripya details fill karein ya list se chunein.')),
+                        );
+                      }
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Contacts access permission zaroori hai!')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.contacts),
+                  label: const Text('Phone Contacts Se Chunein'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.isNotEmpty) {
+                    await DBHelper.insertParty({
+                      'name': nameController.text.trim(),
+                      'phone': phoneController.text.trim(),
+                      'type': widget.type,
+                      'balance': 0.0,
+                    });
+                    _loadParties();
+                    if (mounted) Navigator.pop(dialogContext);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -82,7 +118,7 @@ class _PartyScreenState extends State<PartyScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
-                      child: Text(party['name'][0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                      child: Text(party['name'].isNotEmpty ? party['name'][0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
                     ),
                     title: Text(party['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Phone: ${party['phone']}'),

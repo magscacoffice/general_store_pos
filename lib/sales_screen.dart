@@ -162,7 +162,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 }
 
-// Separate Scanner Widget with explicit runtime permission check
+// Separate Scanner Widget with stable controller initialization
 class DedicatedScannerScreen extends StatefulWidget {
   const DedicatedScannerScreen({super.key});
 
@@ -171,49 +171,47 @@ class DedicatedScannerScreen extends StatefulWidget {
 }
 
 class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
-  late MobileScannerController controller;
-  bool _hasPermission = false;
-  bool _isCheckingPermission = true;
+  MobileScannerController? controller;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _checkCameraPermission();
-    controller = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
-      torchEnabled: false,
-    );
+    _initScanner();
   }
 
-  Future<void> _checkCameraPermission() async {
+  Future<void> _initScanner() async {
     final status = await Permission.camera.request();
-    setState(() {
-      _hasPermission = status.isGranted;
-      _isCheckingPermission = false;
-    });
+    if (status.isGranted) {
+      controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+        autoStart: true,
+      );
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    controller.dispose();
+    controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isCheckingPermission) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Scan Item Barcode'),
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (!_hasPermission) {
+    if (!_isInitialized || controller == null) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Scan Item Barcode'),
@@ -229,16 +227,21 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
                 const Icon(Icons.camera_alt, size: 60, color: Colors.red),
                 const SizedBox(height: 15),
                 const Text(
-                  'Camera permission zaroori hai barcode scan karne ke liye!',
+                  'Camera permission zaroori hai ya camera load ho raha hai!',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () async {
-                    await openAppSettings();
+                    var status = await Permission.camera.request();
+                    if (status.isGranted) {
+                      _initScanner();
+                    } else {
+                      await openAppSettings();
+                    }
                   },
-                  child: const Text('Permission Deni Hogi'),
+                  child: const Text('Permission Check Karein'),
                 ),
               ],
             ),
@@ -259,10 +262,22 @@ class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
-              child: Text(
-                'Camera Error: ${error.errorCode}\n\nKripya phone ki settings mein ja kar camera permission allow karein.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red, fontSize: 16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Camera Error: ${error.errorCode}\n\nKripya dobara koshish karein.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red, fontSize: 16),
+                  ),
+                  const SizedBox(height: 15),
+                  ElevatedButton(
+                    onPressed: () {
+                      controller?.start();
+                    },
+                    child: const Text('Retry Camera'),
+                  ),
+                ],
               ),
             ),
           );
