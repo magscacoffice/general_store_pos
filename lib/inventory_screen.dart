@@ -38,10 +38,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Item Ka Naam')),
-              TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode')),
-              TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Qeemat (Price)')),
-              TextField(controller: qtyController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity')),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Item Ka Naam *'),
+              ),
+              TextField(
+                controller: barcodeController,
+                decoration: const InputDecoration(
+                  labelText: 'Barcode (Optional - Khali chhor sakte hain)',
+                ),
+              ),
+              TextField(
+                controller: priceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Qeemat (Price)'),
+              ),
+              TextField(
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity'),
+              ),
             ],
           ),
         ),
@@ -52,15 +68,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.isNotEmpty && barcodeController.text.isNotEmpty) {
+              if (nameController.text.isNotEmpty) {
+                // Agar barcode khali ho toh auto-generate kar lein
+                String finalBarcode = barcodeController.text.trim();
+                if (finalBarcode.isEmpty) {
+                  finalBarcode = 'AUTO-${DateTime.now().millisecondsSinceEpoch}';
+                }
+
                 await DBHelper.insertProduct({
-                  'name': nameController.text,
-                  'barcode': barcodeController.text,
+                  'name': nameController.text.trim(),
+                  'barcode': finalBarcode,
                   'price': double.tryParse(priceController.text) ?? 0.0,
                   'quantity': int.tryParse(qtyController.text) ?? 0,
                 });
+
                 _refreshProducts();
-                if (mounted) Navigator.pop(context);
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Item kamyabi ke sath save ho gaya!')),
+                  );
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Item ka naam likhna zaroori hai!')),
+                );
               }
             },
             child: const Text('Save'),
@@ -79,7 +112,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         foregroundColor: Colors.white,
       ),
       body: _products.isEmpty
-          ? const Center(child: Text('Koi item add nahi hua abhi tak.'))
+          ? const Center(
+              child: Text(
+                'Koi item add nahi hua abhi tak.\nNeeche diye gaye + button se item add karein.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
           : ListView.builder(
               itemCount: _products.length,
               itemBuilder: (context, index) {
@@ -92,7 +131,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Rs. ${item['price']}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          'Rs. ${item['price']}',
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () async {
