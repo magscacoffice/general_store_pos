@@ -16,6 +16,7 @@ class DBHelper {
       path,
       version: 1,
       onCreate: (db, version) async {
+        // Products Table
         await db.execute('''
           CREATE TABLE products(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,11 +26,24 @@ class DBHelper {
             quantity INTEGER NOT NULL
           )
         ''');
+
+        // Sales Table
         await db.execute('''
           CREATE TABLE sales(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             total_amount REAL NOT NULL,
             date TEXT NOT NULL
+          )
+        ''');
+
+        // Parties (Customer / Supplier) Table
+        await db.execute('''
+          CREATE TABLE parties(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            type TEXT NOT NULL,
+            balance REAL DEFAULT 0.0
           )
         ''');
       },
@@ -52,7 +66,7 @@ class DBHelper {
     return await db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Sales Operations (Yahan naye functions shamil kiye gaye hain)
+  // Sales Operations
   static Future<int> insertSale(Map<String, dynamic> sale) async {
     final db = await database;
     return await db.insert('sales', sale);
@@ -61,5 +75,16 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getSales() async {
     final db = await database;
     return await db.query('sales', orderBy: 'id DESC');
+  }
+
+  // Party (Customer/Supplier) Operations
+  static Future<int> insertParty(Map<String, dynamic> party) async {
+    final db = await database;
+    return await db.insert('parties', party);
+  }
+
+  static Future<List<Map<String, dynamic>>> getParties(String type) async {
+    final db = await database;
+    return await db.query('parties', where: 'type = ?', whereArgs: [type], orderBy: 'id DESC');
   }
 }

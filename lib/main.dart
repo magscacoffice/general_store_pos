@@ -1,3 +1,4 @@
+import 'party_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -131,11 +132,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   _buildDashboardCard(
-                    icon: Icons.settings,
-                    title: 'سیٹنگز',
-                    color: Colors.blueGrey,
+                    icon: Icons.people,
+                    title: 'پارٹی / کھاتہ',
+                    color: Colors.redAccent,
                     onTap: () {
-                      // سیٹنگز کا کوڈ یہاں آئے گا
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PartyScreen(type: 'customer'),
+                        ),
+                      );
                     },
                   ),
                 ],
