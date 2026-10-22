@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:file_picker/file_picker.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -15,8 +13,8 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   bool _isExporting = false;
 
-  // Local Backup Export
-  Future<void> _exportLocalBackup() async {
+  // Direct Internal/Public Download Folder mein Backup save karna
+  Future<void> _createBackup() async {
     setState(() => _isExporting = true);
     try {
       final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
@@ -31,64 +29,51 @@ class _BackupScreenState extends State<BackupScreen> {
         return;
       }
 
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      // Android ke public download directory ka rasta
+      final targetDir = Directory('/storage/emulated/0/Download');
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
 
-      if (selectedDirectory != null) {
-        final now = DateTime.now();
-        final fileName = 'khan_baba_pos_backup_${now.millisecondsSinceEpoch}.db';
-        final newPath = p.join(selectedDirectory, fileName);
+      final now = DateTime.now();
+      final fileName = 'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
+      final savedPath = p.join(targetDir.path, fileName);
 
-        await dbFile.copy(newPath);
+      await dbFile.copy(savedPath);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup Downloads folder mein save ho gaya!\nPath: $savedPath')),
+        );
+      }
+    } catch (e) {
+      // Agar direct path mein masla ho toh app ke apne documents folder mein save kar lein
+      try {
+        final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
+        final dbFile = File(dbPath);
+        
+        final backupDir = Directory('/storage/emulated/0/Android/data/com.example.khan_baba_general_store/files');
+        if (!await backupDir.exists()) {
+          await backupDir.create(recursive: true);
+        }
+        
+        final savedPath = p.join(backupDir.path, 'khan_baba_pos.db');
+        await dbFile.copy(savedPath);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Local Backup save ho gaya:\n$newPath')),
+            SnackBar(content: Text('Backup save ho gaya:\n$savedPath')),
           );
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup mein masla aya: $e')),
-        );
+      } catch (err) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Backup error: $err')),
+          );
+        }
       }
     } finally {
       setState(() => _isExporting = false);
-    }
-  }
-
-  // Local Backup Restore
-  Future<void> _restoreLocalBackup() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles();
-
-      if (result != null && result.files.single.path != null) {
-        final selectedFile = File(result.files.single.path!);
-
-        if (!selectedFile.path.endsWith('.db')) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Kripya sahi database (.db) file select karein!')),
-            );
-          }
-          return;
-        }
-
-        final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
-        await selectedFile.copy(dbPath);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Data kamyabi se Restore ho gaya! App restart karein.')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore mein masla aya: $e')),
-        );
-      }
     }
   }
 
@@ -96,7 +81,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Data Backup & Restore'),
+        title: const Text('Data Backup'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -110,41 +95,32 @@ class _BackupScreenState extends State<BackupScreen> {
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    Icon(Icons.storage, size: 50, color: Colors.teal),
-                    SizedBox(height: 10),
+                    Icon(Icons.backup, size: 60, color: Colors.teal),
+                    SizedBox(height: 15),
                     Text(
-                      'Local Storage Backup',
+                      'One-Click Database Backup',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    SizedBox(height: 5),
+                    SizedBox(height: 10),
                     Text(
-                      'Apne mobile me database ki backup file save karein ya purani file se data restore karein.',
+                      'Neeche diye gaye button par click karke apne dukan ka sara data (Sales, Inventory, Customers, Expenses) apne phone ke Download folder mein mehfooz kar lein.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _isExporting ? null : _exportLocalBackup,
-              icon: const Icon(Icons.download),
-              label: const Text('Local Backup Banaein (Export)', style: TextStyle(fontSize: 16)),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _restoreLocalBackup,
-              icon: const Icon(Icons.upload),
-              label: const Text('Local Backup Restore Karein (Import)', style: TextStyle(fontSize: 16)),
+              onPressed: _isExporting ? null : _createBackup,
+              icon: const Icon(Icons.download, size: 24),
+              label: const Text('Backup Download Karein', style: TextStyle(fontSize: 18)),
             ),
           ],
         ),
