@@ -1,5 +1,48 @@
 import 'package:flutter/material.dart';
-import 'db_helper.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
+import 'scanner_screen.dart';
+
+class DatabaseHelper {
+  static final DatabaseHelper instance = DatabaseHelper._init();
+  static Database? _database;
+
+  DatabaseHelper._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB('khan_baba.db');
+    return _database!;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = p.join(dbPath, filePath);
+    return await openDatabase(path, version: 1, onCreate: _createDB);
+  }
+
+  Future _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE products (
+        barcode TEXT PRIMARY KEY,
+        name TEXT,
+        stock INTEGER,
+        purchasePrice REAL,
+        salePrice REAL,
+        oldSalePrice REAL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE sales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        totalAmount REAL,
+        totalProfit REAL,
+        timestamp TEXT
+      )
+    ''');
+  }
+}
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -9,97 +52,110 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> products = [];
 
   @override
   void initState() {
     super.initState();
-    _refreshProducts();
+    _loadProducts();
   }
 
-  void _refreshProducts() async {
-    final data = await DBHelper.getProducts();
+  Future<void> _loadProducts() async {
+    final db = await DatabaseHelper.instance.database;
+    final result = await db.query('products');
     setState(() {
-      _products = data;
+      products = result;
     });
   }
 
-  void _showAddProductDialog() {
-    final nameController = TextEditingController();
-    final barcodeController = TextEditingController();
-    final priceController = TextEditingController();
-    final qtyController = TextEditingController();
+  void _showAddOrEditProductDialog({Map<String, dynamic>? product}) {
+    final barcodeController = TextEditingController(text: product != null ? product['barcode'] : '');
+    final nameController = TextEditingController(text: product != null ? product['name'] : '');
+    final stockController = TextEditingController(text: product != null ? product['stock'].toString() : '0');
+    final purchasePriceController = TextEditingController(text: product != null ? product['purchasePrice'].toString() : '0');
+    final salePriceController = TextEditingController(text: product != null ? product['salePrice'].toString() : '0');
+
+    double oldSalePrice = product != null ? (product['salePrice'] ?? 0.0) : 0.0;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Naya Item Add Karein'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Item Ka Naam *'),
-              ),
-              TextField(
-                controller: barcodeController,
-                decoration: const InputDecoration(
-                  labelText: 'Barcode (Optional - Khali chhor sakte hain)',
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(product == null ? 'Add Product' : 'Adjust Stock / Price'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: barcodeController,
+                        decoration: const InputDecoration(labelText: 'Barcode'),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.qr_code_scanner, color: Colors.teal),
+                      onPressed: () async {
+                        final code = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ScannerScreen()),
+                        );
+                        if (code != null) {
+                          barcodeController.text = code;
+                        }
+                      },
+                    )
+                  ],
                 ),
-              ),
-              TextField(
-                controller: priceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Qeemat (Price)'),
-              ),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity'),
-              ),
-            ],
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Product Name')),
+                TextField(controller: stockController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Add Stock Quantity')),
+                TextField(controller: purchasePriceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Purchase Price')),
+                TextField(controller: salePriceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'New Sale Price')),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isNotEmpty) {
-                // Agar barcode khali ho toh auto-generate kar lein
-                String finalBarcode = barcodeController.text.trim();
-                if (finalBarcode.isEmpty) {
-                  finalBarcode = 'AUTO-${DateTime.now().millisecondsSinceEpoch}';
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final db = await DatabaseHelper.instance.database;
+                String barcode = barcodeController.text.trim();
+                String name = nameController.text.trim();
+                int addedStock = int.tryParse(stockController.text) ?? 0;
+                double purchasePrice = double.tryParse(purchasePriceController.text) ?? 0.0;
+                double salePrice = double.tryParse(salePriceController.text) ?? 0.0;
+
+                if (barcode.isEmpty || name.isEmpty) return;
+
+                if (product == null) {
+                  await db.insert('products', {
+                    'barcode': barcode,
+                    'name': name,
+                    'stock': addedStock,
+                    'purchasePrice': purchasePrice,
+                    'salePrice': salePrice,
+                    'oldSalePrice': salePrice,
+                  }, conflictAlgorithm: ConflictAlgorithm.replace);
+                } else {
+                  int currentStock = (product['stock'] as int?) ?? 0;
+                  await db.update('products', {
+                    'name': name,
+                    'stock': currentStock + addedStock,
+                    'purchasePrice': purchasePrice,
+                    'salePrice': salePrice,
+                    'oldSalePrice': oldSalePrice,
+                  }, where: 'barcode = ?', whereArgs: [barcode]);
                 }
 
-                await DBHelper.insertProduct({
-                  'name': nameController.text.trim(),
-                  'barcode': finalBarcode,
-                  'price': double.tryParse(priceController.text) ?? 0.0,
-                  'quantity': int.tryParse(qtyController.text) ?? 0,
-                });
-
-                _refreshProducts();
-
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Item kamyabi ke sath save ho gaya!')),
-                  );
-                }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Item ka naam likhna zaroori hai!')),
-                );
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+                if (mounted) Navigator.pop(dialogContext);
+                _loadProducts();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -107,55 +163,34 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stock / Inventory'),
-        backgroundColor: Colors.blue,
+        title: const Text('Inventory Management'),
+        backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      body: _products.isEmpty
-          ? const Center(
-              child: Text(
-                'Koi item add nahi hua abhi tak.\nNeeche diye gaye + button se item add karein.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.teal,
+        onPressed: () => _showAddOrEditProductDialog(),
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+      body: products.isEmpty
+          ? const Center(child: Text('No products found. Add some!'))
           : ListView.builder(
-              itemCount: _products.length,
+              itemCount: products.length,
               itemBuilder: (context, index) {
-                final item = _products[index];
+                final item = products[index];
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   child: ListTile(
                     title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Barcode: ${item['barcode']} | Stock: ${item['quantity']}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Rs. ${item['price']}',
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            await DBHelper.deleteProduct(item['id']);
-                            _refreshProducts();
-                          },
-                        ),
-                      ],
+                    subtitle: Text('Stock: ${item['stock']} | Purchase: Rs.${item['purchasePrice']} | Sale: Rs.${item['salePrice']} (Old: Rs.${item['oldSalePrice']})'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.teal),
+                      onPressed: () => _showAddOrEditProductDialog(product: item),
                     ),
                   ),
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddProductDialog,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'db_helper.dart';
+import 'inventory_screen.dart';
+import 'scanner_screen.dart';
 import 'printer_screen.dart';
 
 class SalesScreen extends StatefulWidget {
@@ -12,89 +11,83 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  final List<Map<String, dynamic>> _cart = [];
-  double _totalAmount = 0.0;
+  List<Map<String, dynamic>> cart = [];
 
-  // Barcode scan karne ke liye dedicated screen par jana
   void _scanAndAddToCart() async {
-    final scannedCode = await Navigator.push<String>(
+    final barcode = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const DedicatedScannerScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
 
-    if (scannedCode != null && scannedCode.isNotEmpty) {
-      // Database se product search karein
-      final products = await DBHelper.getProducts();
-      final matchingProduct = products.firstWhere(
-        (p) => p['barcode'] == scannedCode,
-        orElse: () => {},
-      );
+    if (barcode != null) {
+      final db = await DatabaseHelper.instance.database;
+      final result = await db.query('products', where: 'barcode = ?', whereArgs: [barcode]);
 
-      if (matchingProduct.isNotEmpty) {
+      if (result.isNotEmpty) {
+        final product = result.first;
+        int stock = (product['stock'] as int?) ?? 0;
+
+        if (stock <= 0) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item out of stock!')));
+          }
+          return;
+        }
+
         setState(() {
-          final index = _cart.indexWhere((item) => item['barcode'] == scannedCode);
+          int index = cart.indexWhere((item) => item['barcode'] == barcode);
           if (index >= 0) {
-            _cart[index]['quantity'] += 1;
+            cart[index]['quantity'] += 1;
           } else {
-            _cart.add({
-              'id': matchingProduct['id'],
-              'name': matchingProduct['name'],
-              'price': matchingProduct['price'],
-              'barcode': matchingProduct['barcode'],
+            cart.add({
+              'barcode': barcode,
+              'name': product['name'],
+              'purchasePrice': product['purchasePrice'],
+              'salePrice': product['salePrice'],
               'quantity': 1,
             });
           }
-          _calculateTotal();
         });
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Yeh barcode ($scannedCode) inventory mein nahi mila!')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product not found!')));
         }
       }
     }
   }
 
-  void _calculateTotal() {
-    _totalAmount = 0.0;
-    for (var item in _cart) {
-      _totalAmount += (item['price'] * item['quantity']);
+  double get totalAmount => cart.fold(0.0, (sum, item) => sum + (item['salePrice'] * item['quantity']));
+  double get totalProfit => cart.fold(0.0, (sum, item) => sum + ((item['salePrice'] - item['purchasePrice']) * item['quantity']));
+
+  void _checkout() async {
+    if (cart.isEmpty) return;
+    final db = await DatabaseHelper.instance.database;
+
+    for (var item in cart) {
+      List<Map> res = await db.query('products', where: 'barcode = ?', whereArgs: [item['barcode']]);
+      if (res.isNotEmpty) {
+        int currentStock = (res.first['stock'] as int?) ?? 0;
+        await db.update('products', {'stock': currentStock - item['quantity']}, where: 'barcode = ?', whereArgs: [item['barcode']]);
+      }
     }
-  }
 
-  // Checkout karke database mein sale save karna aur Printer Screen kholna
-  void _completeCheckout() async {
-    if (_cart.isEmpty) return;
-
-    await DBHelper.insertSale({
-      'total_amount': _totalAmount,
-      'date': DateTime.now().toString().substring(0, 16),
-    });
-
-    final printedCart = List<Map<String, dynamic>>.from(_cart);
-    final finalTotal = _totalAmount;
-
-    setState(() {
-      _cart.clear();
-      _totalAmount = 0.0;
+    await db.insert('sales', {
+      'totalAmount': totalAmount,
+      'totalProfit': totalProfit,
+      'timestamp': DateTime.now().toString(),
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sale kamyabi ke sath save ho gayi!')),
-      );
+      List<Map<String, dynamic>> completedCart = List.from(cart);
+      double finalTotal = totalAmount;
+      setState(() {
+        cart.clear();
+      });
 
-      // Print Screen par direct move karna
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PrinterScreen(
-            cartItems: printedCart,
-            totalAmount: finalTotal,
-          ),
+          builder: (context) => PrinterScreen(cartItems: completedCart, totalAmount: finalTotal),
         ),
       );
     }
@@ -104,32 +97,29 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Sale / Billing'),
-        backgroundColor: Colors.green,
+        title: const Text('POS Billing'),
+        backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: _scanAndAddToCart,
+          )
+        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: _cart.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Cart khali hai.\nBarcode scan karne ke liye neech wale button par click karein.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  )
+            child: cart.isEmpty
+                ? const Center(child: Text('Cart is empty. Scan items.'))
                 : ListView.builder(
-                    itemCount: _cart.length,
+                    itemCount: cart.length,
                     itemBuilder: (context, index) {
-                      final item = _cart[index];
+                      final item = cart[index];
                       return ListTile(
-                        title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Qeemat: Rs. ${item['price']} x ${item['quantity']}'),
-                        trailing: Text(
-                          'Rs. ${item['price'] * item['quantity']}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
-                        ),
+                        title: Text(item['name']),
+                        subtitle: Text('Rs. ${item['salePrice']} x ${item['quantity']}'),
+                        trailing: Text('Rs. ${item['quantity'] * item['salePrice']}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       );
                     },
                   ),
@@ -137,176 +127,26 @@ class _SalesScreenState extends State<SalesScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.grey[200],
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Total Amount:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Rs. $_totalAmount', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green)),
+                    const Text('Total Bill:'),
+                    Text('Rs. $totalAmount', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                        onPressed: _scanAndAddToCart,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('Scan Item'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                        onPressed: _completeCheckout,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Checkout'),
-                      ),
-                    ),
-                  ],
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+                  onPressed: cart.isEmpty ? null : _checkout,
+                  icon: const Icon(Icons.print),
+                  label: const Text('Checkout & Print'),
                 ),
               ],
             ),
-          ),
+          )
         ],
-      ),
-    );
-  }
-}
-
-// Separate Scanner Widget with stable controller initialization
-class DedicatedScannerScreen extends StatefulWidget {
-  const DedicatedScannerScreen({super.key});
-
-  @override
-  State<DedicatedScannerScreen> createState() => _DedicatedScannerScreenState();
-}
-
-class _DedicatedScannerScreenState extends State<DedicatedScannerScreen> {
-  MobileScannerController? controller;
-  bool _isInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initScanner();
-  }
-
-  Future<void> _initScanner() async {
-    final status = await Permission.camera.request();
-    if (status.isGranted) {
-      controller = MobileScannerController(
-        detectionSpeed: DetectionSpeed.normal,
-        facing: CameraFacing.back,
-        torchEnabled: false,
-        autoStart: true,
-      );
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _isInitialized = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isInitialized || controller == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Scan Item Barcode'),
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.camera_alt, size: 60, color: Colors.red),
-                const SizedBox(height: 15),
-                const Text(
-                  'Camera permission zaroori hai ya camera load ho raha hai!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    var status = await Permission.camera.request();
-                    if (status.isGranted) {
-                      _initScanner();
-                    } else {
-                      await openAppSettings();
-                    }
-                  },
-                  child: const Text('Permission Check Karein'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Item Barcode'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
-      body: MobileScanner(
-        controller: controller,
-        errorBuilder: (context, error, child) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Camera Error: ${error.errorCode}\n\nKripya dobara koshish karein.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                  ),
-                  const SizedBox(height: 15),
-                  ElevatedButton(
-                    onPressed: () {
-                      controller?.start();
-                    },
-                    child: const Text('Retry Camera'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-        onDetect: (BarcodeCapture capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          for (final barcode in barcodes) {
-            final String? code = barcode.rawValue;
-            if (code != null && code.isNotEmpty) {
-              Navigator.pop(context, code);
-              break;
-            }
-          }
-        },
       ),
     );
   }

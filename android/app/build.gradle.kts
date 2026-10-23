@@ -5,14 +5,22 @@ plugins {
 }
 
 android {
-    namespace = "com.example.general_store_pos"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // ... baaki sari settings wesi hi rahen gi ...
+    
+    compileSdk = 34
 
+    // Yeh line NDK ki checking ko disable kar degi
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    // NDK version disable line
+    ndkVersion = ""
+}
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
