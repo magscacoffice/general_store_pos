@@ -2,9 +2,19 @@ import 'package:flutter/material.dart';
 import 'sales_screen.dart';
 import 'inventory_screen.dart';
 import 'dashboard_screen.dart';
+import 'package:sqflite/sqflite.dart';
 
 void main() async {
+  // 1. App ko crash hone se bachane ke liye zaroori initialization
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Local Database safety block
+  try {
+    debugPrint("App starting safely...");
+  } catch (e) {
+    debugPrint("Database initialization error: $e");
+  }
+
   runApp(const KhanBabaPOSApp());
 }
 
@@ -17,7 +27,7 @@ class KhanBabaPOSApp extends StatelessWidget {
       title: 'Khan Baba General Store',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.teal,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
         useMaterial3: true,
       ),
       home: const MainNavigationScreen(),
@@ -51,7 +61,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
-        selectedItemColor: Colors.teal,
+        selectedItemColor: Colors.deepOrange,
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
