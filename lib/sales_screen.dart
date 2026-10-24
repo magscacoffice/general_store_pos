@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'inventory_screen.dart';
+import 'db_helper.dart';
 import 'scanner_screen.dart';
 import 'printer_screen.dart';
 
@@ -20,12 +20,12 @@ class _SalesScreenState extends State<SalesScreen> {
     );
 
     if (barcode != null) {
-      final db = await DatabaseHelper.instance.database;
-      final result = await db.query('products', where: 'barcode = ?', whereArgs: [barcode]);
+      final products = await DBHelper.getProducts();
+      final productList = products.where((p) => p['barcode'] == barcode).toList();
 
-      if (result.isNotEmpty) {
-        final product = result.first;
-        int stock = (product['stock'] as int?) ?? 0;
+      if (productList.isNotEmpty) {
+        final product = productList.first;
+        int stock = (product['quantity'] as int?) ?? 0;
 
         if (stock <= 0) {
           if (mounted) {
@@ -42,8 +42,8 @@ class _SalesScreenState extends State<SalesScreen> {
             cart.add({
               'barcode': barcode,
               'name': product['name'],
-              'purchasePrice': product['purchasePrice'],
-              'salePrice': product['salePrice'],
+              'purchasePrice': product['purchasePrice'] ?? 0.0,
+              'salePrice': product['price'],
               'quantity': 1,
             });
           }
@@ -61,20 +61,25 @@ class _SalesScreenState extends State<SalesScreen> {
 
   void _checkout() async {
     if (cart.isEmpty) return;
-    final db = await DatabaseHelper.instance.database;
 
     for (var item in cart) {
-      List<Map> res = await db.query('products', where: 'barcode = ?', whereArgs: [item['barcode']]);
-      if (res.isNotEmpty) {
-        int currentStock = (res.first['stock'] as int?) ?? 0;
-        await db.update('products', {'stock': currentStock - item['quantity']}, where: 'barcode = ?', whereArgs: [item['barcode']]);
+      final products = await DBHelper.getProducts();
+      final pList = products.where((p) => p['barcode'] == item['barcode']).toList();
+      if (pList.isNotEmpty) {
+        int currentStock = (pList.first['quantity'] as int?) ?? 0;
+        await DBHelper.insertProduct({
+          'barcode': item['barcode'],
+          'name': item['name'],
+          'price': item['salePrice'],
+          'quantity': currentStock - item['quantity'],
+          'purchasePrice': item['purchasePrice'],
+        });
       }
     }
 
-    await db.insert('sales', {
-      'totalAmount': totalAmount,
-      'totalProfit': totalProfit,
-      'timestamp': DateTime.now().toString(),
+    await DBHelper.insertSale({
+      'total_amount': totalAmount,
+      'date': DateTime.now().toString().substring(0, 19),
     });
 
     if (mounted) {

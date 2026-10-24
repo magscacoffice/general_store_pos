@@ -18,6 +18,9 @@ dependencies:
   google_sign_in: ^7.2.0
   mobile_scanner: ^5.2.3
   permission_handler: ^11.3.1
+  image_picker: ^1.1.2
+  blue_thermal_printer: ^1.2.4
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
