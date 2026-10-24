@@ -1,52 +1,18 @@
 import 'package:flutter/material.dart';
+import 'sales_screen.dart';
 import 'inventory_screen.dart';
+import 'history_screen.dart';
+import 'backup_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends State<DashboardScreen> {
-  double totalSales = 0.0;
-  double totalProfit = 0.0;
-  int totalOrders = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDashboardData();
-  }
-
-  Future<void> _loadDashboardData() async {
-    final db = await DatabaseHelper.instance.database;
-    final sales = await db.query('sales');
-
-    double salesSum = 0.0;
-    double profitSum = 0.0;
-
-    for (var s in sales) {
-      salesSum += (s['totalAmount'] as num?)?.toDouble() ?? 0.0;
-      profitSum += (s['totalProfit'] as num?)?.toDouble() ?? 0.0;
-    }
-
-    if (mounted) {
-      setState(() {
-        totalSales = salesSum;
-        totalProfit = profitSum;
-        totalOrders = sales.length;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // ⚠️ Yahan se _loadDashboardData() hata diya gaya hai taaki infinite loop aur crash khatam ho jaye!
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales & Profit Dashboard'),
+        title: const Text('خان بابا جنرل سٹور'),
+        centerTitle: true,
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -54,33 +20,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Card(
-              color: Colors.teal[50],
-              child: ListTile(
-                leading: const Icon(Icons.attach_money, color: Colors.teal, size: 40),
-                title: const Text('Total Sales'),
-                subtitle: Text('Rs. $totalSales', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal)),
-              ),
+            const Icon(Icons.store, size: 60, color: Colors.teal),
+            const SizedBox(height: 8),
+            const Text(
+              'Khan Baba General Store POS',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            Card(
-              color: Colors.green[50],
-              child: ListTile(
-                leading: const Icon(Icons.trending_up, color: Colors.green, size: 40),
-                title: const Text('Total Net Profit'),
-                subtitle: Text('Rs. $totalProfit', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              color: Colors.blue[50],
-              child: ListTile(
-                leading: const Icon(Icons.receipt_long, color: Colors.blue, size: 40),
-                title: const Text('Total Orders'),
-                subtitle: Text('$totalOrders Orders', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blue)),
+            const SizedBox(height: 20),
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                children: [
+                  _buildMenuCard(
+                    context,
+                    'نیو سیل / اسکینر',
+                    Icons.qr_code_scanner,
+                    Colors.green,
+                    const SalesScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'اسٹاک / انوینٹری',
+                    Icons.inventory_2,
+                    Colors.orange,
+                    const InventoryScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'سیل ہسٹری',
+                    Icons.receipt_long,
+                    Colors.purple,
+                    const HistoryScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'سیٹنگز / بیک اپ',
+                    Icons.settings,
+                    Colors.teal,
+                    const BackupScreen(),
+                  ),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color, Widget targetScreen) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => targetScreen),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 45, color: color),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
         ),
       ),
     );
