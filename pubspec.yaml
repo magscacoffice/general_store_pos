@@ -19,7 +19,7 @@ dependencies:
   mobile_scanner: ^5.2.3
   permission_handler: ^11.3.1
   image_picker: ^1.1.2
-  blue_thermal_printer: ^1.2.4
+  blue_thermal_printer: ^1.2.3
   intl: ^0.19.0
 
 dev_dependencies:
