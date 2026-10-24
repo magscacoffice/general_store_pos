@@ -1,48 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
+import 'db_helper.dart';
 import 'scanner_screen.dart';
-
-class DatabaseHelper {
-  static final DatabaseHelper instance = DatabaseHelper._init();
-  static Database? _database;
-
-  DatabaseHelper._init();
-
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('khan_baba.db');
-    return _database!;
-  }
-
-  Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
-  }
-
-  Future _createDB(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE products (
-        barcode TEXT PRIMARY KEY,
-        name TEXT,
-        stock INTEGER,
-        purchasePrice REAL,
-        salePrice REAL,
-        oldSalePrice REAL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE sales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        totalAmount REAL,
-        totalProfit REAL,
-        timestamp TEXT
-      )
-    ''');
-  }
-}
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -61,27 +20,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final db = await DatabaseHelper.instance.database;
-    final result = await db.query('products');
+    final data = await DBHelper.getProducts();
     setState(() {
-      products = result;
+      products = data;
     });
   }
 
   void _showAddOrEditProductDialog({Map<String, dynamic>? product}) {
     final barcodeController = TextEditingController(text: product != null ? product['barcode'] : '');
     final nameController = TextEditingController(text: product != null ? product['name'] : '');
-    final stockController = TextEditingController(text: product != null ? product['stock'].toString() : '0');
-    final purchasePriceController = TextEditingController(text: product != null ? product['purchasePrice'].toString() : '0');
-    final salePriceController = TextEditingController(text: product != null ? product['salePrice'].toString() : '0');
-
-    double oldSalePrice = product != null ? (product['salePrice'] ?? 0.0) : 0.0;
+    final stockController = TextEditingController(text: product != null ? product['quantity'].toString() : '0');
+    final purchasePriceController = TextEditingController(text: product != null ? (product['purchasePrice']?.toString() ?? '0') : '0');
+    final salePriceController = TextEditingController(text: product != null ? product['price'].toString() : '0');
 
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: Text(product == null ? 'Add Product' : 'Adjust Stock / Price'),
+          title: Text(product == null ? 'Add New Product' : 'Update Product'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -91,7 +47,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     Expanded(
                       child: TextField(
                         controller: barcodeController,
-                        decoration: const InputDecoration(labelText: 'Barcode'),
+                        decoration: const InputDecoration(labelText: 'Barcode *'),
                       ),
                     ),
                     IconButton(
@@ -108,10 +64,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     )
                   ],
                 ),
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Product Name')),
-                TextField(controller: stockController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Add Stock Quantity')),
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Product Name *')),
+                TextField(controller: stockController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity / Stock *')),
                 TextField(controller: purchasePriceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Purchase Price')),
-                TextField(controller: salePriceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'New Sale Price')),
+                TextField(controller: salePriceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Sale Price *')),
               ],
             ),
           ),
@@ -119,34 +75,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
-                final db = await DatabaseHelper.instance.database;
                 String barcode = barcodeController.text.trim();
                 String name = nameController.text.trim();
-                int addedStock = int.tryParse(stockController.text) ?? 0;
+                int stock = int.tryParse(stockController.text) ?? 0;
                 double purchasePrice = double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice = double.tryParse(salePriceController.text) ?? 0.0;
 
-                if (barcode.isEmpty || name.isEmpty) return;
-
-                if (product == null) {
-                  await db.insert('products', {
-                    'barcode': barcode,
-                    'name': name,
-                    'stock': addedStock,
-                    'purchasePrice': purchasePrice,
-                    'salePrice': salePrice,
-                    'oldSalePrice': salePrice,
-                  }, conflictAlgorithm: ConflictAlgorithm.replace);
-                } else {
-                  int currentStock = (product['stock'] as int?) ?? 0;
-                  await db.update('products', {
-                    'name': name,
-                    'stock': currentStock + addedStock,
-                    'purchasePrice': purchasePrice,
-                    'salePrice': salePrice,
-                    'oldSalePrice': oldSalePrice,
-                  }, where: 'barcode = ?', whereArgs: [barcode]);
+                if (barcode.isEmpty || name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Bar code aur Name lazmi hain!')),
+                  );
+                  return;
                 }
+
+                // DBHelper ke zariye database mein save karna
+                await DBHelper.insertProduct({
+                  'barcode': barcode,
+                  'name': name,
+                  'price': salePrice,
+                  'quantity': stock,
+                });
 
                 if (mounted) Navigator.pop(dialogContext);
                 _loadProducts();
@@ -182,7 +130,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   child: ListTile(
                     title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Stock: ${item['stock']} | Purchase: Rs.${item['purchasePrice']} | Sale: Rs.${item['salePrice']} (Old: Rs.${item['oldSalePrice']})'),
+                    subtitle: Text('Stock: ${item['quantity']} | Sale Price: Rs.${item['price']}'),
                     trailing: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.teal),
                       onPressed: () => _showAddOrEditProductDialog(product: item),
