@@ -27,20 +27,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double profitSum = 0.0;
 
     for (var s in sales) {
-      salesSum += (s['totalAmount'] as num).toDouble();
-      profitSum += (s['totalProfit'] as num).toDouble();
+      salesSum += (s['totalAmount'] as num?)?.toDouble() ?? 0.0;
+      profitSum += (s['totalProfit'] as num?)?.toDouble() ?? 0.0;
     }
 
-    setState(() {
-      totalSales = salesSum;
-      totalProfit = profitSum;
-      totalOrders = sales.length;
-    });
+    if (mounted) {
+      setState(() {
+        totalSales = salesSum;
+        totalProfit = profitSum;
+        totalOrders = sales.length;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    _loadDashboardData(); // Refresh on view
+    // ⚠️ Yahan se _loadDashboardData() hata diya gaya hai taaki infinite loop aur crash khatam ho jaye!
 
     return Scaffold(
       appBar: AppBar(
