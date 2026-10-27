@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'db_helper.dart';
 
 class ScannerScreen extends StatefulWidget {
@@ -11,84 +10,31 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
-  final ImagePicker _picker = ImagePicker();
-  String _hardwareScanBuffer = '';
+  final MobileScannerController controller = MobileScannerController();
   bool _isProcessing = false;
-  
   List<Map<String, dynamic>> scannedItems = [];
 
   @override
-  void initState() {
-    super.initState();
-    ServicesBinding.instance.keyboard.addHandler(_handleHardwareKey);
-  }
-
-  @override
   void dispose() {
-    ServicesBinding.instance.keyboard.removeHandler(_handleHardwareKey);
+    controller.dispose();
     super.dispose();
   }
 
-  bool _handleHardwareKey(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        if (_hardwareScanBuffer.isNotEmpty) {
-          _processScannedBarcode(_hardwareScanBuffer.trim());
-          _hardwareScanBuffer = '';
-        }
-      } else if (event.character != null) {
-        _hardwareScanBuffer += event.character!;
-      }
-    }
-    return false;
-  }
-
-  Future<void> _captureFromCamera() async {
+  // Camera se real-time barcode detect hone par yeh function chale ga
+  Future<void> _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
+    final List<Barcode> barcodes = capture.barcodes;
+    if (barcodes.isEmpty) return;
+
+    final String? code = barcodes.first.rawValue;
+    if (code == null || code.isEmpty) return;
+
     setState(() => _isProcessing = true);
-    
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 70,
-      );
-
-      if (image != null) {
-        String mockBarcode = "1045C002"; 
-        await _processScannedBarcode(mockBarcode);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e')),
-        );
-      }
+      await _processScannedBarcode(code);
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
-  Future<void> _pickFromGallery() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
-
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70,
-      );
-
-      if (image != null) {
-        String mockBarcode = "1045C002";
-        await _processScannedBarcode(mockBarcode);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gallery error: $e')),
-        );
-      }
-    } finally {
+      // Thora delay taaki bar bar ek hi code scan na ho jaye
+      await Future.delayed(const Duration(seconds: 2));
       if (mounted) setState(() => _isProcessing = false);
     }
   }
@@ -104,7 +50,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (stock <= 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Yeh item stock mein nahi hai!')),
+            const SnackBar(content: Text('Yeh item stock mein khatam ho chuka hai!')),
           );
         }
         return;
@@ -112,15 +58,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       int? enteredQty = await _showQuantityDialog(product['name'], stock);
       if (enteredQty == null || enteredQty <= 0) return;
-
-      if (enteredQty > stock) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Stock mein itni miqdar maujood nahi hai!')),
-          );
-        }
-        return;
-      }
 
       setState(() {
         int index = scannedItems.indexWhere((item) => item['barcode'] == barcode);
@@ -139,15 +76,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${product['name']} add ho gaya (${enteredQty} adad)')),
+          SnackBar(content: Text('${product['name']} cart mein add ho gaya (${enteredQty} adad)')),
         );
       }
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product database mein nahi mili!')),
-        );
-      }
+      // Agar product inventory mein nahi hai, toh automatic naya product add karne ka dialog kholen!
+      await _showAddNewProductDialog(barcode);
     }
   }
 
@@ -182,124 +116,220 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
   }
 
+  // Naya product inventory mein automatic save karne ka dialog
+  Future<void> _showAddNewProductDialog(String barcode) async {
+    TextEditingController nameController = TextEditingController();
+    TextEditingController priceController = TextEditingController();
+    TextEditingController purPriceController = TextEditingController();
+    TextEditingController qtyController = TextEditingController(text: '10');
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Naya Product Inventory Mein Add Karein'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Barcode: $barcode', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Product ka Naam'),
+                ),
+                TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Sale Price (Rupe)'),
+                ),
+                TextField(
+                  controller: purPriceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Purchase Price (Rupe)'),
+                ),
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Initial Stock Quantity'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                String name = nameController.text.trim();
+                double price = double.tryParse(priceController.text) ?? 0.0;
+                double purPrice = double.tryParse(purPriceController.text) ?? 0.0;
+                int qty = int.tryParse(qtyController.text) ?? 1;
+
+                if (name.isNotEmpty && price > 0) {
+                  // Database mein naya product save karein
+                  await DBHelper.insertProduct({
+                    'barcode': barcode,
+                    'name': name,
+                    'price': price,
+                    'purchasePrice': purPrice,
+                    'quantity': qty,
+                  });
+
+                  if (mounted) Navigator.pop(context);
+
+                  // Foran cart mein bhi add kar dein
+                  setState(() {
+                    scannedItems.add({
+                      'barcode': barcode,
+                      'name': name,
+                      'purchasePrice': purPrice,
+                      'salePrice': price,
+                      'quantity': 1,
+                    });
+                  });
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Naya product inventory mein save ho gaya aur cart mein add ho gaya!')),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Barah-e-karam saheeh naam aur price darj karein!')),
+                  );
+                }
+              },
+              child: const Text('Save & Add'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final manualController = TextEditingController();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Continuous Multi-Scan'),
+        title: const Text('Live Barcode Scanner'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: _isProcessing ? null : _captureFromCamera,
-                    icon: const Icon(Icons.camera_alt, size: 20),
-                    label: const Text('Camera Scan'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      foregroundColor: Colors.teal,
-                    ),
-                    onPressed: _isProcessing ? null : _pickFromGallery,
-                    icon: const Icon(Icons.photo_library, size: 20),
-                    label: const Text('Gallery Photo'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: manualController,
-                    decoration: const InputDecoration(
-                      hintText: 'Barcode type karein ya scanner use karein...',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  ),
-                  onPressed: () {
-                    _processScannedBarcode(manualController.text.trim());
-                    manualController.clear();
-                  },
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            const Text(
-              'Scan kiye gaye items (Live Cart):',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 5),
-            Expanded(
-              child: scannedItems.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Abhi tak koi item scan nahi kiya gaya.\nScan karte jayein, items yahan dikhenge.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: scannedItems.length,
-                      itemBuilder: (context, index) {
-                        final item = scannedItems[index];
-                        return Card(
-                          child: ListTile(
-                            title: Text(item['name']),
-                            subtitle: Text('Rs. ${item['salePrice']} x ${item['quantity']}'),
-                            trailing: Text('Rs. ${item['quantity'] * item['salePrice']}', 
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange[800],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onPressed: () {
-                Navigator.pop(context, scannedItems);
+        actions: [
+          IconButton(
+            icon: ValueListenableBuilder<TorchState>(
+              valueListenable: controller.torchState,
+              builder: (context, state, child) {
+                switch (state) {
+                  case TorchState.off:
+                    return const Icon(Icons.flash_off, color: Colors.grey);
+                  case TorchState.on:
+                    return const Icon(Icons.flash_on, color: Colors.yellow);
+                }
               },
-              child: Text(
-                'Done - ${scannedItems.length} items pooray hue',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () => controller.toggleTorch(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.camera_front),
+            onPressed: () => controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Live Camera Scanner View
+          Expanded(
+            flex: 2,
+            child: Stack(
+              children: [
+                MobileScanner(
+                  controller: controller,
+                  onDetect: _onDetect,
+                ),
+                Center(
+                  child: Container(
+                    width: 250,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.green, width: 3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Manual input & scanned items list section
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: manualController,
+                          decoration: const InputDecoration(
+                            hintState: null,
+                            hintText: 'Barcode manual type karein...',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        onPressed: () {
+                          if (manualController.text.trim().isNotEmpty) {
+                            _processScannedBarcode(manualController.text.trim());
+                            manualController.clear();
+                          }
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Scan kiye gaye items (Live Cart):', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Expanded(
+                    child: scannedItems.isEmpty
+                        ? const Center(child: Text('Camera ke samne barcode layein ya manual type karein.', style: TextStyle(color: Colors.grey)))
+                        : ListView.builder(
+                            itemCount: scannedItems.length,
+                            itemBuilder: (context, index) {
+                              final item = scannedItems[index];
+                              return Card(
+                                child: ListTile(
+                                  title: Text(item['name']),
+                                  subtitle: Text('Rs. ${item['salePrice']} x ${item['quantity']}'),
+                                  trailing: Text('Rs. ${item['quantity'] * item['salePrice']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                    onPressed: () => Navigator.pop(context, scannedItems),
+                    child: Text('Done - ${scannedItems.length} Items Complete', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

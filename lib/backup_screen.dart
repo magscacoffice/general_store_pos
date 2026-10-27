@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import 'package:file_picker/file_picker.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -13,7 +14,7 @@ class BackupScreen extends StatefulWidget {
 class _BackupScreenState extends State<BackupScreen> {
   bool _isWorking = false;
 
-  // 1. Download folder mein backup save karna
+  // 1. Backup file save karna (File Picker ke zariye user ki marzi ki jagah par)
   Future<void> _createBackup() async {
     setState(() => _isWorking = true);
     try {
@@ -21,66 +22,81 @@ class _BackupScreenState extends State<BackupScreen> {
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Database file nahi mili!')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database file nahi mili!')),
+          );
+        }
         return;
-      }
-
-      final targetDir = Directory('/storage/emulated/0/Download');
-      if (!await targetDir.exists()) {
-        await targetDir.create(recursive: true);
       }
 
       final now = DateTime.now();
       final fileName = 'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
-      final savedPath = p.join(targetDir.path, fileName);
 
-      await dbFile.copy(savedPath);
+      // User ko folder choose karne ki ijazat dena
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Backup kahan save karna hai?',
+        fileName: fileName,
+      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup Downloads folder mein save ho gaya!\nPath: $savedPath')),
-        );
+      if (outputFile != null) {
+        await dbFile.copy(outputFile);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Backup kamyabi se save ho gaya!\nPath: $outputFile')),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     } finally {
       setState(() => _isWorking = false);
     }
   }
 
-  // 2. Download folder se database restore karna
+  // 2. File Picker ke zariye database restore karna
   Future<void> _restoreBackup() async {
     setState(() => _isWorking = true);
     try {
-      final targetDir = Directory('/storage/emulated/0/Download');
-      if (!await targetDir.exists()) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Download folder nahi mila!')));
-        return;
-      }
+      // User se .db file select karwana
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+      );
 
-      // Download folder ki .db files dhundna
-      List<FileSystemEntity> files = targetDir.listSync();
-      List<File> backupFiles = files.where((element) => element.path.endsWith('.db')).map((e) => File(e.path)).toList();
+      if (result != null && result.files.single.path != null) {
+        String filePath = result.files.single.path!;
+        if (!filePath.endsWith('.db')) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Barah-e-karam saheeh .db backup file select karein!')),
+            );
+          }
+          return;
+        }
 
-      if (backupFiles.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Downloads mein koi backup file nahi mili!')));
-        return;
-      }
+        File selectedFile = File(filePath);
+        String dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
+        await selectedFile.copy(dbPath);
 
-      // Sab se latest backup file select karna (Syntax fixed here)
-      backupFiles.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
-      File latestBackup = backupFiles.first;
-
-      String dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
-      await latestBackup.copy(dbPath);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup kamyabi se restore ho gaya! App restart karein.'), backgroundColor: Colors.green),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Backup kamyabi se restore ho gaya! App restart karein.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restore Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore Error: $e')),
+        );
+      }
     } finally {
       setState(() => _isWorking = false);
     }
@@ -89,7 +105,11 @@ class _BackupScreenState extends State<BackupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Backup & Restore'), backgroundColor: Colors.teal, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text('Backup & Restore'),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -105,7 +125,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     Text('Database Backup & Restore', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     SizedBox(height: 10),
                     Text(
-                      'Apna sara data phone ke Download folder mein save karein ya wahin se restore karein.',
+                      'Apna sara data asani se backup banayein aur zaroorat parne par restore karein.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 14),
                     ),
@@ -115,17 +135,24 @@ class _BackupScreenState extends State<BackupScreen> {
             ),
             const SizedBox(height: 30),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               onPressed: _isWorking ? null : _createBackup,
               icon: const Icon(Icons.download, size: 24),
-              label: const Text('Backup Download Karein', style: TextStyle(fontSize: 16)),
+              label: const Text('Backup Save Karein', style: TextStyle(fontSize: 16)),
             ),
             const SizedBox(height: 15),
             OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: Colors.teal),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                foregroundColor: Colors.teal,
+              ),
               onPressed: _isWorking ? null : _restoreBackup,
               icon: const Icon(Icons.restore, size: 24),
-              label: const Text('Downloads Se Restore Karein', style: TextStyle(fontSize: 16)),
+              label: const Text('File Se Restore Karein', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),

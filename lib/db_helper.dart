@@ -1,8 +1,10 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DBHelper {
   static Database? _db;
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   static Future<Database> get database async {
     if (_db != null) return _db!;
@@ -14,7 +16,7 @@ class DBHelper {
     String path = join(await getDatabasesPath(), 'khan_baba_pos.db');
     return await openDatabase(
       path,
-      version: 3, // Version ko 3 kar diya hai taaki naye tables aur columns upgrade ho sakein
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -80,12 +82,10 @@ class DBHelper {
           ''');
         }
         if (oldVersion < 3) {
-          // Purane products table mein agar purchasePrice nahi hai toh add kar do
           try {
             await db.execute('ALTER TABLE products ADD COLUMN purchasePrice REAL DEFAULT 0.0');
           } catch (_) {}
           
-          // Sales table mein discount aur final_amount ke columns add karna
           try {
             await db.execute('ALTER TABLE sales ADD COLUMN discount REAL DEFAULT 0.0');
             await db.execute('ALTER TABLE sales ADD COLUMN final_amount REAL DEFAULT 0.0');
@@ -93,7 +93,6 @@ class DBHelper {
             await db.execute('ALTER TABLE sales ADD COLUMN customer_id INTEGER');
           } catch (_) {}
 
-          // Reminders table create karna agar na ho
           await db.execute('''
             CREATE TABLE IF NOT EXISTS reminders(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,10 +107,19 @@ class DBHelper {
     );
   }
 
-  // Product Operations
+  // Product Operations + Firebase Sync
   static Future<int> insertProduct(Map<String, dynamic> product) async {
     final db = await database;
-    return await db.insert('products', product, conflictAlgorithm: ConflictAlgorithm.replace);
+    int result = await db.insert('products', product, conflictAlgorithm: ConflictAlgorithm.replace);
+    
+    // Firebase Cloud par sync karen
+    try {
+      await _firestore.collection('products').doc(product['barcode'].toString()).set(product);
+    } catch (e) {
+      print("Firebase Product Sync Error: $e");
+    }
+
+    return result;
   }
 
   static Future<List<Map<String, dynamic>>> getProducts() async {
@@ -124,10 +132,19 @@ class DBHelper {
     return await db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Sales Operations
+  // Sales Operations + Firebase Sync
   static Future<int> insertSale(Map<String, dynamic> sale) async {
     final db = await database;
-    return await db.insert('sales', sale);
+    int result = await db.insert('sales', sale);
+
+    // Firebase Cloud par sale record sync karen
+    try {
+      await _firestore.collection('sales').add(sale);
+    } catch (e) {
+      print("Firebase Sales Sync Error: $e");
+    }
+
+    return result;
   }
 
   static Future<List<Map<String, dynamic>>> getSales() async {
@@ -135,10 +152,18 @@ class DBHelper {
     return await db.query('sales', orderBy: 'id DESC');
   }
 
-  // Party Operations (Customers & Suppliers)
+  // Party Operations (Customers & Suppliers) + Firebase Sync
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
-    return await db.insert('parties', party);
+    int result = await db.insert('parties', party);
+
+    try {
+      await _firestore.collection('parties').add(party);
+    } catch (e) {
+      print("Firebase Party Sync Error: $e");
+    }
+
+    return result;
   }
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
@@ -156,7 +181,7 @@ class DBHelper {
     await db.rawUpdate('UPDATE parties SET balance = balance + ? WHERE id = ?', [amount, id]);
   }
 
-  // Expense Operations (Kharcha)
+  // Expense Operations
   static Future<int> insertExpense(Map<String, dynamic> expense) async {
     final db = await database;
     return await db.insert('expenses', expense);
