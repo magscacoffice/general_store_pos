@@ -229,6 +229,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     return const Icon(Icons.flash_off, color: Colors.grey);
                   case TorchState.on:
                     return const Icon(Icons.flash_on, color: Colors.yellow);
+                  case TorchState.auto:
+                    return const Icon(Icons.flash_auto, color: Colors.blue);
+                  case TorchState.unavailable:
+                    return const Icon(Icons.no_flash, color: Colors.red);
                 }
               },
             ),
@@ -279,7 +283,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         child: TextField(
                           controller: manualController,
                           decoration: const InputDecoration(
-                            hintState: null,
                             hintText: 'Barcode manual type karein...',
                             border: OutlineInputBorder(),
                             isDense: true,
