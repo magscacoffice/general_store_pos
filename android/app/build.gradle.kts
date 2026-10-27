@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.khan_baba_general_store"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36 // compileSdk ko 36 kar diya hai
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -23,7 +23,7 @@ android {
     defaultConfig {
         applicationId = "com.example.khan_baba_general_store"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36 // targetSdk ko bhi 36 kar diya hai
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
