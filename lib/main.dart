@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'dashboard_screen.dart';
 
 void main() async {
   // 1. App ko crash hone se bachane ke liye zaroori initialization
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Local Database safety block
+  // 2. Firebase aur Local Database initialization
   try {
-    debugPrint("App starting safely...");
+    await Firebase.initializeApp();
+    debugPrint("Firebase initialized successfully...");
   } catch (e) {
-    debugPrint("Database initialization error: $e");
+    debugPrint("Firebase initialization error: $e");
   }
 
   runApp(const KhanBabaPOSApp());
