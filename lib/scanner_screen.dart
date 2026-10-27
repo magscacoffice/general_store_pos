@@ -220,27 +220,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
+          // Simple Flash Toggle Button (No torchState dependency error)
           IconButton(
-            icon: ValueListenableBuilder<TorchState>(
-              valueListenable: controller.torchState,
-              builder: (context, state, child) {
-                switch (state) {
-                  case TorchState.off:
-                    return const Icon(Icons.flash_off, color: Colors.grey);
-                  case TorchState.on:
-                    return const Icon(Icons.flash_on, color: Colors.yellow);
-                  case TorchState.auto:
-                    return const Icon(Icons.flash_auto, color: Colors.blue);
-                  case TorchState.unavailable:
-                    return const Icon(Icons.no_flash, color: Colors.red);
-                }
-              },
-            ),
+            icon: const Icon(Icons.flash_on),
             onPressed: () => controller.toggleTorch(),
+            tooltip: 'Flash On/Off',
           ),
           IconButton(
             icon: const Icon(Icons.camera_front),
             onPressed: () => controller.switchCamera(),
+            tooltip: 'Switch Camera',
           ),
         ],
       ),
