@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import 'v:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PrinterScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -37,15 +37,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
   Future<void> _getBluetoothDevices() async {
     setState(() => _isLoading = true);
     try {
-      final bool status = await PrintBluetoothThermal.isBluetoothEnabled;
-      if (status) {
-        List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
-        setState(() => _devices = devices);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pehle mobile ka Bluetooth on karein!')));
-        }
-      }
+      List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
+      setState(() => _devices = devices);
     } catch (e) {
       // Error handling
     } finally {
@@ -81,20 +74,23 @@ class _PrinterScreenState extends State<PrinterScreen> {
       return;
     }
 
-    await PrintBluetoothThermal.writeText("KHAN BABA GENERAL STORE\n");
-    await PrintBluetoothThermal.writeText("Sanawan, Kot Addu\n");
-    await PrintBluetoothThermal.writeText("Customer: ${widget.customerName}\n");
-    await PrintBluetoothThermal.writeText("Date: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}\n");
-    await PrintBluetoothThermal.writeText("--------------------------------\n");
+    String receiptText = "KHAN BABA GENERAL STORE\n";
+    receiptText += "Sanawan, Kot Addu\n";
+    receiptText += "Customer: ${widget.customerName}\n";
+    receiptText += "Date: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}\n";
+    receiptText += "--------------------------------\n";
 
     for (var item in widget.cartItems) {
-      await PrintBluetoothThermal.writeText("${item['name']}\n${item['quantity']} x ${item['salePrice']} = Rs.${item['quantity'] * item['salePrice']}\n");
+      receiptText += "${item['name']}\n${item['quantity']} x ${item['salePrice']} = Rs.${item['quantity'] * item['salePrice']}\n";
     }
 
-    await PrintBluetoothThermal.writeText("--------------------------------\n");
-    await PrintBluetoothThermal.writeText("TOTAL: Rs. ${widget.totalAmount}\n");
-    await PrintBluetoothThermal.writeText("--------------------------------\n");
-    await PrintBluetoothThermal.writeText("Thank you for shopping!\n\n\n");
+    receiptText += "--------------------------------\n";
+    receiptText += "TOTAL: Rs. ${widget.totalAmount}\n";
+    receiptText += "--------------------------------\n";
+    receiptText += "Thank you for shopping!\n\n\n";
+
+    List<int> bytes = receiptText.codeUnits;
+    await PrintBluetoothThermal.writeBytes(bytes);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rasid kamyabi se print ho gayi!')));

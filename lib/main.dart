@@ -24,7 +24,7 @@ class KhanBabaPOSApp extends StatelessWidget {
       title: 'Khan Baba General Store',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
       // Direct DashboardScreen ko home screen set kar diya hai
