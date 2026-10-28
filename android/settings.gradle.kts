@@ -23,7 +23,7 @@ plugins {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositoriesMode.set(RepositoriesMode.ALLOW_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
