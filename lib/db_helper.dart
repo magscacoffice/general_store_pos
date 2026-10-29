@@ -17,7 +17,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -70,6 +70,38 @@ class DBHelper {
             is_done INTEGER DEFAULT 0
           )
         ''');
+
+        await db.execute('''CREATE TABLE purchases(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          product_name TEXT NOT NULL,
+          barcode TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          unit_cost REAL NOT NULL,
+          total_cost REAL NOT NULL,
+          supplier_id INTEGER,
+          date TEXT NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE sale_items(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sale_id INTEGER NOT NULL,
+          product_id INTEGER,
+          barcode TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          sale_price REAL NOT NULL,
+          purchase_price REAL NOT NULL,
+          line_total REAL NOT NULL,
+          cost_total REAL NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE khata_transactions(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          party_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          amount REAL NOT NULL,
+          note TEXT,
+          date TEXT NOT NULL
+        )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -118,6 +150,40 @@ class DBHelper {
               is_done INTEGER DEFAULT 0
             )
           ''');
+        }
+
+        if (oldVersion < 4) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS purchases(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            barcode TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_cost REAL NOT NULL,
+            total_cost REAL NOT NULL,
+            supplier_id INTEGER,
+            date TEXT NOT NULL
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS sale_items(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER,
+            barcode TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            sale_price REAL NOT NULL,
+            purchase_price REAL NOT NULL,
+            line_total REAL NOT NULL,
+            cost_total REAL NOT NULL
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS khata_transactions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            party_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT,
+            date TEXT NOT NULL
+          )''');
         }
       },
     );
@@ -235,6 +301,52 @@ class DBHelper {
 
       // Save the sale in the same transaction.
       final id = await txn.insert('sales', sale);
+
+      // Snapshot item prices/costs for future profit reports.
+      for (final item in items) {
+        final barcode = item['barcode'].toString();
+        final productRows = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+          limit: 1,
+        );
+        final product = productRows.isEmpty
+            ? <String, dynamic>{}
+            : productRows.first;
+        final qty = (item['quantity'] as num).toInt();
+        final salePrice =
+            ((item['salePrice'] ?? item['price'] ?? product['price'] ?? 0)
+                    as num)
+                .toDouble();
+        final purchasePrice =
+            ((item['purchasePrice'] ?? product['purchasePrice'] ?? 0) as num)
+                .toDouble();
+        final name = (item['name'] ?? product['name'] ?? barcode).toString();
+        await txn.insert('sale_items', {
+          'sale_id': id,
+          'product_id': product['id'],
+          'barcode': barcode,
+          'product_name': name,
+          'quantity': qty,
+          'sale_price': salePrice,
+          'purchase_price': purchasePrice,
+          'line_total': salePrice * qty,
+          'cost_total': purchasePrice * qty,
+        });
+      }
+
+      // Record credit sale in the ledger; balance update remains in this transaction.
+      final customerIdForLedger = sale['customer_id'];
+      if (customerIdForLedger != null) {
+        await txn.insert('khata_transactions', {
+          'party_id': customerIdForLedger,
+          'type': 'credit',
+          'amount': (sale['final_amount'] as num?)?.toDouble() ?? 0.0,
+          'note': 'Credit sale #$id',
+          'date': sale['date'].toString(),
+        });
+      }
 
       // Update customer balance for credit/Khata sales.
       final customerId = sale['customer_id'];
@@ -354,6 +466,114 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getExpenses() async {
     final db = await database;
     return await db.query('expenses', orderBy: 'id DESC');
+  }
+
+  // Purchase / stock entry. Product stock and purchase history update atomically.
+  static Future<int> recordPurchase({
+    required int productId,
+    required int quantity,
+    required double unitCost,
+    int? supplierId,
+  }) async {
+    if (quantity <= 0 || unitCost < 0)
+      throw Exception('Quantity and cost must be valid.');
+    final db = await database;
+    return db.transaction<int>((txn) async {
+      final rows = await txn.query(
+        'products',
+        where: 'id = ?',
+        whereArgs: [productId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw Exception('Product not found.');
+      final p = rows.first;
+      final name = p['name'].toString();
+      final barcode = p['barcode'].toString();
+      await txn.rawUpdate(
+        'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
+        [quantity, unitCost, productId],
+      );
+      return txn.insert('purchases', {
+        'product_id': productId,
+        'product_name': name,
+        'barcode': barcode,
+        'quantity': quantity,
+        'unit_cost': unitCost,
+        'total_cost': quantity * unitCost,
+        'supplier_id': supplierId,
+        'date': DateTime.now().toIso8601String().substring(0, 19),
+      });
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getPurchases() async {
+    final db = await database;
+    return db.query('purchases', orderBy: 'id DESC');
+  }
+
+  // A receipt reduces the customer balance exactly once and records the ledger entry.
+  static Future<void> recordKhataReceipt({
+    required int partyId,
+    required double amount,
+    String note = '',
+  }) async {
+    if (amount <= 0)
+      throw Exception('Receipt amount must be greater than zero.');
+    final db = await database;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'parties',
+        where: 'id = ? AND type = ?',
+        whereArgs: [partyId, 'customer'],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw Exception('Customer not found.');
+      await txn.rawUpdate(
+        'UPDATE parties SET balance = balance - ? WHERE id = ?',
+        [amount, partyId],
+      );
+      await txn.insert('khata_transactions', {
+        'party_id': partyId,
+        'type': 'receipt',
+        'amount': amount,
+        'note': note,
+        'date': DateTime.now().toIso8601String().substring(0, 19),
+      });
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getKhataTransactions(
+    int partyId,
+  ) async {
+    final db = await database;
+    return db.query(
+      'khata_transactions',
+      where: 'party_id = ?',
+      whereArgs: [partyId],
+      orderBy: 'id DESC',
+    );
+  }
+
+  static Future<Map<String, double>> getProfitLossSummary() async {
+    final db = await database;
+    final sales = await db.rawQuery(
+      "SELECT COALESCE(SUM(final_amount), SUM(total_amount), 0) AS revenue FROM sales",
+    );
+    final costs = await db.rawQuery(
+      'SELECT COALESCE(SUM(cost_total), 0) AS cost FROM sale_items',
+    );
+    final expenses = await db.rawQuery(
+      'SELECT COALESCE(SUM(amount), 0) AS expenses FROM expenses',
+    );
+    final revenue = (sales.first['revenue'] as num?)?.toDouble() ?? 0;
+    final cost = (costs.first['cost'] as num?)?.toDouble() ?? 0;
+    final expense = (expenses.first['expenses'] as num?)?.toDouble() ?? 0;
+    return {
+      'revenue': revenue,
+      'cost': cost,
+      'expenses': expense,
+      'profit': revenue - cost - expense,
+    };
   }
 
   // Reminder Operations

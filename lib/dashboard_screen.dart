@@ -5,6 +5,9 @@ import 'inventory_screen.dart';
 import 'history_screen.dart';
 import 'sales_report_screen.dart';
 import 'backup_screen.dart';
+import 'purchase_screen.dart';
+import 'customer_khata_screen.dart';
+import 'profit_loss_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -62,6 +65,27 @@ class DashboardScreen extends StatelessWidget {
                     Icons.bar_chart,
                     Colors.blue,
                     const SalesReportScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'Purchase / Stock Entry',
+                    Icons.add_shopping_cart,
+                    Colors.brown,
+                    const PurchaseScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'Customer Khata',
+                    Icons.menu_book,
+                    Colors.indigo,
+                    const CustomerKhataScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'Profit / Loss',
+                    Icons.trending_up,
+                    Colors.deepPurple,
+                    const ProfitLossScreen(),
                   ),
                   _buildMenuCard(
                     context,
