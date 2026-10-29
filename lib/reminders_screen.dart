@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'db_helper.dart';
 
 class RemindersScreen extends StatefulWidget {
@@ -34,12 +35,23 @@ class _RemindersScreenState extends State<RemindersScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'عنوان (مثلاً ادھار وصولی)')),
-              TextField(controller: detailsController, decoration: const InputDecoration(labelText: 'تفصیلات')),
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: 'عنوان (مثلاً ادھار وصولی)',
+                ),
+              ),
+              TextField(
+                controller: detailsController,
+                decoration: const InputDecoration(labelText: 'تفصیلات'),
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('منسوخ کریں')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('منسوخ کریں'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
@@ -64,7 +76,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('وصولی اور ریمائنڈرز'), backgroundColor: Colors.teal, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text('وصولی اور ریمائنڈرز'),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.teal,
         onPressed: _addReminderDialog,
@@ -79,8 +95,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.alarm, color: Colors.teal),
-                    title: Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${item['details']}\nتاریخ: ${item['date']}'),
+                    title: Text(
+                      item['title'],
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${item['details']}\nتاریخ: ${item['date']}',
+                    ),
                   ),
                 );
               },

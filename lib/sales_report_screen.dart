@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'db_helper.dart';
 
 class SalesReportScreen extends StatefulWidget {
@@ -30,9 +31,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sales load nahi ho sakin: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not load sales: $e')));
     }
   }
 
@@ -151,7 +151,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       child: Padding(
                         padding: EdgeInsets.all(24),
                         child: Center(
-                          child: Text('Is period mein koi sale record nahi hai.'),
+                          child: Text('No sales recorded for this period.'),
                         ),
                       ),
                     )
@@ -170,9 +170,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                           ),
                           title: Text(
                             _money(amount),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
                             'Date: $date\nPayment: ${sale['payment_type'] ?? 'Cash'}',

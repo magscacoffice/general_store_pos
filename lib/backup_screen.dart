@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -24,14 +25,15 @@ class _BackupScreenState extends State<BackupScreen> {
       if (!await dbFile.exists()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Database file nahi mili!')),
+            const SnackBar(content: Text('Database file not found!')),
           );
         }
         return;
       }
 
       final now = DateTime.now();
-      final fileName = 'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
+      final fileName =
+          'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
 
       // User ko folder choose karne ki ijazat dena
       String? outputFile = await FilePicker.platform.saveFile(
@@ -43,15 +45,16 @@ class _BackupScreenState extends State<BackupScreen> {
         await dbFile.copy(outputFile);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Backup kamyabi se save ho gaya!\nPath: $outputFile')),
+            SnackBar(
+              content: Text('Backup saved successfully!\nPath: $outputFile'),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       setState(() => _isWorking = false);
@@ -72,7 +75,9 @@ class _BackupScreenState extends State<BackupScreen> {
         if (!filePath.endsWith('.db')) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Barah-e-karam saheeh .db backup file select karein!')),
+              const SnackBar(
+                content: Text('Please select a valid .db backup file!'),
+              ),
             );
           }
           return;
@@ -85,7 +90,9 @@ class _BackupScreenState extends State<BackupScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Backup kamyabi se restore ho gaya! App restart karein.'),
+              content: Text(
+                'Backup restored successfully! Please restart the app.',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -93,9 +100,8 @@ class _BackupScreenState extends State<BackupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restore Error: $e')));
       }
     } finally {
       setState(() => _isWorking = false);
@@ -122,10 +128,16 @@ class _BackupScreenState extends State<BackupScreen> {
                   children: [
                     Icon(Icons.backup, size: 60, color: Colors.teal),
                     SizedBox(height: 15),
-                    Text('Database Backup & Restore', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Database Backup & Restore',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     SizedBox(height: 10),
                     Text(
-                      'Apna sara data asani se backup banayein aur zaroorat parne par restore karein.',
+                      'Back up all your data and restore it whenever needed.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 14),
                     ),
@@ -142,7 +154,7 @@ class _BackupScreenState extends State<BackupScreen> {
               ),
               onPressed: _isWorking ? null : _createBackup,
               icon: const Icon(Icons.download, size: 24),
-              label: const Text('Backup Save Karein', style: TextStyle(fontSize: 16)),
+              label: const Text('Save Backup', style: TextStyle(fontSize: 16)),
             ),
             const SizedBox(height: 15),
             OutlinedButton.icon(
@@ -152,7 +164,10 @@ class _BackupScreenState extends State<BackupScreen> {
               ),
               onPressed: _isWorking ? null : _restoreBackup,
               icon: const Icon(Icons.restore, size: 24),
-              label: const Text('File Se Restore Karein', style: TextStyle(fontSize: 16)),
+              label: const Text(
+                'Restore from File',
+                style: TextStyle(fontSize: 16),
+              ),
             ),
           ],
         ),

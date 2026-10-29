@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import 'db_helper.dart';
 
 class ScannerScreen extends StatefulWidget {
@@ -50,7 +51,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (stock <= 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Yeh item stock mein khatam ho chuka hai!')),
+            const SnackBar(
+              content: Text('Yeh item stock mein khatam ho chuka hai!'),
+            ),
           );
         }
         return;
@@ -60,7 +63,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (enteredQty == null || enteredQty <= 0) return;
 
       setState(() {
-        int index = scannedItems.indexWhere((item) => item['barcode'] == barcode);
+        int index = scannedItems.indexWhere(
+          (item) => item['barcode'] == barcode,
+        );
         if (index >= 0) {
           scannedItems[index]['quantity'] += enteredQty;
         } else {
@@ -76,7 +81,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${product['name']} cart mein add ho gaya (${enteredQty} adad)')),
+          SnackBar(
+            content: Text(
+              '${product['name']} added to cart (Quantity: $enteredQty)',
+            ),
+          ),
         );
       }
     } else {
@@ -91,7 +100,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('$productName ki miqdar darj karein'),
+          title: Text('$productName Enter quantity for'),
           content: TextField(
             controller: qtyController,
             keyboardType: TextInputType.number,
@@ -108,7 +117,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 int qty = int.tryParse(qtyController.text) ?? 1;
                 Navigator.pop(context, qty);
               },
-              child: const Text('Add Karein'),
+              child: const Text('Add'),
             ),
           ],
         );
@@ -127,31 +136,45 @@ class _ScannerScreenState extends State<ScannerScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Naya Product Inventory Mein Add Karein'),
+          title: const Text('Add New Product to Inventory'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Barcode: $barcode', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                Text(
+                  'Barcode: $barcode',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Product ka Naam'),
+                  decoration: const InputDecoration(
+                    labelText: 'Product ka Naam',
+                  ),
                 ),
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Sale Price (Rupe)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Sale Price (Rupe)',
+                  ),
                 ),
                 TextField(
                   controller: purPriceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Purchase Price (Rupe)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Purchase Price (Rupe)',
+                  ),
                 ),
                 TextField(
                   controller: qtyController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Initial Stock Quantity'),
+                  decoration: const InputDecoration(
+                    labelText: 'Initial Stock Quantity',
+                  ),
                 ),
               ],
             ),
@@ -165,7 +188,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
               onPressed: () async {
                 String name = nameController.text.trim();
                 double price = double.tryParse(priceController.text) ?? 0.0;
-                double purPrice = double.tryParse(purPriceController.text) ?? 0.0;
+                double purPrice =
+                    double.tryParse(purPriceController.text) ?? 0.0;
                 int qty = int.tryParse(qtyController.text) ?? 1;
 
                 if (name.isNotEmpty && price > 0) {
@@ -193,12 +217,18 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Naya product inventory mein save ho gaya aur cart mein add ho gaya!')),
+                      const SnackBar(
+                        content: Text(
+                          'New product saved to inventory and added to cart!',
+                        ),
+                      ),
                     );
                   }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Barah-e-karam saheeh naam aur price darj karein!')),
+                    const SnackBar(
+                      content: Text('Please enter a valid name and price!'),
+                    ),
                   );
                 }
               },
@@ -240,10 +270,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             flex: 2,
             child: Stack(
               children: [
-                MobileScanner(
-                  controller: controller,
-                  onDetect: _onDetect,
-                ),
+                MobileScanner(controller: controller, onDetect: _onDetect),
                 Center(
                   child: Container(
                     width: 250,
@@ -257,7 +284,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ],
             ),
           ),
-          
+
           // Manual input & scanned items list section
           Expanded(
             flex: 3,
@@ -272,7 +299,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         child: TextField(
                           controller: manualController,
                           decoration: const InputDecoration(
-                            hintText: 'Barcode manual type karein...',
+                            hintText: 'Enter barcode manually...',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -280,10 +307,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: () {
                           if (manualController.text.trim().isNotEmpty) {
-                            _processScannedBarcode(manualController.text.trim());
+                            _processScannedBarcode(
+                              manualController.text.trim(),
+                            );
                             manualController.clear();
                           }
                         },
@@ -292,11 +324,19 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text('Scan kiye gaye items (Live Cart):', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Scan kiye gaye items (Live Cart):',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 5),
                   Expanded(
                     child: scannedItems.isEmpty
-                        ? const Center(child: Text('Camera ke samne barcode layein ya manual type karein.', style: TextStyle(color: Colors.grey)))
+                        ? const Center(
+                            child: Text(
+                              'Scan the barcode with the camera or enter it manually.',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
                         : ListView.builder(
                             itemCount: scannedItems.length,
                             itemBuilder: (context, index) {
@@ -304,8 +344,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               return Card(
                                 child: ListTile(
                                   title: Text(item['name']),
-                                  subtitle: Text('Rs. ${item['salePrice']} x ${item['quantity']}'),
-                                  trailing: Text('Rs. ${item['quantity'] * item['salePrice']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                                  subtitle: Text(
+                                    'Rs. ${item['salePrice']} x ${item['quantity']}',
+                                  ),
+                                  trailing: Text(
+                                    'Rs. ${item['quantity'] * item['salePrice']}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.teal,
+                                    ),
+                                  ),
                                 ),
                               );
                             },
@@ -313,9 +361,19 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   ),
                   const SizedBox(height: 10),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[800],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                     onPressed: () => Navigator.pop(context, scannedItems),
-                    child: Text('Done - ${scannedItems.length} Items Complete', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      'Done - ${scannedItems.length} Items Complete',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),

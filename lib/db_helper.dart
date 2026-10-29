@@ -13,7 +13,8 @@ class DBHelper {
   }
 
   static Future<Database> initDB() async {
-    String path = join(await getDatabasesPath(), 'khan_baba_pos.db');
+    final path = join(await getDatabasesPath(), 'khan_baba_pos.db');
+
     return await openDatabase(
       path,
       version: 3,
@@ -81,16 +82,31 @@ class DBHelper {
             )
           ''');
         }
+
         if (oldVersion < 3) {
           try {
-            await db.execute('ALTER TABLE products ADD COLUMN purchasePrice REAL DEFAULT 0.0');
+            await db.execute(
+              'ALTER TABLE products '
+              'ADD COLUMN purchasePrice REAL DEFAULT 0.0',
+            );
           } catch (_) {}
-          
+
           try {
-            await db.execute('ALTER TABLE sales ADD COLUMN discount REAL DEFAULT 0.0');
-            await db.execute('ALTER TABLE sales ADD COLUMN final_amount REAL DEFAULT 0.0');
-            await db.execute('ALTER TABLE sales ADD COLUMN payment_type TEXT DEFAULT "Cash"');
-            await db.execute('ALTER TABLE sales ADD COLUMN customer_id INTEGER');
+            await db.execute(
+              'ALTER TABLE sales '
+              'ADD COLUMN discount REAL DEFAULT 0.0',
+            );
+            await db.execute(
+              'ALTER TABLE sales '
+              'ADD COLUMN final_amount REAL DEFAULT 0.0',
+            );
+            await db.execute(
+              'ALTER TABLE sales '
+              'ADD COLUMN payment_type TEXT DEFAULT "Cash"',
+            );
+            await db.execute(
+              'ALTER TABLE sales ADD COLUMN customer_id INTEGER',
+            );
           } catch (_) {}
 
           await db.execute('''
@@ -108,15 +124,23 @@ class DBHelper {
   }
 
   // Product Operations + Firebase Sync
+
   static Future<int> insertProduct(Map<String, dynamic> product) async {
     final db = await database;
-    int result = await db.insert('products', product, conflictAlgorithm: ConflictAlgorithm.replace);
-    
-    // Firebase Cloud par sync karen
+
+    final result = await db.insert(
+      'products',
+      product,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
     try {
-      await _firestore.collection('products').doc(product['barcode'].toString()).set(product);
+      await _firestore
+          .collection('products')
+          .doc(product['barcode'].toString())
+          .set(product);
     } catch (e) {
-      print("Firebase Product Sync Error: $e");
+      print('Firebase Product Sync Error: $e');
     }
 
     return result;
@@ -132,16 +156,143 @@ class DBHelper {
     return await db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Sales Operations + Firebase Sync
-  static Future<int> insertSale(Map<String, dynamic> sale) async {
-    final db = await database;
-    int result = await db.insert('sales', sale);
+  // Safely complete a sale and reduce stock in one transaction.
 
-    // Firebase Cloud par sale record sync karen
+  static Future<int> completeSale({
+    required Map<String, dynamic> sale,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (items.isEmpty) {
+      throw Exception('Cart is empty.');
+    }
+
+    final db = await database;
+
+    // Combine quantities for repeated barcodes.
+    final quantitiesByBarcode = <String, int>{};
+
+    for (final item in items) {
+      final barcode = item['barcode']?.toString();
+      final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+
+      if (barcode == null || barcode.isEmpty || quantity <= 0) {
+        throw Exception('Invalid product barcode or quantity.');
+      }
+
+      quantitiesByBarcode[barcode] =
+          (quantitiesByBarcode[barcode] ?? 0) + quantity;
+    }
+
+    // Check stock and save the sale atomically.
+    final saleId = await db.transaction<int>((txn) async {
+      // Validate every product before changing any stock.
+      for (final entry in quantitiesByBarcode.entries) {
+        final barcode = entry.key;
+        final requestedQuantity = entry.value;
+
+        final products = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+          limit: 1,
+        );
+
+        if (products.isEmpty) {
+          throw Exception('Product not found: $barcode');
+        }
+
+        final product = products.first;
+        final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+
+        if (stock < requestedQuantity) {
+          final name = product['name'] ?? barcode;
+          throw Exception(
+            'Insufficient stock for $name. '
+            'Available: $stock, requested: $requestedQuantity.',
+          );
+        }
+      }
+
+      // Reduce stock only after all products pass validation.
+      for (final entry in quantitiesByBarcode.entries) {
+        final barcode = entry.key;
+        final requestedQuantity = entry.value;
+
+        final changed = await txn.rawUpdate(
+          'UPDATE products '
+          'SET quantity = quantity - ? '
+          'WHERE barcode = ? AND quantity >= ?',
+          [requestedQuantity, barcode, requestedQuantity],
+        );
+
+        if (changed != 1) {
+          throw Exception(
+            'Stock update failed for barcode $barcode. '
+            'Please try again.',
+          );
+        }
+      }
+
+      // Save the sale in the same transaction.
+      final id = await txn.insert('sales', sale);
+
+      // Update customer balance for credit/Khata sales.
+      final customerId = sale['customer_id'];
+
+      if (customerId != null) {
+        final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? 0.0;
+
+        await txn.rawUpdate(
+          'UPDATE parties '
+          'SET balance = balance + ? WHERE id = ?',
+          [finalAmount, customerId],
+        );
+      }
+
+      return id;
+    });
+
+    // Sync changed products to Firebase after local success.
+    for (final barcode in quantitiesByBarcode.keys) {
+      try {
+        final products = await db.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+          limit: 1,
+        );
+
+        if (products.isNotEmpty) {
+          await _firestore
+              .collection('products')
+              .doc(barcode)
+              .set(products.first);
+        }
+      } catch (e) {
+        print('Firebase Product Sync Error: $e');
+      }
+    }
+
+    // Sync the sale to Firebase.
     try {
       await _firestore.collection('sales').add(sale);
     } catch (e) {
-      print("Firebase Sales Sync Error: $e");
+      print('Firebase Sales Sync Error: $e');
+    }
+
+    return saleId;
+  }
+
+  // Sales Operations + Firebase Sync
+
+  static Future<int> insertSale(Map<String, dynamic> sale) async {
+    final db = await database;
+    final result = await db.insert('sales', sale);
+
+    try {
+      await _firestore.collection('sales').add(sale);
+    } catch (e) {
+      print('Firebase Sales Sync Error: $e');
     }
 
     return result;
@@ -153,14 +304,15 @@ class DBHelper {
   }
 
   // Party Operations (Customers & Suppliers) + Firebase Sync
+
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
-    int result = await db.insert('parties', party);
+    final result = await db.insert('parties', party);
 
     try {
       await _firestore.collection('parties').add(party);
     } catch (e) {
-      print("Firebase Party Sync Error: $e");
+      print('Firebase Party Sync Error: $e');
     }
 
     return result;
@@ -168,20 +320,32 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
-    return await db.query('parties', where: 'type = ?', whereArgs: [type], orderBy: 'id DESC');
+
+    return await db.query(
+      'parties',
+      where: 'type = ?',
+      whereArgs: [type],
+      orderBy: 'id DESC',
+    );
   }
 
   static Future<int> deleteParty(int id) async {
     final db = await database;
+
     return await db.delete('parties', where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> updatePartyBalance(int id, double amount) async {
     final db = await database;
-    await db.rawUpdate('UPDATE parties SET balance = balance + ? WHERE id = ?', [amount, id]);
+
+    await db.rawUpdate(
+      'UPDATE parties SET balance = balance + ? WHERE id = ?',
+      [amount, id],
+    );
   }
 
   // Expense Operations
+
   static Future<int> insertExpense(Map<String, dynamic> expense) async {
     final db = await database;
     return await db.insert('expenses', expense);
@@ -193,6 +357,7 @@ class DBHelper {
   }
 
   // Reminder Operations
+
   static Future<int> insertReminder(Map<String, dynamic> reminder) async {
     final db = await database;
     return await db.insert('reminders', reminder);

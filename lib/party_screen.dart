@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 import 'db_helper.dart';
 
 class PartyScreen extends StatefulWidget {
@@ -35,7 +36,11 @@ class _PartyScreenState extends State<PartyScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(widget.type == 'customer' ? 'Naya Customer Add Karein' : 'Naya Supplier Add Karein'),
+            title: Text(
+              widget.type == 'customer'
+                  ? 'Add New Customer'
+                  : 'Add New Supplier',
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -55,13 +60,21 @@ class _PartyScreenState extends State<PartyScreen> {
                     if (status.isGranted) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Contacts Access Granted. Kripya details fill karein ya list se chunein.')),
+                          const SnackBar(
+                            content: Text(
+                              'Contacts Access Granted. Please fill in the details or select from the list.',
+                            ),
+                          ),
                         );
                       }
                     } else {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Contacts access permission zaroori hai!')),
+                          const SnackBar(
+                            content: Text(
+                              'Contacts access permission zaroori hai!',
+                            ),
+                          ),
                         );
                       }
                     }
@@ -103,29 +116,55 @@ class _PartyScreenState extends State<PartyScreen> {
     bool isCustomer = widget.type == 'customer';
     return Scaffold(
       appBar: AppBar(
-        title: Text(isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)'),
+        title: Text(
+          isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)',
+        ),
         backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
         foregroundColor: Colors.white,
       ),
       body: _parties.isEmpty
-          ? Center(child: Text(isCustomer ? 'Koi customer mojood nahi hai.' : 'Koi supplier mojood nahi hai.'))
+          ? Center(
+              child: Text(
+                isCustomer ? 'No customers found.' : 'No suppliers found.',
+              ),
+            )
           : ListView.builder(
               itemCount: _parties.length,
               itemBuilder: (context, index) {
                 final party = _parties[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
-                      child: Text(party['name'].isNotEmpty ? party['name'][0].toUpperCase() : '?', style: const TextStyle(color: Colors.white)),
+                      backgroundColor: isCustomer
+                          ? Colors.orange
+                          : Colors.indigo,
+                      child: Text(
+                        party['name'].isNotEmpty
+                            ? party['name'][0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
-                    title: Text(party['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(
+                      party['name'],
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text('Phone: ${party['phone']}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Rs. ${party['balance']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          'Rs. ${party['balance']}',
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.grey),
                           onPressed: () async {

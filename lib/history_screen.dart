@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'db_helper.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -33,19 +34,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
         foregroundColor: Colors.white,
       ),
       body: _sales.isEmpty
-          ? const Center(child: Text('Abhi tak koi sale record mojood nahi hai.'))
+          ? const Center(child: Text('No sales records found yet.'))
           : ListView.builder(
               itemCount: _sales.length,
               itemBuilder: (context, index) {
                 final sale = _sales[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: Colors.purple,
                       child: Icon(Icons.receipt, color: Colors.white),
                     ),
-                    title: Text('Total: Rs. ${sale['total_amount']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(
+                      'Total: Rs. ${sale['total_amount']}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text('Waqt: ${sale['date']}'),
                   ),
                 );

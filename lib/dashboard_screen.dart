@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'sales_screen.dart';
 import 'inventory_screen.dart';
 import 'history_screen.dart';
@@ -78,7 +79,13 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color, Widget targetScreen) {
+  Widget _buildMenuCard(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    Widget targetScreen,
+  ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -100,7 +107,10 @@ class DashboardScreen extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),

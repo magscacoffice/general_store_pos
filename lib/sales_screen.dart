@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'db_helper.dart';
 import 'scanner_screen.dart';
 import 'printer_screen.dart';
@@ -17,6 +18,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
+  bool isCheckingOut = false;
 
   @override
   void initState() {
@@ -39,7 +41,9 @@ class _SalesScreenState extends State<SalesScreen> {
     if (result != null && result is List<Map<String, dynamic>>) {
       setState(() {
         for (var scannedItem in result) {
-          int index = cart.indexWhere((item) => item['barcode'] == scannedItem['barcode']);
+          int index = cart.indexWhere(
+            (item) => item['barcode'] == scannedItem['barcode'],
+          );
           if (index >= 0) {
             cart[index]['quantity'] += scannedItem['quantity'];
           } else {
@@ -51,9 +55,10 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   double get subTotal => cart.fold(0.0, (sum, item) {
-        double itemPrice = (item['salePrice'] - (item['itemDiscount'] ?? 0.0)) * item['quantity'];
-        return sum + itemPrice;
-      });
+    double itemPrice =
+        (item['salePrice'] - (item['itemDiscount'] ?? 0.0)) * item['quantity'];
+    return sum + itemPrice;
+  });
 
   double get calculatedDiscount {
     if (isPercentageDiscount) {
@@ -62,10 +67,13 @@ class _SalesScreenState extends State<SalesScreen> {
     return overallDiscount;
   }
 
-  double get finalTotal => (subTotal - calculatedDiscount) < 0 ? 0 : (subTotal - calculatedDiscount);
+  double get finalTotal =>
+      (subTotal - calculatedDiscount) < 0 ? 0 : (subTotal - calculatedDiscount);
 
   void _showDiscountDialog() {
-    TextEditingController discountController = TextEditingController(text: overallDiscount.toString());
+    TextEditingController discountController = TextEditingController(
+      text: overallDiscount.toString(),
+    );
     bool isPercent = isPercentageDiscount;
 
     showDialog(
@@ -81,7 +89,9 @@ class _SalesScreenState extends State<SalesScreen> {
                   TextField(
                     controller: discountController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Discount ki miqdar'),
+                    decoration: const InputDecoration(
+                      labelText: 'Discount ki miqdar',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -91,7 +101,8 @@ class _SalesScreenState extends State<SalesScreen> {
                           title: const Text('Rupe'),
                           value: false,
                           groupValue: isPercent,
-                          onChanged: (val) => setDialogState(() => isPercent = val!),
+                          onChanged: (val) =>
+                              setDialogState(() => isPercent = val!),
                         ),
                       ),
                       Expanded(
@@ -99,24 +110,29 @@ class _SalesScreenState extends State<SalesScreen> {
                           title: const Text('FeeSad (%)'),
                           value: true,
                           groupValue: isPercent,
-                          onChanged: (val) => setDialogState(() => isPercent = val!),
+                          onChanged: (val) =>
+                              setDialogState(() => isPercent = val!),
                         ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
-                      overallDiscount = double.tryParse(discountController.text) ?? 0.0;
+                      overallDiscount =
+                          double.tryParse(discountController.text) ?? 0.0;
                       isPercentageDiscount = isPercent;
                     });
                     Navigator.pop(context);
                   },
-                  child: const Text('Lagoo Karein'),
+                  child: const Text('Apply'),
                 ),
               ],
             );
@@ -126,63 +142,103 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  void _checkout() async {
-    if (cart.isEmpty) return;
+  Future<void> _checkout() async {
+    if (cart.isEmpty || isCheckingOut) return;
 
-    // Stock update in database
-    for (var item in cart) {
-      final products = await DBHelper.getProducts();
-      final pList = products.where((p) => p['barcode'] == item['barcode']).toList();
-      if (pList.isNotEmpty) {
-        int currentStock = (pList.first['quantity'] as int?) ?? 0;
-        await DBHelper.insertProduct({
-          'barcode': item['barcode'],
-          'name': item['name'],
-          'price': item['salePrice'],
-          'quantity': currentStock - item['quantity'],
-          'purchasePrice': pList.first['purchasePrice'] ?? 0.0,
-        });
-      }
-    }
-
-    // Save Sale record
-    await DBHelper.insertSale({
-      'total_amount': subTotal,
-      'discount': calculatedDiscount,
-      'final_amount': finalTotal,
-      'payment_type': selectedCustomer == null ? 'Cash' : 'Khata',
-      'customer_id': selectedCustomer?['id'],
-      'date': DateTime.now().toString().substring(0, 19),
+    setState(() {
+      isCheckingOut = true;
     });
 
-    // If customer selected, update customer khata balance
-    if (selectedCustomer != null) {
-      await DBHelper.updatePartyBalance(selectedCustomer!['id'], finalTotal);
-    }
+    // Receipt ke liye cart ki copy mehfooz rakhein.
+    final completedCart = cart
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
 
-    if (mounted) {
-      List<Map<String, dynamic>> completedCart = List.from(cart);
-      double totalToPrint = finalTotal;
-      String custName = selectedCustomer != null ? selectedCustomer!['name'] : 'Aam Grahak (Quick Bill)';
-      String custPhone = selectedCustomer != null ? selectedCustomer!['phone'] : '';
+    // Sale values database operation se pehle calculate karein.
+    final saleSubtotal = subTotal;
+    final saleDiscount = calculatedDiscount;
+    final saleFinalTotal = finalTotal;
 
+    final customer = selectedCustomer == null
+        ? null
+        : Map<String, dynamic>.from(selectedCustomer!);
+
+    final customerName = customer != null
+        ? customer['name'].toString()
+        : ' Walk-in Customer (Quick Bill)';
+
+    final customerPhone = customer != null
+        ? (customer['phone']?.toString() ?? '')
+        : '';
+
+    final sale = <String, dynamic>{
+      'total_amount': saleSubtotal,
+      'discount': saleDiscount,
+      'final_amount': saleFinalTotal,
+      'payment_type': customer == null ? 'Cash' : 'Khata',
+      'customer_id': customer?['id'],
+      'date': DateTime.now().toString().substring(0, 19),
+    };
+
+    try {
+      // Stock, sale aur customer balance ek transaction mein update honge.
+      final saleId = await DBHelper.completeSale(
+        sale: sale,
+        items: completedCart,
+      );
+
+      if (!mounted) return;
+
+      // Sirf successful sale ke baad cart clear karein.
       setState(() {
         cart.clear();
         overallDiscount = 0.0;
+        isPercentageDiscount = false;
         selectedCustomer = null;
       });
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sale successfully save ho gayi.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Receipt printing ka purana feature barqarar hai.
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PrinterScreen(
             cartItems: completedCart,
-            totalAmount: totalToPrint,
-            customerName: custName,
-            customerPhone: custPhone,
+            totalAmount: saleFinalTotal,
+            customerName: customerName,
+            customerPhone: customerPhone,
+            invoiceId: saleId,
+            subtotalAmount: saleSubtotal,
+            discountAmount: saleDiscount,
+            paymentType: sale['payment_type'].toString(),
+            saleDate: sale['date'].toString(),
           ),
         ),
       );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sale could not be saved: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isCheckingOut = false;
+        });
+      }
     }
   }
 
@@ -197,7 +253,7 @@ class _SalesScreenState extends State<SalesScreen> {
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: _scanAndAddToCart,
-          )
+          ),
         ],
       ),
       body: Column(
@@ -214,16 +270,21 @@ class _SalesScreenState extends State<SalesScreen> {
                   child: DropdownButton<Map<String, dynamic>?>(
                     isExpanded: true,
                     value: selectedCustomer,
-                    hint: const Text('Baghair Khate Wala Grahak (Quick Bill)'),
+                    hint: const Text('Walk-in Customer (Quick Bill)'),
                     items: [
                       const DropdownMenuItem<Map<String, dynamic>?>(
                         value: null,
-                        child: Text('Baghair Khate Wala Grahak (Quick Bill)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: Text(
+                          'Walk-in Customer (Quick Bill)',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                       ...customers.map((c) {
                         return DropdownMenuItem<Map<String, dynamic>?>(
                           value: c,
-                          child: Text('${c['name']} (Khata: Rs.${c['balance']})'),
+                          child: Text(
+                            '${c['name']} (Khata: Rs.${c['balance']})',
+                          ),
                         );
                       }),
                     ],
@@ -237,24 +298,41 @@ class _SalesScreenState extends State<SalesScreen> {
           // Live Bill Items Display
           Expanded(
             child: cart.isEmpty
-                ? const Center(child: Text('Cart khali hai. Items scan karein.'))
+                ? const Center(child: Text('Cart is empty. Scan items.'))
                 : ListView.builder(
                     itemCount: cart.length,
                     itemBuilder: (context, index) {
                       final item = cart[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         child: ListTile(
-                          title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Rs. ${item['salePrice']} x ${item['quantity']}'),
+                          title: Text(
+                            item['name'],
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            'Rs. ${item['salePrice']} x ${item['quantity']}',
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Rs. ${(item['salePrice'] * item['quantity'])}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text(
+                                'Rs. ${(item['salePrice'] * item['quantity'])}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => setState(() => cart.removeAt(index)),
-                              )
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () =>
+                                    setState(() => cart.removeAt(index)),
+                              ),
                             ],
                           ),
                         ),
@@ -276,8 +354,10 @@ class _SalesScreenState extends State<SalesScreen> {
                     TextButton.icon(
                       onPressed: _showDiscountDialog,
                       icon: const Icon(Icons.discount, color: Colors.teal),
-                      label: Text('Discount: ${calculatedDiscount > 0 ? "Rs. $calculatedDiscount" : "Shamil Karein"}'),
-                    )
+                      label: Text(
+                        'Discount: ${calculatedDiscount > 0 ? "Rs. $calculatedDiscount" : "Apply"}',
+                      ),
+                    ),
                   ],
                 ),
                 const Divider(),
@@ -288,11 +368,25 @@ class _SalesScreenState extends State<SalesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Qabil-e-Ada Kul Bill:'),
-                        Text('Rs. $finalTotal', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal)),
+                        Text(
+                          'Rs. $finalTotal',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal,
+                          ),
+                        ),
                       ],
                     ),
                     ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
+                      ),
                       onPressed: cart.isEmpty ? null : _checkout,
                       icon: const Icon(Icons.print),
                       label: const Text('Checkout / Print'),
@@ -301,7 +395,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
