@@ -8,6 +8,7 @@ import 'backup_screen.dart';
 import 'purchase_screen.dart';
 import 'customer_khata_screen.dart';
 import 'profit_loss_screen.dart';
+import 'party_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -72,6 +73,13 @@ class DashboardScreen extends StatelessWidget {
                     Icons.add_shopping_cart,
                     Colors.brown,
                     const PurchaseScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'Party / Customers',
+                    Icons.people,
+                    Colors.deepOrange,
+                    const PartyScreen(type: 'customer'),
                   ),
                   _buildMenuCard(
                     context,
