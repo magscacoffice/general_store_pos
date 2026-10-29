@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'sales_screen.dart';
 import 'inventory_screen.dart';
 import 'history_screen.dart';
+import 'sales_report_screen.dart';
 import 'backup_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -53,6 +54,13 @@ class DashboardScreen extends StatelessWidget {
                     Icons.receipt_long,
                     Colors.purple,
                     const HistoryScreen(),
+                  ),
+                  _buildMenuCard(
+                    context,
+                    'سیل رپورٹ / Reports',
+                    Icons.bar_chart,
+                    Colors.blue,
+                    const SalesReportScreen(),
                   ),
                   _buildMenuCard(
                     context,
