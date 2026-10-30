@@ -556,6 +556,32 @@ class DBHelper {
     );
   }
 
+  // Complete customer ledger: credit purchases and cash receipts in one timeline.
+  static Future<List<Map<String, dynamic>>> getCustomerHistory(int partyId) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT * FROM (
+        SELECT s.id AS entry_id, s.date AS date, 'sale' AS entry_type,
+          COALESCE(s.final_amount, s.total_amount, 0) AS amount,
+          ('Bill #' || s.id || ' - ' || COALESCE((
+            SELECT GROUP_CONCAT(product_name || ' x' || quantity, ', ')
+            FROM sale_items WHERE sale_id = s.id
+          ), 'Items unavailable')) AS description
+        FROM sales s
+        WHERE s.customer_id = ?
+        UNION ALL
+        SELECT k.id AS entry_id, k.date AS date, k.type AS entry_type,
+          k.amount AS amount,
+          CASE WHEN k.type = 'receipt'
+            THEN 'Cash received' || CASE WHEN COALESCE(k.note, '') = '' THEN '' ELSE ' - ' || k.note END
+            ELSE COALESCE(k.note, k.type) END AS description
+        FROM khata_transactions k
+        WHERE k.party_id = ?
+      )
+      ORDER BY date DESC, entry_id DESC
+    ''', [partyId, partyId]);
+  }
+
   static Future<Map<String, double>> getProfitLossSummary() async {
     final db = await database;
     final sales = await db.rawQuery(
