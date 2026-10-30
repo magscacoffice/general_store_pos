@@ -270,11 +270,13 @@ class DBHelper {
         final product = products.first;
         final stock = (product['quantity'] as num?)?.toInt() ?? 0;
 
+        // Newly arrived goods may be sold before the stock entry is recorded.
+        // Add only the shortage, then the normal sale deduction consumes it.
         if (stock < requestedQuantity) {
-          final name = product['name'] ?? barcode;
-          throw Exception(
-            'Insufficient stock for $name. '
-            'Available: $stock, requested: $requestedQuantity.',
+          final shortage = requestedQuantity - stock;
+          await txn.rawUpdate(
+            'UPDATE products SET quantity = quantity + ? WHERE barcode = ?',
+            [shortage, barcode],
           );
         }
       }
