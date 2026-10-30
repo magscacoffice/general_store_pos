@@ -14,10 +14,43 @@ class _ScannerScreenState extends State<ScannerScreen> {
   final MobileScannerController controller = MobileScannerController();
   bool _isProcessing = false;
   List<Map<String, dynamic>> scannedItems = [];
+  final TextEditingController manualController = TextEditingController();
+  List<Map<String, dynamic>> allProducts = [];
+  List<Map<String, dynamic>> searchResults = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    final products = await DBHelper.getProducts();
+    if (!mounted) return;
+    setState(() => allProducts = products);
+  }
+
+  void _searchProducts(String query) {
+    final term = query.trim().toLowerCase();
+    setState(() {
+      if (term.isEmpty) {
+        searchResults = [];
+      } else {
+        // contains() har position par match karta hai, sirf starting letters par nahi.
+        searchResults = allProducts
+            .where((product) =>
+                (product['name']?.toString().toLowerCase() ?? '')
+                    .contains(term))
+            .take(30)
+            .toList();
+      }
+    });
+  }
 
   @override
   void dispose() {
     controller.dispose();
+    manualController.dispose();
     super.dispose();
   }
 
@@ -242,8 +275,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final manualController = TextEditingController();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Live Barcode Scanner'),
@@ -298,8 +329,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       Expanded(
                         child: TextField(
                           controller: manualController,
+                          onChanged: _searchProducts,
                           decoration: const InputDecoration(
-                            hintText: 'Enter barcode manually...',
+                            hintText: 'Enter barcode or search item name...',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -317,15 +349,48 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               manualController.text.trim(),
                             );
                             manualController.clear();
+                            _searchProducts('');
                           }
                         },
                         child: const Text('OK'),
                       ),
                     ],
                   ),
+                  if (searchResults.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.teal.shade100),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: searchResults.length,
+                        itemBuilder: (context, index) {
+                          final product = searchResults[index];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.inventory_2, color: Colors.teal),
+                            title: Text(product['name']?.toString() ?? ''),
+                            subtitle: Text('Barcode: ${product['barcode']}  |  Rs. ${product['price']}'),
+                            onTap: () async {
+                              FocusScope.of(context).unfocus();
+                              await _processScannedBarcode(product['barcode'].toString());
+                              if (mounted) {
+                                manualController.clear();
+                                _searchProducts('');
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   const Text(
-                    'Scan kiye gaye items (Live Cart):',
+                    'Scan kiye gaye items (Live Cart):'
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 5),
