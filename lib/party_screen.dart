@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'db_helper.dart';
 
@@ -56,25 +56,30 @@ class _PartyScreenState extends State<PartyScreen> {
                 const SizedBox(height: 15),
                 OutlinedButton.icon(
                   onPressed: () async {
-                    var status = await Permission.contacts.request();
-                    if (status.isGranted) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Contacts Access Granted. Please fill in the details or select from the list.',
-                            ),
-                          ),
-                        );
+                    try {
+                      final permission = await FlutterContacts.permissions
+                          .request(PermissionType.read);
+                      if (permission != PermissionStatus.granted) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Contacts permission allow karein.')),
+                          );
+                        }
+                        return;
                       }
-                    } else {
+                      final contact = await FlutterContacts.native.showPicker(
+                        properties: {ContactProperty.phone},
+                      );
+                      if (contact != null && mounted) {
+                        nameController.text = contact.displayName ?? '';
+                        if (contact.phones.isNotEmpty) {
+                          phoneController.text = contact.phones.first.number;
+                        }
+                      }
+                    } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Contacts access permission zaroori hai!',
-                            ),
-                          ),
+                          SnackBar(content: Text('Contact open nahi ho saka: $e')),
                         );
                       }
                     }
