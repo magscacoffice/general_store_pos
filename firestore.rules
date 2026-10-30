@@ -21,20 +21,22 @@ service cloud.firestore {
     }
 
     match /stores/{storeId}/members/{userId} {
-      allow get: if signedIn() && request.auth.uid == userId
+      allow get: if (signedIn() && request.auth.uid == userId)
         || storeAdmin(storeId);
       allow list: if storeAdmin(storeId);
       allow create, update, delete: if storeAdmin(storeId);
     }
 
-    // Shared store records are readable/writable only by active members.
-    // Keep all shared POS collections under /stores/{storeId}/... .
-    match /stores/{storeId}/{document=**} {
-      allow read, write: if activeMember(storeId);
+    // Store data collections. Member documents are deliberately excluded.
+    match /stores/{storeId}/{collection}/{documentId} {
+      allow read, write: if activeMember(storeId)
+        && collection in [
+          'products', 'sales', 'sale_items', 'parties',
+          'purchases', 'khata_transactions', 'expenses', 'reminders'
+        ];
     }
 
-    // Legacy root-level collections remain closed. They will be migrated
-    // to the store-scoped path before realtime sync is enabled.
+    // No root-level or unrecognized collection access.
     match /{document=**} {
       allow read, write: if false;
     }
