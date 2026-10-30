@@ -36,17 +36,20 @@ class _BackupScreenState extends State<BackupScreen> {
           'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
 
       // User ko folder choose karne ki ijazat dena
+      // Android/iOS par saveFile ko bytes dena zaroori hota hai.
+      final backupBytes = await dbFile.readAsBytes();
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Backup kahan save karna hai?',
         fileName: fileName,
+        bytes: backupBytes,
       );
 
       if (outputFile != null) {
-        await dbFile.copy(outputFile);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Backup saved successfully!\nPath: $outputFile'),
+              backgroundColor: Colors.green,
             ),
           );
         }
