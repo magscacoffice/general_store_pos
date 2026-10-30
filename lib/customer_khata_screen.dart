@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
+import 'customer_history_screen.dart';
 
 class CustomerKhataScreen extends StatefulWidget {
   const CustomerKhataScreen({super.key});
@@ -123,6 +124,15 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
                       '${c['phone'] ?? ''}\nBalance: Rs. ${b.toStringAsFixed(2)}',
                     ),
                     isThreeLine: true,
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CustomerHistoryScreen(customer: c),
+                        ),
+                      );
+                      await _load();
+                    },
                     trailing: IconButton(
                       tooltip: 'Record receipt',
                       icon: const Icon(Icons.payments),
