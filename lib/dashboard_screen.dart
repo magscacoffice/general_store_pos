@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'sales_screen.dart';
@@ -21,6 +22,15 @@ class DashboardScreen extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
