@@ -28,7 +28,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _loadCustomers() async {
     // parties table se type 'Customer' wale get karein
-    final data = await DBHelper.getParties('Customer');
+    final data = await DBHelper.getParties('customer');
     setState(() => customers = data);
   }
 
