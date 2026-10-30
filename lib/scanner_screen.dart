@@ -390,7 +390,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   ],
                   const SizedBox(height: 10),
                   const Text(
-                    'Scan kiye gaye items (Live Cart):'
+                    'Scan kiye gaye items (Live Cart):',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 5),
