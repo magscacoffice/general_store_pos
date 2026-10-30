@@ -48,12 +48,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --debug
+      - name: Build split release APKs
+        run: flutter build apk --release --split-per-abi
 
-      - name: Upload APK
+      - name: Show APK sizes
+        run: ls -lh build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: khan-baba-general-store-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: khan-baba-general-store-release-apks
+          path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
