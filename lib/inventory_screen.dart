@@ -155,7 +155,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   }
                 } catch (e) {
                   if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
                       SnackBar(
                         content: Text(
                           'Product save nahi ho saka: ${e.toString().replaceFirst('Exception: ', '')}',
