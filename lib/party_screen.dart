@@ -60,7 +60,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       final permission = await FlutterContacts.permissions
                           .request(PermissionType.read);
                       if (permission != PermissionStatus.granted) {
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Contacts permission allow karein.')),
                           );
@@ -70,14 +70,14 @@ class _PartyScreenState extends State<PartyScreen> {
                       final contact = await FlutterContacts.native.showPicker(
                         properties: {ContactProperty.phone},
                       );
-                      if (contact != null && mounted) {
+                      if (contact != null && context.mounted) {
                         nameController.text = contact.displayName ?? '';
                         if (contact.phones.isNotEmpty) {
                           phoneController.text = contact.phones.first.number;
                         }
                       }
                     } catch (e) {
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Contact open nahi ho saka: $e')),
                         );
@@ -104,7 +104,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'balance': 0.0,
                     });
                     _loadParties();
-                    if (mounted) Navigator.pop(dialogContext);
+                    if (dialogContext.mounted) Navigator.pop(dialogContext);
                   }
                 },
                 child: const Text('Save'),
