@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'salesmen_management_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'sales_screen.dart';
@@ -12,7 +13,9 @@ import 'profit_loss_screen.dart';
 import 'party_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+  final String role;
+
+  const DashboardScreen({super.key, required this.role});
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +108,14 @@ class DashboardScreen extends StatelessWidget {
                     Colors.deepPurple,
                     const ProfitLossScreen(),
                   ),
+                  if (role == 'admin')
+                    _buildMenuCard(
+                      context,
+                      'Salesmen / عملہ',
+                      Icons.manage_accounts,
+                      Colors.cyan,
+                      const SalesmenManagementScreen(),
+                    ),
                   _buildMenuCard(
                     context,
                     'سیٹنگز / بیک اپ',
