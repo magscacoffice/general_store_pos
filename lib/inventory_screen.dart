@@ -144,7 +144,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'quantity': stock,
                 });
 
-                if (mounted) Navigator.pop(dialogContext);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
                 _loadProducts();
               },
               child: const Text('Save'),
