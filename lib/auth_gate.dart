@@ -50,7 +50,7 @@ class AuthGate extends StatelessWidget {
                 showSignOut: true,
               );
             }
-            return const DashboardScreen();
+            return DashboardScreen(role: data['role'] as String);
           },
         );
       },
