@@ -235,7 +235,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     'quantity': qty,
                   });
 
-                  if (context.mounted) Navigator.pop(context);
+                  if (!mounted || !context.mounted) return;
+                  Navigator.pop(context);
 
                   // Foran cart mein bhi add kar dein
                   setState(() {
@@ -260,10 +261,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 } else {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter a valid name and price!'),
-                    ),
-                  );
+                      const SnackBar(
+                        content: Text('Please enter a valid name and price!'),
+                      ),
+                    );
                   }
                 }
               },
