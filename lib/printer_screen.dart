@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -208,19 +207,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
     Share.share(_buildBillText());
   }
 
-  Future<void> _sendSMSAlert() async {
-    final smsUri = Uri(
-      scheme: 'sms',
-      path: widget.customerPhone,
-      queryParameters: {'body': _buildBillText()},
-    );
-
-    if (await canLaunchUrl(smsUri)) {
-      await launchUrl(smsUri);
-    } else {
-      await Share.share(_buildBillText());
-    }
-  }
 
   Future<Uint8List> _generateInvoicePdf() async {
     final document = pw.Document();
