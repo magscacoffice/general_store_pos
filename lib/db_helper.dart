@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,7 +25,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -103,6 +104,17 @@ class DBHelper {
           line_total REAL NOT NULL,
           cost_total REAL NOT NULL
         )''');
+        await db.execute('''CREATE TABLE sync_queue(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          collection_name TEXT NOT NULL,
+          document_id TEXT NOT NULL,
+          operation TEXT NOT NULL DEFAULT 'set',
+          payload TEXT,
+          created_at TEXT NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          last_error TEXT,
+          UNIQUE(collection_name, document_id)
+        )''');
         await db.execute('''CREATE TABLE khata_transactions(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           party_id INTEGER NOT NULL,
@@ -161,6 +173,20 @@ class DBHelper {
           ''');
         }
 
+        if (oldVersion < 6) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS sync_queue(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            collection_name TEXT NOT NULL,
+            document_id TEXT NOT NULL,
+            operation TEXT NOT NULL DEFAULT 'set',
+            payload TEXT,
+            created_at TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            UNIQUE(collection_name, document_id)
+          )''');
+        }
+
         if (oldVersion < 5) {
           await db.execute('ALTER TABLE sales ADD COLUMN salesman_uid TEXT');
           await db.execute('ALTER TABLE sales ADD COLUMN salesman_name TEXT');
@@ -203,25 +229,90 @@ class DBHelper {
     );
   }
 
+
+  // Durable offline-first outbox. Local changes are queued before network sync.
+  static Future<void> _queueSync(
+    DatabaseExecutor executor, {
+    required String collection,
+    required String documentId,
+    required Map<String, dynamic> payload,
+    String operation = 'set',
+  }) async {
+    await executor.insert(
+      'sync_queue',
+      {
+        'collection_name': collection,
+        'document_id': documentId,
+        'operation': operation,
+        'payload': jsonEncode(payload),
+        'created_at': DateTime.now().toIso8601String(),
+        'attempts': 0,
+        'last_error': null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<int> getPendingSyncCount() async {
+    final db = await database;
+    final rows = await db.rawQuery('SELECT COUNT(*) AS total FROM sync_queue');
+    return (rows.first['total'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<void> syncPendingChanges({int batchSize = 50}) async {
+    final db = await database;
+    final pending = await db.query(
+      'sync_queue',
+      orderBy: 'id ASC',
+      limit: batchSize,
+    );
+
+    for (final row in pending) {
+      final id = row['id'] as int;
+      final collection = row['collection_name'].toString();
+      final documentId = row['document_id'].toString();
+      final operation = row['operation'].toString();
+      try {
+        final ref = _storeCollection(collection).doc(documentId);
+        if (operation == 'delete') {
+          await ref.delete();
+        } else {
+          final decoded = jsonDecode(row['payload'].toString());
+          if (decoded is! Map<String, dynamic>) {
+            throw const FormatException('Invalid sync payload.');
+          }
+          await ref.set(decoded, SetOptions(merge: true));
+        }
+        await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
+      } catch (e) {
+        await db.rawUpdate(
+          'UPDATE sync_queue SET attempts = attempts + 1, last_error = ? WHERE id = ?',
+          [e.toString(), id],
+        );
+      }
+    }
+  }
+
   // Product Operations + Firebase Sync
 
   static Future<int> insertProduct(Map<String, dynamic> product) async {
     final db = await database;
 
-    final result = await db.insert(
-      'products',
-      product,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-
-    try {
-      await _storeCollection('products')
-          .doc(product['barcode'].toString())
-          .set(product);
-    } catch (e) {
-      print('Firebase Product Sync Error: $e');
-    }
-
+    final result = await db.transaction<int>((txn) async {
+      final inserted = await txn.insert(
+        'products',
+        product,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await _queueSync(
+        txn,
+        collection: 'products',
+        documentId: product['barcode'].toString(),
+        payload: product,
+      );
+      return inserted;
+    });
+    await syncPendingChanges();
     return result;
   }
 
