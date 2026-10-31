@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'auth_gate.dart';
@@ -35,7 +36,7 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
 
   Future<void> _createSalesman() async {
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
     if (name.isEmpty || !email.contains('@') || password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -47,14 +48,39 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
     }
 
     setState(() => _creating = true);
+    FirebaseApp? secondaryApp;
+    FirebaseAuth? secondaryAuth;
+    UserCredential? credential;
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'asia-south1')
-          .httpsCallable('createSalesman');
-      await callable.call({
+      // Create the salesman through a secondary Firebase app so the admin
+      // session on the primary app remains signed in.
+      try {
+        secondaryApp = Firebase.app('salesmanCreator');
+      } catch (_) {
+        secondaryApp = await Firebase.initializeApp(
+          name: 'salesmanCreator',
+          options: Firebase.app().options,
+        );
+      }
+      secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      await credential.user?.updateDisplayName(name);
+
+      // The primary Firebase session is still the admin. Firestore Rules
+      // permit an active admin to create a member document.
+      await _members.doc(credential.user!.uid).set({
         'name': name,
         'email': email,
-        'password': password,
+        'role': 'salesman',
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': FirebaseAuth.instance.currentUser!.uid,
       });
+
+      await secondaryAuth.signOut();
       _nameController.clear();
       _emailController.clear();
       _passwordController.clear();
@@ -65,17 +91,31 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
           backgroundColor: Colors.green,
         ),
       );
-    } on FirebaseFunctionsException catch (e) {
+    } on FirebaseAuthException catch (e) {
+      if (credential?.user != null) {
+        await credential!.user!.delete().catchError((_) {});
+      }
       if (!mounted) return;
+      final message = switch (e.code) {
+        'email-already-in-use' => 'Yeh email pehle se registered hai.',
+        'invalid-email' => 'Email address durust nahi hai.',
+        'weak-password' => 'Password kam az kam 8 characters ka rakhein.',
+        'network-request-failed' => 'Internet connection check karein.',
+        _ => e.message ?? 'Account create nahi ho saka.',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Account create nahi ho saka.')),
+        SnackBar(content: Text(message)),
       );
     } catch (e) {
+      if (credential?.user != null) {
+        await credential!.user!.delete().catchError((_) {});
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('Account create nahi ho saka: $e')),
       );
     } finally {
+      await secondaryAuth?.signOut().catchError((_) {});
       if (mounted) setState(() => _creating = false);
     }
   }
