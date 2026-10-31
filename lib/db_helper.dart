@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -486,7 +487,7 @@ class DBHelper {
               .set(products.first);
         }
       } catch (e) {
-        print('Firebase Product Sync Error: $e');
+        developer.log('Firebase Product Sync Error', name: 'DBHelper', error: e);
       }
     }
 
@@ -494,7 +495,7 @@ class DBHelper {
     try {
       await _storeCollection('sales').add(sale);
     } catch (e) {
-      print('Firebase Sales Sync Error: $e');
+      developer.log('Firebase Sales Sync Error', name: 'DBHelper', error: e);
     }
 
     return saleId;
@@ -529,7 +530,7 @@ class DBHelper {
     try {
       await _storeCollection('parties').add(party);
     } catch (e) {
-      print('Firebase Party Sync Error: $e');
+      developer.log('Firebase Party Sync Error', name: 'DBHelper', error: e);
     }
 
     return result;
