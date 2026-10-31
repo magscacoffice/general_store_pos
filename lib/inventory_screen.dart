@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
 
 import 'db_helper.dart';
 import 'scanner_screen.dart';
@@ -141,6 +140,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'barcode': barcode,
                   'name': name,
                   'price': salePrice,
+                  'purchasePrice': purchasePrice,
                   'quantity': stock,
                 });
 
