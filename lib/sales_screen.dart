@@ -95,27 +95,29 @@ class _SalesScreenState extends State<SalesScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<bool>(
-                          title: const Text('Rupe'),
-                          value: false,
-                          groupValue: isPercent,
-                          onChanged: (val) =>
-                              setDialogState(() => isPercent = val!),
+                  RadioGroup<bool>(
+                    groupValue: isPercent,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => isPercent = val);
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            title: const Text('Rupe'),
+                            value: false,
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<bool>(
-                          title: const Text('FeeSad (%)'),
-                          value: true,
-                          groupValue: isPercent,
-                          onChanged: (val) =>
-                              setDialogState(() => isPercent = val!),
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            title: const Text('FeeSad (%)'),
+                            value: true,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
