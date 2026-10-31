@@ -18,8 +18,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     _loadExpenses();
   }
 
-  void _loadExpenses() async {
+  Future<void> _loadExpenses() async {
     final data = await DBHelper.getExpenses();
+    if (!mounted) return;
     setState(() {
       _expenses = data;
     });
@@ -56,22 +57,32 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (titleController.text.isNotEmpty &&
-                  amountController.text.isNotEmpty) {
-                await DBHelper.insertExpense({
-                  'title': titleController.text.trim(),
-                  'amount': double.tryParse(amountController.text) ?? 0.0,
-                  'date': DateTime.now().toString().substring(0, 16),
-                });
-                _loadExpenses();
-                if (mounted) Navigator.pop(context);
+              final title = titleController.text.trim();
+              final amount = double.tryParse(amountController.text.trim());
+              if (title.isEmpty || amount == null || !amount.isFinite || amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Title aur positive valid amount darj karein.')),
+                );
+                return;
               }
+              await DBHelper.insertExpense({
+                  'title': title,
+                  'amount': amount,
+                  'date': DateTime.now().toString().substring(0, 16),
+              });
+              await _loadExpenses();
+              if (mounted) Navigator.pop(context);
             },
             child: const Text('Save'),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override
