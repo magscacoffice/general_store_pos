@@ -329,20 +329,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
     );
   }
 
-  pw.Widget _pdfTotalRow(String label, String value, {bool bold = false}) {
-    final style = pw.TextStyle(
-      fontSize: bold ? 13 : 11,
-      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-    );
-
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(label, style: style),
-        pw.Text(value, style: style),
-      ],
-    );
-  }
 
   String get _pdfFileName {
     final invoiceNumber = widget.invoiceId > 0
