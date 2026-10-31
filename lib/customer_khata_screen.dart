@@ -63,10 +63,11 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
     if (ok != true) return;
     final a = double.tryParse(amount.text) ?? 0;
     if (a <= 0) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
+      }
       return;
     }
     try {
@@ -76,16 +77,18 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
         note: note.text.trim(),
       );
       await _load();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Receipt saved; customer balance reduced.'),
           ),
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
+      }
     } finally {
       amount.dispose();
       note.dispose();
