@@ -580,8 +580,9 @@ class DBHelper {
     required double unitCost,
     int? supplierId,
   }) async {
-    if (quantity <= 0 || unitCost < 0)
+    if (quantity <= 0 || unitCost < 0) {
       throw Exception('Quantity and cost must be valid.');
+    }
     final db = await database;
     return db.transaction<int>((txn) async {
       final rows = await txn.query(
