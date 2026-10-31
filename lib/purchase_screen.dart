@@ -34,7 +34,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   Future<void> _save() async {
     final q = int.tryParse(qty.text) ?? 0, c = double.tryParse(cost.text) ?? -1;
-    if (productId == null || q <= 0 || c < 0) {
+    if (productId == null || q <= 0 || !c.isFinite || c < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Product, quantity and valid cost required.'),
