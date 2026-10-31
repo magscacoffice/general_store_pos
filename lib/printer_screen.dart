@@ -82,7 +82,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   String _billText({required bool plain}) {
     const width = 32;
-    final separator = '-' * width;
+    final separator = List.filled(width, '-').join();
     final received = widget.receivedAmount ?? widget.totalAmount;
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final tax = widget.taxAmount;
