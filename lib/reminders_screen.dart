@@ -61,7 +61,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     'date': DateTime.now().toString().substring(0, 10),
                     'is_done': 0,
                   });
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
                   _loadReminders();
                 }
               },
