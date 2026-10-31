@@ -135,14 +135,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   return;
                 }
 
-                // DBHelper ke zariye database mein save karna
-                await DBHelper.insertProduct({
+                final productData = {
                   'barcode': barcode,
                   'name': name,
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
                   'quantity': stock,
-                });
+                };
+
+                // Edit par existing row update ho; naya product create na ho.
+                try {
+                  if (product == null) {
+                    await DBHelper.insertProduct(productData);
+                  } else {
+                    await DBHelper.updateProduct(
+                      product['id'] as int,
+                      productData,
+                    );
+                  }
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Product save nahi ho saka: ${e.toString().replaceFirst('Exception: ', '')}',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                  return;
+                }
 
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 _loadProducts();
