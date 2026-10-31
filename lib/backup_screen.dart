@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:file_picker/file_picker.dart';
+import 'db_helper.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -60,54 +61,116 @@ class _BackupScreenState extends State<BackupScreen> {
             .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      setState(() => _isWorking = false);
+      if (mounted) setState(() => _isWorking = false);
     }
   }
 
-  // 2. File Picker ke zariye database restore karna
+  // Restore only a verified database, keeping a safety copy of current data.
   Future<void> _restoreBackup() async {
     setState(() => _isWorking = true);
     try {
-      // User se .db file select karwana
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['db'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        String filePath = result.files.single.path!;
-        if (!filePath.endsWith('.db')) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please select a valid .db backup file!'),
-              ),
-            );
-          }
-          return;
+      if (result == null || result.files.single.path == null) return;
+
+      final selectedFile = File(result.files.single.path!);
+      if (!await selectedFile.exists() ||
+          !selectedFile.path.toLowerCase().endsWith('.db')) {
+        throw Exception('Please select a valid .db backup file.');
+      }
+
+      final dbDirectory = await getDatabasesPath();
+      final dbPath = p.join(dbDirectory, 'khan_baba_pos.db');
+      final currentDb = File(dbPath);
+      final tempPath = p.join(
+        dbDirectory,
+        'restore_validation_${DateTime.now().microsecondsSinceEpoch}.db',
+      );
+      final tempDb = File(tempPath);
+
+      // Copy first and validate the selected file without touching live data.
+      await selectedFile.copy(tempPath);
+      Database? validationDb;
+      try {
+        validationDb = await openDatabase(tempPath, readOnly: true);
+        final integrity = await validationDb.rawQuery('PRAGMA integrity_check');
+        final integrityResult = integrity.isNotEmpty
+            ? integrity.first.values.first.toString().toLowerCase()
+            : '';
+        if (integrityResult != 'ok') {
+          throw Exception('Backup file database integrity check failed.');
         }
 
-        File selectedFile = File(filePath);
-        String dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
-        await selectedFile.copy(dbPath);
+        final tables = await validationDb.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type = 'table'",
+        );
+        final tableNames = tables.map((row) => row['name'].toString()).toSet();
+        const requiredTables = {
+          'products',
+          'sales',
+          'parties',
+          'expenses',
+          'purchases',
+          'sale_items',
+          'khata_transactions',
+        };
+        if (!tableNames.containsAll(requiredTables)) {
+          throw Exception('Selected file is not a valid app backup.');
+        }
+      } finally {
+        await validationDb?.close();
+      }
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Backup restored successfully! Please restart the app.',
-              ),
-              backgroundColor: Colors.green,
+      // Preserve the current database before replacing it.
+      final now = DateTime.now();
+      final safetyPath = p.join(
+        dbDirectory,
+        'before_restore_${now.millisecondsSinceEpoch}.db',
+      );
+      if (await currentDb.exists()) {
+        await DBHelper.closeDatabase();
+        await currentDb.copy(safetyPath);
+      } else {
+        await DBHelper.closeDatabase();
+      }
+
+      try {
+        await tempDb.copy(dbPath);
+      } catch (_) {
+        // Roll back automatically if replacing the database fails.
+        final safetyFile = File(safetyPath);
+        if (await safetyFile.exists()) {
+          await safetyFile.copy(dbPath);
+        }
+        rethrow;
+      } finally {
+        if (await tempDb.exists()) await tempDb.delete();
+      }
+
+      // Re-open using the app's normal database helper and confirm it is readable.
+      await DBHelper.database;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Restore successful. Previous data backup: ${p.basename(safetyPath)}',
             ),
-          );
-        }
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Restore Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore Error: $e')),
+        );
       }
     } finally {
-      setState(() => _isWorking = false);
+      if (mounted) setState(() => _isWorking = false);
     }
   }
 
