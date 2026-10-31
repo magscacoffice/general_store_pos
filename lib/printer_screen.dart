@@ -55,12 +55,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   double get _subtotal => widget.subtotalAmount ?? widget.totalAmount;
 
-  String get _formattedDate {
-    final parsedDate = DateTime.tryParse(widget.saleDate);
-    return DateFormat('dd-MMM-yyyy hh:mm a')
-        .format(parsedDate ?? DateTime.now());
-  }
-
   double _number(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
@@ -388,25 +382,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
-  Future<void> _printPdf() async {
-    if (_isGeneratingPdf) return;
-    setState(() => _isGeneratingPdf = true);
-    try {
-      final bytes = await _generateInvoicePdf();
-      await Printing.layoutPdf(
-        onLayout: (_) async => bytes,
-        name: _pdfFileName,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not print PDF: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isGeneratingPdf = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
