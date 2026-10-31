@@ -219,110 +219,114 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   Future<Uint8List> _generateInvoicePdf() async {
     final document = pw.Document();
+    final invoiceNumber =
+        widget.invoiceId > 0 ? widget.invoiceId.toString() : 'N/A';
+    final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
+    final received = widget.receivedAmount ?? widget.totalAmount;
+    final change =
+        (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
 
-    final invoiceNumber = widget.invoiceId > 0
-        ? widget.invoiceId.toString()
-        : 'N/A';
-
-    document.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => [
-          pw.Center(
-            child: pw.Text(
-              'KHAN BABA GENERAL STORE',
-              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 5),
-          pw.Center(
-            child: pw.Text(
-              'Sanawan, Kot Addu',
-              style: const pw.TextStyle(fontSize: 11),
-            ),
-          ),
-          pw.SizedBox(height: 20),
-          pw.Center(
-            child: pw.Text(
-              'SALES INVOICE',
-              style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 15),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('Invoice No: $invoiceNumber'),
-                    pw.SizedBox(height: 5),
-                    pw.Text('Customer: ${widget.customerName}'),
-                    pw.SizedBox(height: 5),
-                    pw.Text('Payment: ${widget.paymentType}'),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 12),
-              pw.Text('Date: $_formattedDate'),
-            ],
-          ),
-          pw.SizedBox(height: 20),
-          pw.TableHelper.fromTextArray(
-            headers: ['Product', 'Qty', 'Price', 'Amount'],
-            data: widget.cartItems.map((item) {
-              return [
-                item['name']?.toString() ?? 'Product',
-                _number(item['quantity']).toStringAsFixed(0),
-                _money(_number(item['salePrice'])),
-                _money(_itemTotal(item)),
-              ];
-            }).toList(),
-            headerStyle: pw.TextStyle(
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.white,
-            ),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.teal),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            cellAlignment: pw.Alignment.centerLeft,
-            cellPadding: const pw.EdgeInsets.all(7),
-            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-          ),
-          pw.SizedBox(height: 20),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.SizedBox(
-              width: 230,
-              child: pw.Column(
-                children: [
-                  _pdfTotalRow('Subtotal', _money(_subtotal)),
-                  pw.SizedBox(height: 7),
-                  _pdfTotalRow('Discount', _money(widget.discountAmount)),
-                  pw.Divider(),
-                  _pdfTotalRow(
-                    'FINAL TOTAL',
-                    _money(widget.totalAmount),
-                    bold: true,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 35),
-          pw.Center(
-            child: pw.Text(
-              'Thank you for shopping with us!',
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
+    // 58mm thermal receipt: compact width with height based on item count.
+    final pageHeight = (155 + widget.cartItems.length * 13).toDouble();
+    final pageFormat = PdfPageFormat(
+      58 * PdfPageFormat.mm,
+      pageHeight * PdfPageFormat.mm,
+      marginAll: 4 * PdfPageFormat.mm,
     );
 
+    document.addPage(
+      pw.Page(
+        pageFormat: pageFormat,
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Center(
+              child: pw.Text(
+                'KHAN BABA',
+                style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.Center(
+              child: pw.Text(
+                'GENERAL STORE & PERFUMERY',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.Center(child: pw.Text('Perfume | Cosmetics | Daily Needs', style: const pw.TextStyle(fontSize: 6))),
+            pw.Center(child: pw.Text('Gift Items', style: const pw.TextStyle(fontSize: 7))),
+            pw.Center(child: pw.Text('GT Road Sanawa', style: const pw.TextStyle(fontSize: 7))),
+            pw.Center(child: pw.Text('WhatsApp: 0345-1444325', style: const pw.TextStyle(fontSize: 7))),
+            pw.Divider(),
+            _pdfInfoRow('Bill No', invoiceNumber),
+            _pdfInfoRow('Date', DateFormat('dd-MM-yyyy').format(parsedDate)),
+            _pdfInfoRow('Time', DateFormat('hh:mm a').format(parsedDate)),
+            _pdfInfoRow('Cashier', widget.cashierName),
+            _pdfInfoRow('Sales Type', widget.salesType),
+            pw.Divider(),
+            pw.Text('Customer: ${widget.customerName}', style: const pw.TextStyle(fontSize: 7)),
+            pw.Text('Phone: ${widget.customerPhone.isEmpty ? 'N/A' : widget.customerPhone}', style: const pw.TextStyle(fontSize: 7)),
+            pw.Divider(),
+            pw.Row(
+              children: [
+                pw.Expanded(flex: 5, child: pw.Text('Description', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                pw.Expanded(flex: 2, child: pw.Text('Qty', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                pw.Expanded(flex: 3, child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+              ],
+            ),
+            pw.SizedBox(height: 3),
+            ...widget.cartItems.map((item) {
+              final name = item['name']?.toString() ?? 'Product';
+              final qty = _number(item['quantity']);
+              final rate = _number(item['salePrice']);
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 4),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                  children: [
+                    pw.Text(name, style: const pw.TextStyle(fontSize: 7)),
+                    pw.Row(
+                      children: [
+                        pw.Expanded(child: pw.Text('${_money(rate)} x ${qty.toStringAsFixed(0)}', style: const pw.TextStyle(fontSize: 6))),
+                        pw.Text(_money(_itemTotal(item)), style: const pw.TextStyle(fontSize: 7)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+            pw.Divider(),
+            _pdfInfoRow('Sub Total', _money(_subtotal)),
+            _pdfInfoRow('Discount', _money(widget.discountAmount)),
+            _pdfInfoRow('Tax (GST)', _money(widget.taxAmount)),
+            pw.Divider(),
+            _pdfInfoRow('TOTAL AMOUNT', _money(widget.totalAmount), bold: true),
+            pw.Divider(),
+            _pdfInfoRow('Payment', widget.paymentType),
+            _pdfInfoRow('Received', _money(received)),
+            _pdfInfoRow('Change', _money(change)),
+            pw.SizedBox(height: 8),
+            pw.Center(child: pw.Text('Thank You For Shopping', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('Visit Again', style: const pw.TextStyle(fontSize: 7))),
+          ],
+        ),
+      ),
+    );
     return document.save();
+  }
+
+  pw.Widget _pdfInfoRow(String label, String value, {bool bold = false}) {
+    final style = pw.TextStyle(
+      fontSize: bold ? 8 : 7,
+      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+    );
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Expanded(child: pw.Text(label, style: style)),
+        pw.Text(value, style: style),
+      ],
+    );
   }
 
   pw.Widget _pdfTotalRow(String label, String value, {bool bold = false}) {
@@ -366,22 +370,52 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
-  Future<void> _printPdf() async {
+  Future<void> _previewPdf() async {
     if (_isGeneratingPdf) return;
-
     setState(() => _isGeneratingPdf = true);
-
     try {
       final bytes = await _generateInvoicePdf();
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('58mm Bill Preview')),
+            body: PdfPreview(
+              build: (_) async => bytes,
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              allowPrinting: true,
+              allowSharing: true,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not preview PDF: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
+  }
 
+  Future<void> _printPdf() async {
+    if (_isGeneratingPdf) return;
+    setState(() => _isGeneratingPdf = true);
+    try {
+      final bytes = await _generateInvoicePdf();
       await Printing.layoutPdf(
         onLayout: (_) async => bytes,
         name: _pdfFileName,
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not print PDF: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not print PDF: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isGeneratingPdf = false);
@@ -530,9 +564,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _isGeneratingPdf ? null : _printPdf,
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Print PDF'),
+                    onPressed: _isGeneratingPdf ? null : _previewPdf,
+                    icon: const Icon(Icons.preview),
+                    label: const Text('58mm Preview'),
                   ),
                 ),
                 const SizedBox(width: 8),
