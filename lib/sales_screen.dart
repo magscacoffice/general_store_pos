@@ -30,6 +30,7 @@ class _SalesScreenState extends State<SalesScreen> {
   Future<void> _loadCustomers() async {
     // parties table se type 'Customer' wale get karein
     final data = await DBHelper.getParties('customer');
+    if (!mounted) return;
     setState(() => customers = data);
   }
 
@@ -39,7 +40,29 @@ class _SalesScreenState extends State<SalesScreen> {
       MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
 
+    if (!mounted) return;
     if (result != null && result is List<Map<String, dynamic>>) {
+      final currentProducts = await DBHelper.getProducts();
+      if (!mounted) return;
+      final stockByBarcode = <String, int>{
+        for (final product in currentProducts)
+          product['barcode'].toString(): (product['quantity'] as num).toInt(),
+      };
+      final requested = <String, int>{};
+      for (final item in cart) {
+        final code = item['barcode'].toString();
+        requested[code] = (requested[code] ?? 0) + (item['quantity'] as num).toInt();
+      }
+      for (final item in result) {
+        final code = item['barcode'].toString();
+        requested[code] = (requested[code] ?? 0) + (item['quantity'] as num).toInt();
+        if (requested[code]! > (stockByBarcode[code] ?? 0)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Stock se zyada quantity select ho rahi hai: ${item['name']}')),
+          );
+          return;
+        }
+      }
       setState(() {
         for (var scannedItem in result) {
           int index = cart.indexWhere(
@@ -71,13 +94,13 @@ class _SalesScreenState extends State<SalesScreen> {
   double get finalTotal =>
       (subTotal - calculatedDiscount) < 0 ? 0 : (subTotal - calculatedDiscount);
 
-  void _showDiscountDialog() {
+  Future<void> _showDiscountDialog() async {
     TextEditingController discountController = TextEditingController(
       text: overallDiscount.toString(),
     );
     bool isPercent = isPercentageDiscount;
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -128,9 +151,20 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () {
+                    final value = double.tryParse(discountController.text.trim());
+                    final invalid = value == null || !value.isFinite || value < 0 ||
+                        (isPercent && value > 100) ||
+                        (!isPercent && value > subTotal);
+                    if (invalid) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(isPercent
+                            ? 'Discount 0 se 100 percent ke darmiyan hona chahiye.'
+                            : 'Discount valid aur subtotal se kam ya barabar hona chahiye.')),
+                      );
+                      return;
+                    }
                     setState(() {
-                      overallDiscount =
-                          double.tryParse(discountController.text) ?? 0.0;
+                      overallDiscount = value;
                       isPercentageDiscount = isPercent;
                     });
                     Navigator.pop(context);
@@ -143,6 +177,7 @@ class _SalesScreenState extends State<SalesScreen> {
         );
       },
     );
+    discountController.dispose();
   }
 
   Future<void> _checkout() async {
