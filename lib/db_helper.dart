@@ -326,6 +326,34 @@ class DBHelper {
     return result;
   }
 
+  static Future<int> updateProduct(
+    int id,
+    Map<String, dynamic> product,
+  ) async {
+    final db = await database;
+
+    final result = await db.transaction<int>((txn) async {
+      final updated = await txn.update(
+        'products',
+        product,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (updated == 0) {
+        throw Exception('Product not found. Please refresh and try again.');
+      }
+      await _queueSync(
+        txn,
+        collection: 'products',
+        documentId: product['barcode'].toString(),
+        payload: product,
+      );
+      return updated;
+    });
+    await syncPendingChanges();
+    return result;
+  }
+
   static Future<List<Map<String, dynamic>>> getProducts() async {
     final db = await database;
     return await db.query('products', orderBy: 'id DESC');
