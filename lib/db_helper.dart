@@ -510,7 +510,7 @@ class DBHelper {
     try {
       await _storeCollection('sales').add(sale);
     } catch (e) {
-      print('Firebase Sales Sync Error: $e');
+      developer.log('Firebase Sales Sync Error', name: 'DBHelper', error: e);
     }
 
     return result;
