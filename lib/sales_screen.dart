@@ -224,6 +224,8 @@ class _SalesScreenState extends State<SalesScreen> {
             discountAmount: saleDiscount,
             paymentType: sale['payment_type'].toString(),
             saleDate: sale['date'].toString(),
+            cashierName: currentUser?.displayName ?? currentUser?.email ?? 'Admin',
+            salesType: customer == null ? 'Retail' : 'Khata',
           ),
         ),
       );
