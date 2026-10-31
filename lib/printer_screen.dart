@@ -20,6 +20,10 @@ class PrinterScreen extends StatefulWidget {
   final double discountAmount;
   final String paymentType;
   final String saleDate;
+  final String cashierName;
+  final double receivedAmount;
+  final double taxAmount;
+  final String salesType;
 
   const PrinterScreen({
     super.key,
@@ -32,6 +36,10 @@ class PrinterScreen extends StatefulWidget {
     this.discountAmount = 0,
     this.paymentType = 'Cash',
     this.saleDate = '',
+    this.cashierName = 'Admin',
+    this.receivedAmount,
+    this.taxAmount = 0,
+    this.salesType = 'Retail',
   });
 
   @override
@@ -62,8 +70,66 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return _number(item['quantity']) * _number(item['salePrice']);
   }
 
-  String _money(double amount) {
-    return 'Rs. ${amount.toStringAsFixed(2)}';
+  String _money(double amount) => amount.toStringAsFixed(2);
+
+  String _line(String left, String right, {int width = 32}) {
+    final available = width - left.length - right.length;
+    if (available <= 1) {
+      return '${left.substring(0, left.length > width - right.length - 1 ? width - right.length - 1 : left.length)} $right';
+    }
+    return left + (' ' * available) + right;
+  }
+
+  String _billText({required bool plain}) {
+    const width = 32;
+    final separator = '-' * width;
+    final received = widget.receivedAmount ?? widget.totalAmount;
+    final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
+    final tax = widget.taxAmount;
+    final buffer = StringBuffer()
+      ..writeln('       KHAN BABA')
+      ..writeln(' GENERAL STORE & PERFUMERY')
+      ..writeln(' Perfume | Cosmetics | Daily Needs')
+      ..writeln('        Gift Items')
+      ..writeln('       GT Road Sanawa')
+      ..writeln('      WhatsApp: 0345-1444325')
+      ..writeln(separator)
+      ..writeln(_line('Bill No', ': ${widget.invoiceId.toString().padLeft(6, '0')}', width: width))
+      ..writeln(_line('Date', ': ${DateFormat('dd-MM-yyyy').format(DateTime.tryParse(widget.saleDate) ?? DateTime.now())}', width: width))
+      ..writeln(_line('Time', ': ${DateFormat('hh:mm a').format(DateTime.tryParse(widget.saleDate) ?? DateTime.now())}', width: width))
+      ..writeln(_line('Cashier', ': ${widget.cashierName}', width: width))
+      ..writeln(_line('Sales Type', ': ${widget.salesType}', width: width))
+      ..writeln(separator)
+      ..writeln('Customer : ${widget.customerName}')
+      ..writeln('Phone    : ${widget.customerPhone.isEmpty ? 'N/A' : widget.customerPhone}')
+      ..writeln(separator)
+      ..writeln(_line('No  Description', 'Amount', width: width));
+    for (var i = 0; i < widget.cartItems.length; i++) {
+      final item = widget.cartItems[i];
+      final name = (item['name']?.toString() ?? 'Product');
+      final qty = _number(item['quantity']).toStringAsFixed(0);
+      final rate = _number(item['salePrice']);
+      final amount = _itemTotal(item);
+      buffer
+        ..writeln('${i + 1}. ${name.length > 25 ? name.substring(0, 25) : name}')
+        ..writeln('   ${_money(rate)} x $qty = ${_money(amount)}');
+    }
+    buffer
+      ..writeln(separator)
+      ..writeln(_line('Sub Total', _money(_subtotal), width: width))
+      ..writeln(_line('Discount', _money(widget.discountAmount), width: width))
+      ..writeln(_line('Tax (GST)', _money(tax), width: width))
+      ..writeln(separator)
+      ..writeln(_line('TOTAL AMOUNT', _money(widget.totalAmount), width: width))
+      ..writeln(separator)
+      ..writeln(_line('Payment Method', widget.paymentType, width: width))
+      ..writeln(_line('Received Amount', _money(received), width: width))
+      ..writeln(_line('Change', _money(change), width: width))
+      ..writeln(separator)
+      ..writeln('       Thank You For Shopping')
+      ..writeln('             Visit Again')
+      ..writeln('\n\n');
+    return buffer.toString();
   }
 
   @override
@@ -128,40 +194,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
       );
       return;
     }
-
-    final buffer = StringBuffer()
-      ..writeln('KHAN BABA GENERAL STORE')
-      ..writeln('Sanawan, Kot Addu')
-      ..writeln('Invoice: ${widget.invoiceId > 0 ? widget.invoiceId : 'N/A'}')
-      ..writeln('Customer: ${widget.customerName}')
-      ..writeln('Date: $_formattedDate')
-      ..writeln('Payment: ${widget.paymentType}')
-      ..writeln('--------------------------------');
-
-    for (final item in widget.cartItems) {
-      final quantity = _number(item['quantity']);
-      final price = _number(item['salePrice']);
-
-      buffer
-        ..writeln(item['name']?.toString() ?? 'Product')
-        ..writeln(
-          '${quantity.toStringAsFixed(0)} x ${_money(price)} = '
-          '${_money(_itemTotal(item))}',
-        );
-    }
-
-    buffer
-      ..writeln('--------------------------------')
-      ..writeln('Subtotal: ${_money(_subtotal)}')
-      ..writeln('Discount: ${_money(widget.discountAmount)}')
-      ..writeln('TOTAL: ${_money(widget.totalAmount)}')
-      ..writeln('--------------------------------')
-      ..writeln('Thank you for shopping!')
-      ..writeln('\n\n');
-
     try {
-      await PrintBluetoothThermal.writeBytes(buffer.toString().codeUnits);
-
+      await PrintBluetoothThermal.writeBytes(_billText(plain: true).codeUnits);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Receipt sent to printer.')),
@@ -169,39 +203,14 @@ class _PrinterScreenState extends State<PrinterScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Printing failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Printing failed: $e')),
+        );
       }
     }
   }
 
-  String _buildBillText() {
-    final buffer = StringBuffer()
-      ..writeln('*KHAN BABA GENERAL STORE*')
-      ..writeln('Sanawan, Kot Addu')
-      ..writeln('Invoice: ${widget.invoiceId > 0 ? widget.invoiceId : 'N/A'}')
-      ..writeln('Customer: ${widget.customerName}')
-      ..writeln('Date: $_formattedDate')
-      ..writeln('Payment: ${widget.paymentType}')
-      ..writeln('--------------------------------');
-
-    for (final item in widget.cartItems) {
-      buffer.writeln(
-        '${item['name']} - ${item['quantity']} x '
-        '${_money(_number(item['salePrice']))} = '
-        '${_money(_itemTotal(item))}',
-      );
-    }
-
-    buffer
-      ..writeln('--------------------------------')
-      ..writeln('Subtotal: ${_money(_subtotal)}')
-      ..writeln('Discount: ${_money(widget.discountAmount)}')
-      ..writeln('*Total Amount: ${_money(widget.totalAmount)}*')
-      ..writeln('Thank you for shopping!');
-
-    return buffer.toString();
-  }
+  String _buildBillText() => _billText(plain: true);
 
   void _shareOnWhatsApp() {
     Share.share(_buildBillText());
