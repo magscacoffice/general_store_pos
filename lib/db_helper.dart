@@ -622,8 +622,9 @@ class DBHelper {
     required double amount,
     String note = '',
   }) async {
-    if (amount <= 0)
+    if (amount <= 0) {
       throw Exception('Receipt amount must be greater than zero.');
+    }
     final db = await database;
     await db.transaction((txn) async {
       final rows = await txn.query(
