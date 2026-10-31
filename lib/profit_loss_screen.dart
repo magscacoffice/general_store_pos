@@ -22,9 +22,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       final d = await DBHelper.getProfitLossSummary();
       if (mounted) setState(() => data = d);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
