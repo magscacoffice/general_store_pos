@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -350,6 +351,37 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
   }
 
+  Future<void> _savePdfToDevice() async {
+    if (_isGeneratingPdf) return;
+    setState(() => _isGeneratingPdf = true);
+    try {
+      final bytes = await _generateInvoicePdf();
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save invoice PDF',
+        fileName: _pdfFileName,
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      if (savedPath != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF saved successfully: $savedPath'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save PDF: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGeneratingPdf = false);
+    }
+  }
+
   Future<void> _previewPdf() async {
     if (_isGeneratingPdf) return;
     setState(() => _isGeneratingPdf = true);
@@ -554,6 +586,12 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _isGeneratingPdf ? null : _savePdfToDevice,
+              icon: const Icon(Icons.save_alt),
+              label: const Text('Save PDF to Device'),
             ),
           ],
         ),
