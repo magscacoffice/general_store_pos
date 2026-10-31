@@ -77,7 +77,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     if (available <= 1) {
       return '${left.substring(0, left.length > width - right.length - 1 ? width - right.length - 1 : left.length)} $right';
     }
-    return left + (' ' * available) + right;
+    return left + List.filled(available, ' ').join() + right;
   }
 
   String _billText({required bool plain}) {
