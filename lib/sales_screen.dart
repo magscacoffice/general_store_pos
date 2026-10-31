@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'db_helper.dart';
 import 'scanner_screen.dart';
@@ -171,7 +172,10 @@ class _SalesScreenState extends State<SalesScreen> {
         ? (customer['phone']?.toString() ?? '')
         : '';
 
+    final currentUser = FirebaseAuth.instance.currentUser;
     final sale = <String, dynamic>{
+      'salesman_uid': currentUser?.uid,
+      'salesman_name': currentUser?.displayName ?? currentUser?.email ?? 'Unknown',
       'total_amount': saleSubtotal,
       'discount': saleDiscount,
       'final_amount': saleFinalTotal,
