@@ -69,7 +69,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                           itemCount: entries.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 2),
+                          separatorBuilder: (_, _) => const SizedBox(height: 2),
                           itemBuilder: (context, index) {
                             final e = entries[index];
                             final type = e['entry_type']?.toString() ?? '';
