@@ -79,7 +79,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     if (productList.isNotEmpty) {
       final product = productList.first;
-      int stock = (product['quantity'] as int?) ?? 0;
+      int stock = (product['quantity'] as num?)?.toInt() ?? 0;
 
       if (stock <= 0) {
         if (mounted) {
@@ -92,13 +92,20 @@ class _ScannerScreenState extends State<ScannerScreen> {
         return;
       }
 
-      int? enteredQty = await _showQuantityDialog(product['name'], stock);
-      if (enteredQty == null || enteredQty <= 0) return;
-
-      setState(() {
-        int index = scannedItems.indexWhere(
-          (item) => item['barcode'] == barcode,
+      final index = scannedItems.indexWhere((item) => item['barcode'] == barcode);
+      final alreadyAdded = index >= 0 ? (scannedItems[index]['quantity'] as num).toInt() : 0;
+      final remainingStock = stock - alreadyAdded;
+      if (remainingStock <= 0) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cart mein ${product['name']} ki tamam available quantity add ho chuki hai.')),
         );
+        return;
+      }
+      int? enteredQty = await _showQuantityDialog(product['name'], remainingStock);
+      if (enteredQty == null || enteredQty <= 0) return;
+      if (enteredQty > remainingStock) return;
+      if (!mounted) return;
+      setState(() {
         if (index >= 0) {
           scannedItems[index]['quantity'] += enteredQty;
         } else {
@@ -147,7 +154,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                int qty = int.tryParse(qtyController.text) ?? 1;
+                final qty = int.tryParse(qtyController.text);
+                if (qty == null || qty <= 0 || qty > maxStock) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Quantity 1 se $maxStock ke darmiyan honi chahiye.')),
+                  );
+                  return;
+                }
                 Navigator.pop(context, qty);
               },
               child: const Text('Add'),
@@ -223,9 +236,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 double price = double.tryParse(priceController.text) ?? 0.0;
                 double purPrice =
                     double.tryParse(purPriceController.text) ?? 0.0;
-                int qty = int.tryParse(qtyController.text) ?? 1;
+                int qty = int.tryParse(qtyController.text) ?? 0;
 
-                if (name.isNotEmpty && price > 0) {
+                if (name.isNotEmpty && price > 0 && purPrice >= 0 && qty > 0) {
                   // Database mein naya product save karein
                   await DBHelper.insertProduct({
                     'barcode': barcode,
@@ -262,7 +275,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Please enter a valid name and price!'),
+                        content: Text('Please enter a name, positive sale price, non-negative purchase price and stock quantity.'),
                       ),
                     );
                   }
