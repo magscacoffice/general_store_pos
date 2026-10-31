@@ -235,7 +235,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     'quantity': qty,
                   });
 
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
 
                   // Foran cart mein bhi add kar dein
                   setState(() {
@@ -248,7 +248,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     });
                   });
 
-                  if (mounted) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -258,11 +258,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     );
                   }
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Please enter a valid name and price!'),
                     ),
                   );
+                  }
                 }
               },
               child: const Text('Save & Add'),
