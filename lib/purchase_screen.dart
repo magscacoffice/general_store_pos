@@ -23,12 +23,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   Future<void> _load() async {
     final p = await DBHelper.getProducts();
     final h = await DBHelper.getPurchases();
-    if (mounted)
+    if (mounted) {
       setState(() {
         products = p;
         purchases = h;
         productId = p.isEmpty ? null : p.first['id'] as int;
       });
+    }
   }
 
   Future<void> _save() async {
@@ -50,14 +51,16 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       );
       qty.text = '1';
       await _load();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Purchase saved and stock updated.')),
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -79,7 +82,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
             const Text('Pehle Inventory mein product add karein.')
           else
             DropdownButtonFormField<int>(
-              value: productId,
+              initialValue: productId,
               decoration: const InputDecoration(
                 labelText: 'Product',
                 border: OutlineInputBorder(),
