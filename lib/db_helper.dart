@@ -24,7 +24,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -45,6 +45,8 @@ class DBHelper {
             final_amount REAL DEFAULT 0.0,
             payment_type TEXT DEFAULT 'Cash',
             customer_id INTEGER,
+            salesman_uid TEXT,
+            salesman_name TEXT,
             date TEXT NOT NULL
           )
         ''');
@@ -157,6 +159,11 @@ class DBHelper {
               is_done INTEGER DEFAULT 0
             )
           ''');
+        }
+
+        if (oldVersion < 5) {
+          await db.execute('ALTER TABLE sales ADD COLUMN salesman_uid TEXT');
+          await db.execute('ALTER TABLE sales ADD COLUMN salesman_name TEXT');
         }
 
         if (oldVersion < 4) {
