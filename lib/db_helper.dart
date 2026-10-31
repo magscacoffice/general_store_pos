@@ -5,6 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class DBHelper {
   static Database? _db;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _storeId = 'khan-baba-general-store';
+
+  static CollectionReference<Map<String, dynamic>> _storeCollection(
+    String name,
+  ) {
+    return _firestore.collection('stores').doc(_storeId).collection(name);
+  }
 
   static Future<Database> get database async {
     if (_db != null) return _db!;
@@ -201,8 +208,7 @@ class DBHelper {
     );
 
     try {
-      await _firestore
-          .collection('products')
+      await _storeCollection('products')
           .doc(product['barcode'].toString())
           .set(product);
     } catch (e) {
@@ -377,8 +383,7 @@ class DBHelper {
         );
 
         if (products.isNotEmpty) {
-          await _firestore
-              .collection('products')
+          await _storeCollection('products')
               .doc(barcode)
               .set(products.first);
         }
@@ -389,7 +394,7 @@ class DBHelper {
 
     // Sync the sale to Firebase.
     try {
-      await _firestore.collection('sales').add(sale);
+      await _storeCollection('sales').add(sale);
     } catch (e) {
       print('Firebase Sales Sync Error: $e');
     }
@@ -404,7 +409,7 @@ class DBHelper {
     final result = await db.insert('sales', sale);
 
     try {
-      await _firestore.collection('sales').add(sale);
+      await _storeCollection('sales').add(sale);
     } catch (e) {
       print('Firebase Sales Sync Error: $e');
     }
@@ -424,7 +429,7 @@ class DBHelper {
     final result = await db.insert('parties', party);
 
     try {
-      await _firestore.collection('parties').add(party);
+      await _storeCollection('parties').add(party);
     } catch (e) {
       print('Firebase Party Sync Error: $e');
     }
