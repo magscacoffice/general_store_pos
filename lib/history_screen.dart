@@ -18,8 +18,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadSales();
   }
 
-  void _loadSales() async {
+  Future<void> _loadSales() async {
     final data = await DBHelper.getSales();
+    if (!mounted) return;
     setState(() {
       _sales = data;
     });
