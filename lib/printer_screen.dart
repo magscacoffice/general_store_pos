@@ -21,7 +21,7 @@ class PrinterScreen extends StatefulWidget {
   final String paymentType;
   final String saleDate;
   final String cashierName;
-  final double receivedAmount;
+  final double? receivedAmount;
   final double taxAmount;
   final String salesType;
 
