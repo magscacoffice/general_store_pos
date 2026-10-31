@@ -21,6 +21,15 @@ class DBHelper {
     return _db!;
   }
 
+  // Close the active SQLite handle before replacing the database during restore.
+  static Future<void> closeDatabase() async {
+    final current = _db;
+    _db = null;
+    if (current != null && current.isOpen) {
+      await current.close();
+    }
+  }
+
   static Future<Database> initDB() async {
     final path = join(await getDatabasesPath(), 'khan_baba_pos.db');
 
