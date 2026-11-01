@@ -82,13 +82,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       int stock = (product['quantity'] as num?)?.toInt() ?? 0;
 
       if (stock <= 0) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Yeh item stock mein khatam ho chuka hai!'),
-            ),
-          );
-        }
+        await _showAddStockAndAddToCartDialog(product);
         return;
       }
 
@@ -131,6 +125,101 @@ class _ScannerScreenState extends State<ScannerScreen> {
     } else {
       // Agar product inventory mein nahi hai, toh automatic naya product add karne ka dialog kholen!
       await _showAddNewProductDialog(barcode);
+    }
+  }
+
+  Future<void> _showAddStockAndAddToCartDialog(
+    Map<String, dynamic> product,
+  ) async {
+    final stockController = TextEditingController(text: '10');
+    final saleQtyController = TextEditingController(text: '1');
+    final costController = TextEditingController(
+      text: (product['purchasePrice'] ?? 0).toString(),
+    );
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${product['name']} - Stock Add Karein'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Is item ka stock zero hai. Yahin stock purchase record ke sath add karein.'),
+                TextField(
+                  controller: stockController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Naya stock quantity'),
+                ),
+                TextField(
+                  controller: costController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Purchase price per item (Rs.)'),
+                ),
+                TextField(
+                  controller: saleQtyController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Sale mein kitni quantity add karni hai'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final addQty = int.tryParse(stockController.text.trim());
+                final saleQty = int.tryParse(saleQtyController.text.trim());
+                final cost = double.tryParse(costController.text.trim());
+                if (addQty == null || addQty <= 0 ||
+                    saleQty == null || saleQty <= 0 || saleQty > addQty ||
+                    cost == null || !cost.isFinite || cost < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Stock aur sale quantity valid hon; sale quantity added stock se zyada na ho. Purchase price zero ya us se zyada ho.')),
+                  );
+                  return;
+                }
+                try {
+                  final productId = (product['id'] as num).toInt();
+                  await DBHelper.recordPurchase(
+                    productId: productId,
+                    quantity: addQty,
+                    unitCost: cost,
+                  );
+                  if (!mounted) return;
+                  setState(() {
+                    scannedItems.add({
+                      'barcode': product['barcode'].toString(),
+                      'name': product['name'].toString(),
+                      'purchasePrice': cost,
+                      'salePrice': (product['price'] as num).toDouble(),
+                      'quantity': saleQty,
+                    });
+                  });
+                  await _loadProducts();
+                  if (!mounted) return;
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$addQty stock purchase mein record hua aur $saleQty sale cart mein add ho gaya.')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Stock add nahi ho saka: $e')),
+                  );
+                }
+              },
+              child: const Text('Stock Add & Sale Cart'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      stockController.dispose();
+      saleQtyController.dispose();
+      costController.dispose();
     }
   }
 
