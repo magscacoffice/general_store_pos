@@ -15,7 +15,15 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> cart = [];
   List<Map<String, dynamic>> customers = [];
-  Map<String, dynamic>? selectedCustomer; // Null means Quick / Walk-in Customer
+  int? selectedCustomerId; // Null means Quick / Walk-in Customer
+
+  Map<String, dynamic>? get selectedCustomer {
+    if (selectedCustomerId == null) return null;
+    for (final customer in customers) {
+      if ((customer['id'] as num?)?.toInt() == selectedCustomerId) return customer;
+    }
+    return null;
+  }
 
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
@@ -31,7 +39,13 @@ class _SalesScreenState extends State<SalesScreen> {
     // parties table se type 'Customer' wale get karein
     final data = await DBHelper.getParties('customer');
     if (!mounted) return;
-    setState(() => customers = data);
+    setState(() {
+      customers = data;
+      if (selectedCustomerId != null &&
+          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId)) {
+        selectedCustomerId = null;
+      }
+    });
   }
 
   void _scanAndAddToCart() async {
@@ -235,7 +249,7 @@ class _SalesScreenState extends State<SalesScreen> {
         cart.clear();
         overallDiscount = 0.0;
         isPercentageDiscount = false;
-        selectedCustomer = null;
+        selectedCustomerId = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -305,17 +319,20 @@ class _SalesScreenState extends State<SalesScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.teal.shade50,
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
                 const Icon(Icons.person, color: Colors.teal),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: DropdownButton<Map<String, dynamic>?>(
+                  child: DropdownButton<int?>(
                     isExpanded: true,
-                    value: selectedCustomer,
+                    value: selectedCustomerId,
                     hint: const Text('Walk-in Customer (Quick Bill)'),
                     items: [
-                      const DropdownMenuItem<Map<String, dynamic>?>(
+                      const DropdownMenuItem<int?>(
                         value: null,
                         child: Text(
                           'Walk-in Customer (Quick Bill)',
@@ -323,17 +340,31 @@ class _SalesScreenState extends State<SalesScreen> {
                         ),
                       ),
                       ...customers.map((c) {
-                        return DropdownMenuItem<Map<String, dynamic>?>(
-                          value: c,
-                          child: Text(
-                            '${c['name']} (Khata: Rs.${c['balance']})',
-                          ),
+                        final id = (c['id'] as num).toInt();
+                        return DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text('${c['name']} (Khata: Rs.${c['balance']})'),
                         );
                       }),
                     ],
-                    onChanged: (val) => setState(() => selectedCustomer = val),
+                    onChanged: (id) => setState(() => selectedCustomerId = id),
                   ),
                 ),
+                  ],
+                ),
+                if (selectedCustomer != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 34, top: 2),
+                    child: Text(
+                      'Selected Khata Customer: ${selectedCustomer!['name']}  |  Balance: Rs. ${selectedCustomer!['balance']}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(left: 34, top: 2),
+                    child: Text('Walk-in Customer (Cash Sale)', style: TextStyle(color: Colors.black54)),
+                  ),
               ],
             ),
           ),
