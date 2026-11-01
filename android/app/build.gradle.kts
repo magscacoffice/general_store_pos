@@ -32,6 +32,12 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            // Keep release shrinking enabled while suppressing references to
+            // optional ML Kit script recognizers not bundled by the Latin-only app.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
