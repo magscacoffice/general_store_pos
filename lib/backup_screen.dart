@@ -69,14 +69,21 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _restoreBackup() async {
     setState(() => _isWorking = true);
     try {
+      // Android document providers may reject custom filters for .db files.
+      // Let the user choose any file, then validate the extension and SQLite
+      // database contents below before touching the live database.
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['db'],
+        type: FileType.any,
+        allowMultiple: false,
       );
 
-      if (result == null || result.files.single.path == null) return;
+      if (result == null || result.files.isEmpty) return;
+      final selectedPath = result.files.single.path;
+      if (selectedPath == null) {
+        throw Exception('Selected backup file ka path nahi mil saka.');
+      }
 
-      final selectedFile = File(result.files.single.path!);
+      final selectedFile = File(selectedPath);
       if (!await selectedFile.exists() ||
           !selectedFile.path.toLowerCase().endsWith('.db')) {
         throw Exception('Please select a valid .db backup file.');
