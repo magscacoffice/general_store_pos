@@ -19,6 +19,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   List<Map<String, dynamic>> scannedItems = [];
   final TextEditingController manualController = TextEditingController();
+  final FocusNode barcodeInputFocus = FocusNode();
+  Map<String, dynamic>? lastScannedProduct;
   List<Map<String, dynamic>> allProducts = [];
   List<Map<String, dynamic>> searchResults = [];
 
@@ -55,6 +57,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void dispose() {
     controller.dispose();
     manualController.dispose();
+    barcodeInputFocus.dispose();
     super.dispose();
   }
 
@@ -84,6 +87,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (productList.isNotEmpty) {
       final product = productList.first;
       int stock = (product['quantity'] as num?)?.toInt() ?? 0;
+      if (mounted) {
+        setState(() => lastScannedProduct = Map<String, dynamic>.from(product));
+      }
 
       if (stock <= 0) {
         await _showAddStockAndAddToCartDialog(product);
@@ -412,6 +418,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                   // Foran cart mein bhi add kar dein
                   setState(() {
+                    lastScannedProduct = {
+                      'barcode': barcode,
+                      'name': name,
+                      'purchasePrice': purPrice,
+                      'price': price,
+                      'quantity': qty,
+                    };
                     scannedItems.add({
                       'barcode': barcode,
                       'name': name,
@@ -420,6 +433,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'quantity': 1,
                     });
                   });
+                  await _loadProducts();
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -504,9 +518,21 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       Expanded(
                         child: TextField(
                           controller: manualController,
+                          focusNode: barcodeInputFocus,
+                          autofocus: true,
+                          textInputAction: TextInputAction.done,
                           onChanged: _searchProducts,
+                          onSubmitted: (value) async {
+                            final barcode = value.trim();
+                            if (barcode.isEmpty || _isProcessing) return;
+                            manualController.clear();
+                            _searchProducts('');
+                            await _processScannedBarcode(barcode);
+                            if (mounted) barcodeInputFocus.requestFocus();
+                          },
                           decoration: const InputDecoration(
-                            hintText: 'Enter barcode or search item name...',
+                            hintText: 'USB/Bluetooth scanner: scan barcode here...',
+                            helperText: 'Scanner Enter bheje to product auto search hoga',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -531,6 +557,20 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       ),
                     ],
                   ),
+                  if (lastScannedProduct != null) ...[
+                    const SizedBox(height: 8),
+                    Card(
+                      color: Colors.teal.shade50,
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.inventory_2, color: Colors.teal),
+                        title: Text(lastScannedProduct!['name']?.toString() ?? ''),
+                        subtitle: Text(
+                          'Barcode: ${lastScannedProduct!['barcode']}  |  Price: Rs. ${lastScannedProduct!['price']}  |  Stock: ${lastScannedProduct!['quantity']}',
+                        ),
+                      ),
+                    ),
+                  ],
                   if (searchResults.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
