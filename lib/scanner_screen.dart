@@ -527,8 +527,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             if (barcode.isEmpty || _isProcessing) return;
                             manualController.clear();
                             _searchProducts('');
-                            await _processScannedBarcode(barcode);
-                            if (mounted) barcodeInputFocus.requestFocus();
+                            _isProcessing = true;
+                            try {
+                              await _processScannedBarcode(barcode);
+                            } finally {
+                              if (mounted) {
+                                _isProcessing = false;
+                                barcodeInputFocus.requestFocus();
+                              }
+                            }
                           },
                           decoration: const InputDecoration(
                             hintText: 'USB/Bluetooth scanner: scan barcode here...',
