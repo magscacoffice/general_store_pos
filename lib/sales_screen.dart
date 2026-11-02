@@ -48,6 +48,79 @@ class _SalesScreenState extends State<SalesScreen> {
     });
   }
 
+  Future<void> _addKhataCustomer() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    try {
+      final createdId = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Add New Khata Customer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Customer Name *'),
+              ),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone Number'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Customer name is required.')),
+                  );
+                  return;
+                }
+                try {
+                  final id = await DBHelper.insertParty({
+                    'name': name,
+                    'phone': phoneController.text.trim(),
+                    'type': 'customer',
+                    'balance': 0.0,
+                  });
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, id);
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('Customer save nahi ho saka: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Customer'),
+            ),
+          ],
+        ),
+      );
+      if (createdId != null && mounted) {
+        await _loadCustomers();
+        if (!mounted) return;
+        setState(() => selectedCustomerId = createdId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('New Khata customer added and selected.')),
+        );
+      }
+    } finally {
+      nameController.dispose();
+      phoneController.dispose();
+    }
+  }
+
   void _scanAndAddToCart() async {
     final result = await Navigator.push(
       context,
@@ -350,6 +423,11 @@ class _SalesScreenState extends State<SalesScreen> {
                     onChanged: (id) => setState(() => selectedCustomerId = id),
                   ),
                 ),
+                IconButton(
+                  tooltip: 'Add New Khata Customer',
+                  onPressed: _addKhataCustomer,
+                  icon: const Icon(Icons.person_add_alt_1, color: Colors.teal),
+                ),
                   ],
                 ),
                 if (selectedCustomer != null)
@@ -441,7 +519,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Qabil-e-Ada Kul Bill:'),
+                        const Text('Total Payable Bill:'),
                         Text(
                           'Rs. $finalTotal',
                           style: const TextStyle(
