@@ -362,8 +362,31 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: nameController,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Product ka Naam',
+                    hintText: 'Naam type karein ya camera se read karein',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _isReadingProductName
+                      ? null
+                      : () => _readProductNameFromCamera(
+                            nameController,
+                            context,
+                          ),
+                  icon: _isReadingProductName
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.camera_alt),
+                  label: Text(
+                    _isReadingProductName
+                        ? 'Image se text read ho raha hai...'
+                        : 'Camera se Product Name Read Karein',
                   ),
                 ),
                 TextField(
