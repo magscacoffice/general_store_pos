@@ -435,7 +435,7 @@ class _SalesScreenState extends State<SalesScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: DropdownButtonFormField<String>(
-              initialValue: selectedCustomerType,
+              value: selectedCustomerType,
               decoration: const InputDecoration(labelText: 'Customer Type'),
               items: const [
                 DropdownMenuItem(value: 'walk_in', child: Text('Walk-in')),
