@@ -100,9 +100,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final alreadyAdded = index >= 0 ? (scannedItems[index]['quantity'] as num).toInt() : 0;
       final remainingStock = stock - alreadyAdded;
       if (remainingStock <= 0) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Cart mein ${product['name']} ki tamam available quantity add ho chuki hai.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Cart mein ${product['name']} ki tamam available quantity add ho chuki hai.')),
+          );
+        }
         return;
       }
       int? enteredQty = await _showQuantityDialog(product['name'], remainingStock);
@@ -214,8 +216,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     });
                   });
                   await _loadProducts();
-                  if (!mounted) return;
-                  Navigator.pop(dialogContext);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('$addQty stock purchase mein record hua aur $saleQty sale cart mein add ho gaya.')),
                   );
