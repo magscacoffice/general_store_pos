@@ -216,12 +216,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     });
                   });
                   await _loadProducts();
-                  if (!context.mounted) return;
+                  if (!mounted) return;
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('$addQty stock purchase mein record hua aur $saleQty sale cart mein add ho gaya.')),
                   );
                 } catch (e) {
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Stock add nahi ho saka: $e')),
                   );
