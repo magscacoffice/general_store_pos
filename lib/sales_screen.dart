@@ -167,17 +167,30 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _editSalePrice(int index) async {
     final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
+    final purchasePrice =
+        (cart[index]['purchasePrice'] as num?)?.toDouble() ?? 0.0;
     final controller = TextEditingController(text: currentPrice.toString());
     try {
       final updatedPrice = await showDialog<double>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text('Sale Price: ${cart[index]['name']}'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Unit Sale Price (Rs.)'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Purchase Price: Rs. $purchasePrice'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Unit Sale Price (Rs.)',
+                  helperText: 'Minimum allowed: Rs. $purchasePrice',
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -187,10 +200,12 @@ class _SalesScreenState extends State<SalesScreen> {
             FilledButton(
               onPressed: () {
                 final value = double.tryParse(controller.text.trim());
-                if (value == null || !value.isFinite || value < 0) {
+                if (value == null || !value.isFinite || value < purchasePrice) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Sale price must be a valid number, zero or greater.'),
+                    SnackBar(
+                      content: Text(
+                        'Sale Price purchase price (Rs. $purchasePrice) se kam nahi ho sakti.',
+                      ),
                     ),
                   );
                   return;
