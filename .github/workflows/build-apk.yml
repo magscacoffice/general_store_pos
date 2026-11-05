@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/stock-profit-khata-backup
+      - feature/wholesale-customer-billing
 
 jobs:
   build:
@@ -48,6 +49,9 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Analyze Dart and Flutter code
+        run: flutter analyze
 
       - name: Build split release APKs
         run: flutter build apk --release --split-per-abi

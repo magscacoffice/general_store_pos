@@ -35,7 +35,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -44,6 +44,7 @@ class DBHelper {
             barcode TEXT UNIQUE NOT NULL,
             price REAL NOT NULL,
             purchasePrice REAL DEFAULT 0.0,
+            wholesale_price REAL DEFAULT 0.0,
             quantity INTEGER NOT NULL
           )
         ''');
@@ -56,6 +57,9 @@ class DBHelper {
             final_amount REAL DEFAULT 0.0,
             payment_type TEXT DEFAULT 'Cash',
             customer_id INTEGER,
+            customer_type TEXT DEFAULT 'retail',
+            received_amount REAL DEFAULT 0.0,
+            balance_due REAL DEFAULT 0.0,
             salesman_uid TEXT,
             salesman_name TEXT,
             date TEXT NOT NULL
@@ -68,6 +72,7 @@ class DBHelper {
             name TEXT NOT NULL,
             phone TEXT NOT NULL,
             type TEXT NOT NULL,
+            customer_type TEXT DEFAULT 'khata',
             balance REAL DEFAULT 0.0
           )
         ''');
@@ -234,6 +239,30 @@ class DBHelper {
             note TEXT,
             date TEXT NOT NULL
           )''');
+        }
+        if (oldVersion < 7) {
+          final productColumns = (await db.rawQuery('PRAGMA table_info(products)'))
+              .map((row) => row['name'].toString()).toSet();
+          if (!productColumns.contains('wholesale_price')) {
+            await db.execute('ALTER TABLE products ADD COLUMN wholesale_price REAL DEFAULT 0.0');
+          }
+          final partyColumns = (await db.rawQuery('PRAGMA table_info(parties)'))
+              .map((row) => row['name'].toString()).toSet();
+          if (!partyColumns.contains('customer_type')) {
+            await db.execute("ALTER TABLE parties ADD COLUMN customer_type TEXT DEFAULT 'khata'");
+          }
+          final saleColumns = (await db.rawQuery('PRAGMA table_info(sales)'))
+              .map((row) => row['name'].toString()).toSet();
+          if (!saleColumns.contains('customer_type')) {
+            await db.execute("ALTER TABLE sales ADD COLUMN customer_type TEXT DEFAULT 'retail'");
+          }
+          if (!saleColumns.contains('received_amount')) {
+            await db.execute('ALTER TABLE sales ADD COLUMN received_amount REAL DEFAULT 0.0');
+          }
+          if (!saleColumns.contains('balance_due')) {
+            await db.execute('ALTER TABLE sales ADD COLUMN balance_due REAL DEFAULT 0.0');
+          }
+          await db.execute("UPDATE sales SET customer_type = 'khata', balance_due = COALESCE(final_amount, total_amount, 0) WHERE customer_id IS NOT NULL AND customer_type = 'retail'");
         }
       },
     );
@@ -480,29 +509,28 @@ class DBHelper {
         });
       }
 
-      // Record credit sale in the ledger; balance update remains in this transaction.
-      final customerIdForLedger = sale['customer_id'];
-      if (customerIdForLedger != null) {
-        await txn.insert('khata_transactions', {
-          'party_id': customerIdForLedger,
-          'type': 'credit',
-          'amount': (sale['final_amount'] as num?)?.toDouble() ?? 0.0,
-          'note': 'Credit sale #$id',
-          'date': sale['date'].toString(),
-        });
-      }
-
-      // Update customer balance for credit/Khata sales.
+      // Only the unpaid amount increases the customer balance.
       final customerId = sale['customer_id'];
-
+      final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? 0.0;
+      final receivedAmount = (sale['received_amount'] as num?)?.toDouble() ?? 0.0;
+      final balanceDue = (sale['balance_due'] as num?)?.toDouble() ??
+          (finalAmount - receivedAmount).clamp(0.0, double.infinity).toDouble();
       if (customerId != null) {
-        final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? 0.0;
-
-        await txn.rawUpdate(
-          'UPDATE parties '
-          'SET balance = balance + ? WHERE id = ?',
-          [finalAmount, customerId],
-        );
+        if (balanceDue > 0) {
+          await txn.insert('khata_transactions', {
+            'party_id': customerId, 'type': 'credit', 'amount': balanceDue,
+            'note': 'Outstanding from sale #$id', 'date': sale['date'].toString(),
+          });
+        }
+        if (receivedAmount > 0) {
+          await txn.insert('khata_transactions', {
+            'party_id': customerId, 'type': 'receipt', 'amount': receivedAmount,
+            'note': 'Cash received at sale #$id', 'date': sale['date'].toString(),
+          });
+        }
+        if (balanceDue > 0) {
+          await txn.rawUpdate('UPDATE parties SET balance = balance + ? WHERE id = ?', [balanceDue, customerId]);
+        }
       }
 
       return id;
@@ -673,6 +701,8 @@ class DBHelper {
         limit: 1,
       );
       if (rows.isEmpty) throw Exception('Customer not found.');
+      final outstanding = (rows.first['balance'] as num?)?.toDouble() ?? 0.0;
+      if (amount > outstanding + 0.000001) throw Exception('Receipt exceeds outstanding balance.');
       await txn.rawUpdate(
         'UPDATE parties SET balance = balance - ? WHERE id = ?',
         [amount, partyId],
@@ -709,17 +739,17 @@ class DBHelper {
           ('Bill #' || s.id || ' - ' || COALESCE((
             SELECT GROUP_CONCAT(product_name || ' x' || quantity, ', ')
             FROM sale_items WHERE sale_id = s.id
-          ), 'Items unavailable')) AS description
+          ), 'Items unavailable') ||
+          ' | Received: Rs. ' || printf('%.2f', COALESCE(s.received_amount, 0)) ||
+          ' | Due: Rs. ' || printf('%.2f', COALESCE(s.balance_due, 0))) AS description
         FROM sales s
         WHERE s.customer_id = ?
         UNION ALL
-        SELECT k.id AS entry_id, k.date AS date, k.type AS entry_type,
+        SELECT k.id AS entry_id, k.date AS date, 'receipt' AS entry_type,
           k.amount AS amount,
-          CASE WHEN k.type = 'receipt'
-            THEN 'Cash received' || CASE WHEN COALESCE(k.note, '') = '' THEN '' ELSE ' - ' || k.note END
-            ELSE COALESCE(k.note, k.type) END AS description
+          'Cash received' || CASE WHEN COALESCE(k.note, '') = '' THEN '' ELSE ' - ' || k.note END AS description
         FROM khata_transactions k
-        WHERE k.party_id = ?
+        WHERE k.party_id = ? AND k.type = 'receipt'
       )
       ORDER BY date DESC, entry_id DESC
     ''', [partyId, partyId]);
