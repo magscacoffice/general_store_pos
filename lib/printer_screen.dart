@@ -23,7 +23,6 @@ class PrinterScreen extends StatefulWidget {
   final String saleDate;
   final String cashierName;
   final double? receivedAmount;
-  final double balanceDue;
   final double taxAmount;
   final String salesType;
 
@@ -40,7 +39,6 @@ class PrinterScreen extends StatefulWidget {
     this.saleDate = '',
     this.cashierName = 'Admin',
     this.receivedAmount,
-    this.balanceDue = 0,
     this.taxAmount = 0,
     this.salesType = 'Retail',
   });
@@ -121,7 +119,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
       ..writeln(separator)
       ..writeln(_line('Payment Method', widget.paymentType, width: width))
       ..writeln(_line('Received Amount', _money(received), width: width))
-      ..writeln(_line('Balance Due', _money(widget.balanceDue), width: width))
       ..writeln(_line('Change', _money(change), width: width))
       ..writeln(separator)
       ..writeln('       Thank You For Shopping')
@@ -302,7 +299,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
             pw.Divider(),
             _pdfInfoRow('Payment', widget.paymentType),
             _pdfInfoRow('Received', _money(received)),
-            _pdfInfoRow('Balance Due', _money(widget.balanceDue)),
             _pdfInfoRow('Change', _money(change)),
             pw.SizedBox(height: 8),
             pw.Center(child: pw.Text('Thank You For Shopping', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),

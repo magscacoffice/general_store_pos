@@ -16,8 +16,6 @@ class _SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> cart = [];
   List<Map<String, dynamic>> customers = [];
   int? selectedCustomerId; // Null means Quick / Walk-in Customer
-  String selectedCustomerType = 'walk_in';
-  final TextEditingController receivedController = TextEditingController(text: '0');
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
@@ -93,7 +91,6 @@ class _SalesScreenState extends State<SalesScreen> {
                     'name': name,
                     'phone': phoneController.text.trim(),
                     'type': 'customer',
-                    'customer_type': selectedCustomerType == 'wholesale' ? 'wholesale' : 'khata',
                     'balance': 0.0,
                   });
                   if (dialogContext.mounted) Navigator.pop(dialogContext, id);
@@ -166,27 +163,6 @@ class _SalesScreenState extends State<SalesScreen> {
         }
       });
     }
-  }
-
-  Future<void> _editWholesaleRate(int index) async {
-    final controller = TextEditingController(text: (cart[index]['salePrice'] ?? 0).toString());
-    final value = await showDialog<double>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Wholesale rate: ${cart[index]['name']}'),
-        content: TextField(controller: controller, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Unit selling price (Rs.)')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () {
-            final rate = double.tryParse(controller.text.trim());
-            if (rate == null || !rate.isFinite || rate < 0) return;
-            Navigator.pop(ctx, rate);
-          }, child: const Text('Save')),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value != null && mounted) setState(() => cart[index]['salePrice'] = value);
   }
 
   double get subTotal => cart.fold(0.0, (sum, item) {
@@ -307,21 +283,6 @@ class _SalesScreenState extends State<SalesScreen> {
     final saleSubtotal = subTotal;
     final saleDiscount = calculatedDiscount;
     final saleFinalTotal = finalTotal;
-    if (selectedCustomerType != 'walk_in' && selectedCustomer == null) {
-      setState(() => isCheckingOut = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer for this customer type.')));
-      return;
-    }
-    final customerType = selectedCustomer == null ? 'retail' : selectedCustomerType;
-    final receivedAmount = customerType == 'wholesale'
-        ? (double.tryParse(receivedController.text.trim()) ?? -1)
-        : (customerType == 'khata' ? 0.0 : saleFinalTotal);
-    if (!receivedAmount.isFinite || receivedAmount < 0 || receivedAmount > saleFinalTotal) {
-      setState(() => isCheckingOut = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Received cash must be between zero and the bill total.')));
-      return;
-    }
-    final balanceDue = customerType == 'wholesale' ? saleFinalTotal - receivedAmount : (customerType == 'khata' ? saleFinalTotal : 0.0);
 
     final customer = selectedCustomer == null
         ? null
@@ -342,11 +303,8 @@ class _SalesScreenState extends State<SalesScreen> {
       'total_amount': saleSubtotal,
       'discount': saleDiscount,
       'final_amount': saleFinalTotal,
-      'payment_type': customer == null || receivedAmount >= saleFinalTotal ? 'Cash' : (receivedAmount > 0 ? 'Partial' : 'Khata'),
+      'payment_type': customer == null ? 'Cash' : 'Khata',
       'customer_id': customer?['id'],
-      'customer_type': customerType,
-      'received_amount': receivedAmount,
-      'balance_due': balanceDue,
       'date': DateTime.now().toString().substring(0, 19),
     };
 
@@ -387,11 +345,9 @@ class _SalesScreenState extends State<SalesScreen> {
             subtotalAmount: saleSubtotal,
             discountAmount: saleDiscount,
             paymentType: sale['payment_type'].toString(),
-            receivedAmount: receivedAmount,
-            balanceDue: balanceDue,
             saleDate: sale['date'].toString(),
             cashierName: currentUser?.displayName ?? currentUser?.email ?? 'Admin',
-            salesType: customerType == 'wholesale' ? 'Wholesale' : (customerType == 'khata' ? 'Khata' : 'Retail'),
+            salesType: customer == null ? 'Retail' : 'Khata',
           ),
         ),
       );
@@ -420,7 +376,7 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('POS Billing'),
+        title: const Text('POS Billing (Quick & Khata)'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
@@ -432,32 +388,7 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: DropdownButtonFormField<String>(
-              value: selectedCustomerType,
-              decoration: const InputDecoration(labelText: 'Customer Type'),
-              items: const [
-                DropdownMenuItem(value: 'walk_in', child: Text('Walk-in')),
-                DropdownMenuItem(value: 'khata', child: Text('Khata')),
-                DropdownMenuItem(value: 'wholesale', child: Text('Wholesale')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  selectedCustomerType = value;
-                  selectedCustomerId = null;
-                  for (final item in cart) {
-                    final retail = (item['retailSalePrice'] ?? item['salePrice'] ?? 0) as num;
-                    final wholesale = (item['wholesalePrice'] ?? 0) as num;
-                    item['salePrice'] = value == 'wholesale' && wholesale > 0 ? wholesale.toDouble() : retail.toDouble();
-                  }
-                });
-              },
-            ),
-          ),
           // Customer / Khata Selection Dropdown
-          if (selectedCustomerType != 'walk_in')
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.teal.shade50,
@@ -481,7 +412,7 @@ class _SalesScreenState extends State<SalesScreen> {
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      ...customers.where((c) => (c['customer_type']?.toString() ?? 'khata') == selectedCustomerType).map((c) {
+                      ...customers.map((c) {
                         final id = (c['id'] as num).toInt();
                         return DropdownMenuItem<int?>(
                           value: id,
@@ -516,15 +447,6 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
 
-          if (selectedCustomerType == 'wholesale')
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: TextField(
-                controller: receivedController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Cash received now (Rs.)', helperText: 'Remaining amount will be added to this Wholesale customer Khata.', border: OutlineInputBorder()),
-              ),
-            ),
           // Live Bill Items Display
           Expanded(
             child: cart.isEmpty
@@ -539,7 +461,6 @@ class _SalesScreenState extends State<SalesScreen> {
                           vertical: 4,
                         ),
                         child: ListTile(
-                          onTap: selectedCustomerType == 'wholesale' ? () => _editWholesaleRate(index) : null,
                           title: Text(
                             item['name'],
                             style: const TextStyle(fontWeight: FontWeight.bold),

@@ -44,9 +44,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final salePriceController = TextEditingController(
       text: product != null ? product['price'].toString() : '0',
     );
-    final wholesalePriceController = TextEditingController(
-      text: product != null ? (product['wholesale_price'] ?? 0).toString() : '0',
-    );
 
     showDialog(
       context: context,
@@ -108,13 +105,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
                 TextField(
                   controller: salePriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Retail Sale Price *'),
-                ),
-                TextField(
-                  controller: wholesalePriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Wholesale Price (optional)'),
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Sale Price *'),
                 ),
               ],
             ),
@@ -133,8 +125,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice =
                     double.tryParse(salePriceController.text) ?? 0.0;
-                double wholesalePrice =
-                    double.tryParse(wholesalePriceController.text) ?? 0.0;
 
                 if (barcode.isEmpty || name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +140,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'name': name,
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
-                  'wholesale_price': wholesalePrice,
                   'quantity': stock,
                 };
 

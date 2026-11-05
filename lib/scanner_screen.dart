@@ -118,8 +118,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
             'name': product['name'],
             'purchasePrice': product['purchasePrice'] ?? 0.0,
             'salePrice': product['price'],
-            'retailSalePrice': product['price'],
-            'wholesalePrice': product['wholesale_price'] ?? 0.0,
             'quantity': enteredQty,
           });
         }
@@ -208,8 +206,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'name': product['name'].toString(),
                       'purchasePrice': cost,
                       'salePrice': (product['price'] as num).toDouble(),
-                      'retailSalePrice': (product['price'] as num).toDouble(),
-                      'wholesalePrice': product['wholesale_price'] ?? 0.0,
                       'quantity': saleQty,
                     });
                   });
