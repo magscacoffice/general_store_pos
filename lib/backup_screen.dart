@@ -39,7 +39,7 @@ class _BackupScreenState extends State<BackupScreen> {
       // User ko folder choose karne ki ijazat dena
       // Android/iOS par saveFile ko bytes dena zaroori hota hai.
       final backupBytes = await dbFile.readAsBytes();
-      String? outputFile = await FilePicker.platform.saveFile(
+      String? outputFile = await FilePicker.saveFile(
         dialogTitle: 'Backup kahan save karna hai?',
         fileName: fileName,
         bytes: backupBytes,
@@ -72,13 +72,13 @@ class _BackupScreenState extends State<BackupScreen> {
       // Android document providers may reject custom filters for .db files.
       // Let the user choose any file, then validate the extension and SQLite
       // database contents below before touching the live database.
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.any,
         allowMultiple: false,
       );
 
-      if (result == null || result.files.isEmpty) return;
-      final selectedPath = result.files.single.path;
+      if (result.isEmpty) return;
+      final selectedPath = result.single.path;
       if (selectedPath == null) {
         throw Exception('Selected backup file ka path nahi mil saka.');
       }
