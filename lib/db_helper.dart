@@ -15,6 +15,83 @@ class DBHelper {
     return _firestore.collection('stores').doc(_storeId).collection(name);
   }
 
+  static bool _isPullingProducts = false;
+
+  static double _numberAsDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0.0;
+  }
+
+  static int _numberAsInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  /// Pull shared inventory without replacing device-local SQLite primary keys
+  /// or overwriting local product changes waiting in the sync outbox.
+  static Future<void> syncProductsFromCloud() async {
+    if (_isPullingProducts) return;
+    _isPullingProducts = true;
+    try {
+      await syncPendingChanges();
+      final snapshot = await _storeCollection('products').get();
+      final db = await database;
+      final pendingRows = await db.query(
+        'sync_queue',
+        columns: ['document_id'],
+        where: 'collection_name = ?',
+        whereArgs: ['products'],
+      );
+      final pendingBarcodes = pendingRows
+          .map((row) => row['document_id'].toString())
+          .toSet();
+
+      await db.transaction((txn) async {
+        for (final document in snapshot.docs) {
+          final data = document.data();
+          final barcode = (data['barcode'] ?? document.id).toString().trim();
+          final name = (data['name'] ?? '').toString().trim();
+          if (barcode.isEmpty || name.isEmpty ||
+              pendingBarcodes.contains(barcode)) {
+            continue;
+          }
+
+          // Never import a remote SQLite id; it is local to another device.
+          final product = <String, dynamic>{
+            'barcode': barcode,
+            'name': name,
+            'price': _numberAsDouble(data['price']),
+            'purchasePrice': _numberAsDouble(data['purchasePrice']),
+            'quantity': _numberAsInt(data['quantity']),
+          };
+          final existing = await txn.query(
+            'products',
+            columns: ['id'],
+            where: 'barcode = ?',
+            whereArgs: [barcode],
+            limit: 1,
+          );
+          if (existing.isEmpty) {
+            await txn.insert('products', product);
+          } else {
+            await txn.update(
+              'products',
+              product,
+              where: 'barcode = ?',
+              whereArgs: [barcode],
+            );
+          }
+        }
+      });
+    } catch (e) {
+      // Keep the app usable offline; retry at the next authenticated startup.
+      developer.log('Firebase Inventory Pull Error',
+          name: 'DBHelper', error: e);
+    } finally {
+      _isPullingProducts = false;
+    }
+  }
+
   static Future<Database> get database async {
     if (_db != null) return _db!;
     _db = await initDB();
@@ -361,7 +438,26 @@ class DBHelper {
 
   static Future<int> deleteProduct(int id) async {
     final db = await database;
-    return await db.delete('products', where: 'id = ?', whereArgs: [id]);
+    final deleted = await db.transaction<int>((txn) async {
+      final rows = await txn.query(
+        'products',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (rows.isEmpty) return 0;
+      final barcode = rows.first['barcode'].toString();
+      await _queueSync(
+        txn,
+        collection: 'products',
+        documentId: barcode,
+        payload: {'barcode': barcode},
+        operation: 'delete',
+      );
+      return txn.delete('products', where: 'id = ?', whereArgs: [id]);
+    });
+    await syncPendingChanges();
+    return deleted;
   }
 
   // Safely complete a sale and reduce stock in one transaction.
@@ -441,6 +537,22 @@ class DBHelper {
             'Please try again.',
           );
         }
+        final updatedRows = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+          limit: 1,
+        );
+        if (updatedRows.isNotEmpty) {
+          final updatedProduct = Map<String, dynamic>.from(updatedRows.first)
+            ..remove('id');
+          await _queueSync(
+            txn,
+            collection: 'products',
+            documentId: barcode,
+            payload: updatedProduct,
+          );
+        }
       }
 
       // Save the sale in the same transaction.
@@ -508,25 +620,8 @@ class DBHelper {
       return id;
     });
 
-    // Sync changed products to Firebase after local success.
-    for (final barcode in quantitiesByBarcode.keys) {
-      try {
-        final products = await db.query(
-          'products',
-          where: 'barcode = ?',
-          whereArgs: [barcode],
-          limit: 1,
-        );
-
-        if (products.isNotEmpty) {
-          await _storeCollection('products')
-              .doc(barcode)
-              .set(products.first);
-        }
-      } catch (e) {
-        developer.log('Firebase Product Sync Error', name: 'DBHelper', error: e);
-      }
-    }
+    // Stock changes were queued atomically with the local sale.
+    await syncPendingChanges();
 
     // Sync the sale to Firebase.
     try {
@@ -622,7 +717,7 @@ class DBHelper {
       throw Exception('Quantity and cost must be valid.');
     }
     final db = await database;
-    return db.transaction<int>((txn) async {
+    final purchaseId = await db.transaction<int>((txn) async {
       final rows = await txn.query(
         'products',
         where: 'id = ?',
@@ -637,6 +732,22 @@ class DBHelper {
         'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
         [quantity, unitCost, productId],
       );
+      final updatedRows = await txn.query(
+        'products',
+        where: 'id = ?',
+        whereArgs: [productId],
+        limit: 1,
+      );
+      if (updatedRows.isNotEmpty) {
+        final updatedProduct = Map<String, dynamic>.from(updatedRows.first)
+          ..remove('id');
+        await _queueSync(
+          txn,
+          collection: 'products',
+          documentId: barcode,
+          payload: updatedProduct,
+        );
+      }
       return txn.insert('purchases', {
         'product_id': productId,
         'product_name': name,
@@ -648,6 +759,8 @@ class DBHelper {
         'date': DateTime.now().toIso8601String().substring(0, 19),
       });
     });
+    await syncPendingChanges();
+    return purchaseId;
   }
 
   static Future<List<Map<String, dynamic>>> getPurchases() async {

@@ -4,19 +4,26 @@ import 'package:flutter/material.dart';
 
 import 'dashboard_screen.dart';
 import 'login_screen.dart';
+import 'db_helper.dart';
 
 const String storeId = 'khan-baba-general-store';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _membership(User user) {
-    return FirebaseFirestore.instance
+  Future<DocumentSnapshot<Map<String, dynamic>>> _membership(User user) async {
+    final membership = await FirebaseFirestore.instance
         .collection('stores')
         .doc(storeId)
         .collection('members')
         .doc(user.uid)
         .get();
+    final data = membership.data();
+    if (data != null && data['active'] == true &&
+        ['admin', 'salesman'].contains(data['role'])) {
+      await DBHelper.syncProductsFromCloud();
+    }
+    return membership;
   }
 
   @override

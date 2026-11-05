@@ -165,6 +165,51 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> _editSalePrice(int index) async {
+    final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
+    final controller = TextEditingController(text: currentPrice.toString());
+    try {
+      final updatedPrice = await showDialog<double>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Sale Price: ${cart[index]['name']}'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Unit Sale Price (Rs.)'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = double.tryParse(controller.text.trim());
+                if (value == null || !value.isFinite || value < 0) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sale price must be a valid number, zero or greater.'),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (updatedPrice != null && mounted) {
+        setState(() => cart[index]['salePrice'] = updatedPrice);
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
   double get subTotal => cart.fold(0.0, (sum, item) {
     double itemPrice =
         (item['salePrice'] - (item['itemDiscount'] ?? 0.0)) * item['quantity'];
@@ -461,6 +506,7 @@ class _SalesScreenState extends State<SalesScreen> {
                           vertical: 4,
                         ),
                         child: ListTile(
+                          onTap: () => _editSalePrice(index),
                           title: Text(
                             item['name'],
                             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -472,10 +518,15 @@ class _SalesScreenState extends State<SalesScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Rs. ${(item['salePrice'] * item['quantity'])}',
+                                'Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt())}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
+                              ),
+                              IconButton(
+                                tooltip: 'Edit sale price',
+                                icon: const Icon(Icons.edit, color: Colors.teal),
+                                onPressed: () => _editSalePrice(index),
                               ),
                               IconButton(
                                 icon: const Icon(
