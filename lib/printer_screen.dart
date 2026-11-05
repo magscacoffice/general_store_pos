@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:unified_esc_pos_printer/unified_esc_pos_printer.dart' as usb_print;
 
 class PrinterScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -53,6 +55,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
   bool _isConnected = false;
   bool _isLoading = false;
   bool _isGeneratingPdf = false;
+  final usb_print.PrinterManager _usbPrinterManager = usb_print.PrinterManager();
+  List<usb_print.UsbPrinterDevice> _usbDevices = [];
+  usb_print.UsbPrinterDevice? _selectedUsbDevice;
+  bool _isUsbScanning = false;
+  bool _isUsbConnected = false;
 
   double get _subtotal => widget.subtotalAmount ?? widget.totalAmount;
 
@@ -131,6 +138,71 @@ class _PrinterScreenState extends State<PrinterScreen> {
   void initState() {
     super.initState();
     _getBluetoothDevices();
+    _scanUsbPrinters();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_usbPrinterManager.dispose());
+    super.dispose();
+  }
+
+  Future<void> _scanUsbPrinters() async {
+    if (_isUsbScanning) return;
+    setState(() => _isUsbScanning = true);
+    try {
+      final found = await _usbPrinterManager.scanPrinters(
+        timeout: const Duration(seconds: 5),
+        types: {usb_print.PrinterConnectionType.usb},
+      );
+      if (!mounted) return;
+      final devices = found.whereType<usb_print.UsbPrinterDevice>().toList();
+      setState(() {
+        _usbDevices = devices;
+        if (_selectedUsbDevice != null &&
+            !devices.any((device) => device.identifier == _selectedUsbDevice!.identifier)) {
+          _selectedUsbDevice = null;
+          _isUsbConnected = false;
+        }
+      });
+      if (devices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('USB printer nahi mila. OTG cable aur printer connection check karein.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('USB printer search nahi ho saka: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUsbScanning = false);
+    }
+  }
+
+  Future<void> _connectUsbPrinter(usb_print.UsbPrinterDevice device) async {
+    setState(() => _isUsbScanning = true);
+    try {
+      await _usbPrinterManager.connect(device);
+      if (!mounted) return;
+      setState(() {
+        _selectedUsbDevice = device;
+        _isUsbConnected = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('USB printer connected: ${device.name}')),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUsbConnected = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('USB printer connect nahi hua: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUsbScanning = false);
+    }
   }
 
   Future<void> _getBluetoothDevices() async {
@@ -183,24 +255,33 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   Future<void> _printReceipt() async {
-    if (!_isConnected) {
+    if (!_isUsbConnected && !_isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please connect the printer first!')),
+        const SnackBar(content: Text('Pehle USB ya Bluetooth printer connect karein.')),
       );
       return;
     }
     try {
-      await PrintBluetoothThermal.writeBytes(_billText(plain: true).codeUnits);
+      if (_isUsbConnected) {
+        final ticket = await usb_print.Ticket.create(usb_print.PaperSize.mm58);
+        for (final line in _billText(plain: true).split(String.fromCharCode(10))) {
+          ticket.text(line);
+        }
+        ticket.cut();
+        await _usbPrinterManager.printTicket(ticket);
+        await _usbPrinterManager.waitWriteComplete();
+      } else {
+        await PrintBluetoothThermal.writeBytes(_billText(plain: true).codeUnits);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Receipt sent to printer.')),
+          SnackBar(content: Text(_isUsbConnected ? 'Receipt USB printer ko bhej di gayi.' : 'Receipt Bluetooth printer ko bhej di gayi.')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Printing failed: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Printing failed: $e')));
       }
     }
   }
@@ -477,6 +558,42 @@ class _PrinterScreenState extends State<PrinterScreen> {
                           );
                         },
                       ),
+              ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _isUsbScanning ? null : _scanUsbPrinters,
+              icon: _isUsbScanning
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.usb),
+              label: Text(_isUsbScanning ? 'USB printer search ho raha hai...' : 'Find USB OTG Printer'),
+            ),
+            if (_usbDevices.isNotEmpty)
+              SizedBox(
+                height: 90,
+                child: ListView.builder(
+                  itemCount: _usbDevices.length,
+                  itemBuilder: (context, index) {
+                    final device = _usbDevices[index];
+                    final isSelected = _selectedUsbDevice?.identifier == device.identifier && _isUsbConnected;
+                    return Card(
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.print),
+                        title: Text(device.name),
+                        subtitle: Text('USB ID: ${device.identifier}'),
+                        trailing: ElevatedButton(
+                          onPressed: _isUsbScanning ? null : () => _connectUsbPrinter(device),
+                          child: Text(isSelected ? 'Connected' : 'Connect'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('USB printer connect kar ke Find USB OTG Printer dabayein.', style: TextStyle(color: Colors.black54)),
               ),
             const Divider(thickness: 2),
             Expanded(

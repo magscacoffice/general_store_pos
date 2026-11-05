@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!-- Android USB OTG host support for ESC/POS thermal printers. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
         android:label="Khan Baba General Store"
