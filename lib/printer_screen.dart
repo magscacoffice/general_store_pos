@@ -60,6 +60,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   usb_print.UsbPrinterDevice? _selectedUsbDevice;
   bool _isUsbScanning = false;
   bool _isUsbConnected = false;
+  int _usbPaperWidth = 58;
 
   double get _subtotal => widget.subtotalAmount ?? widget.totalAmount;
 
@@ -138,7 +139,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
   void initState() {
     super.initState();
     _getBluetoothDevices();
-    _scanUsbPrinters();
   }
 
   @override
@@ -263,7 +263,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
     try {
       if (_isUsbConnected) {
-        final ticket = await usb_print.Ticket.create(usb_print.PaperSize.mm58);
+        final paperSize = _usbPaperWidth == 80
+            ? usb_print.PaperSize.mm80
+            : usb_print.PaperSize.mm58;
+        final ticket = await usb_print.Ticket.create(paperSize);
         for (final line in _billText(plain: true).split(String.fromCharCode(10))) {
           ticket.text(line);
         }
@@ -560,6 +563,22 @@ class _PrinterScreenState extends State<PrinterScreen> {
                       ),
               ),
             const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('USB Paper Size:'),
+                const SizedBox(width: 12),
+                DropdownButton<int>(
+                  value: _usbPaperWidth,
+                  items: const [
+                    DropdownMenuItem(value: 58, child: Text('58 mm')),
+                    DropdownMenuItem(value: 80, child: Text('80 mm')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _usbPaperWidth = value);
+                  },
+                ),
+              ],
+            ),
             OutlinedButton.icon(
               onPressed: _isUsbScanning ? null : _scanUsbPrinters,
               icon: _isUsbScanning

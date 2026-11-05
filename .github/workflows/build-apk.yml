@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/stock-profit-khata-backup
+      - feature/wholesale-customer-billing
 
 jobs:
   build:
