@@ -117,7 +117,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: Icon(Icons.receipt, color: Colors.white),
                     ),
                     title: Text(
-                      'Total: Rs. ${sale['total_amount']}',
+                      'Bill Total: Rs. ${sale['final_amount'] ?? sale['total_amount']}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text('Invoice #${sale['id']}  |  Waqt: ${sale['date']}'),
