@@ -30,6 +30,7 @@ class _PartyScreenState extends State<PartyScreen> {
   void _showAddPartyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    String customerType = 'Khata';
 
     showDialog(
       context: context,
@@ -53,6 +54,20 @@ class _PartyScreenState extends State<PartyScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Phone Number'),
                 ),
+                if (widget.type == 'customer') ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: customerType,
+                    decoration: const InputDecoration(labelText: 'Customer Type'),
+                    items: const [
+                      DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                      DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setDialogState(() => customerType = value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 15),
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -101,6 +116,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'name': nameController.text.trim(),
                       'phone': phoneController.text.trim(),
                       'type': widget.type,
+                      'customer_type': widget.type == 'customer' ? customerType : 'Khata',
                       'balance': 0.0,
                     });
                     _loadParties();
@@ -158,7 +174,9 @@ class _PartyScreenState extends State<PartyScreen> {
                       party['name'],
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('Phone: ${party['phone']}'),
+                    subtitle: Text(widget.type == 'customer'
+                        ? 'Phone: ${party['phone']}  |  ${party['customer_type'] ?? 'Khata'}'
+                        : 'Phone: ${party['phone']}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
