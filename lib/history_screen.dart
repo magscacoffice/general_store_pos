@@ -49,7 +49,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'salePrice': item['sale_price'],
       'purchasePrice': item['purchase_price'],
     }).toList();
-    final total = (sale['final_amount'] as num?)?.toDouble() ?? (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final total = (sale['effective_amount'] as num?)?.toDouble() ??
+        (sale['final_amount'] as num?)?.toDouble() ??
+        (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
     final received = (sale['received_amount'] as num?)?.toDouble() ??
         ((sale['payment_type']?.toString() ?? 'Cash') == 'Cash' ? total : 0.0);
     final due = (sale['balance_due'] as num?)?.toDouble() ?? (total - received).clamp(0.0, double.infinity).toDouble();
@@ -117,7 +119,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: Icon(Icons.receipt, color: Colors.white),
                     ),
                     title: Text(
-                      'Bill Total: Rs. ${sale['final_amount'] ?? sale['total_amount']}',
+                      'Bill Total: Rs. ${sale['effective_amount'] ?? sale['final_amount'] ?? sale['total_amount']}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text('Invoice #${sale['id']}  |  Waqt: ${sale['date']}'),
