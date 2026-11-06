@@ -1293,7 +1293,7 @@ class DBHelper {
       return id;
     });
 
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return saleId;
   }
 
@@ -1313,7 +1313,7 @@ class DBHelper {
       await _queueRow(txn, 'sales', data, remove: ['customer_id']);
       return id;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return result;
   }
 
@@ -1481,7 +1481,7 @@ class DBHelper {
       }
       return id;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return returnId;
   }
 
@@ -1512,7 +1512,7 @@ class DBHelper {
       await _queueRow(txn, 'parties', data);
       return id;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return result;
   }
 
@@ -1540,7 +1540,7 @@ class DBHelper {
       }
       return txn.delete('parties', where: 'id = ?', whereArgs: [id]);
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return deleted;
   }
 
@@ -1555,7 +1555,7 @@ class DBHelper {
       final rows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
       if (rows.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(rows.first));
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
   }
 
   // Expense Operations
@@ -1568,7 +1568,7 @@ class DBHelper {
       await _queueRow(txn, 'expenses', data);
       return inserted;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return id;
   }
 
@@ -1638,7 +1638,7 @@ class DBHelper {
       await _queueRow(txn, 'purchases', purchase, remove: ['product_id', 'supplier_id']);
       return id;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return purchaseId;
   }
 
@@ -1684,7 +1684,7 @@ class DBHelper {
       final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
       if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
   }
 
   static Future<List<Map<String, dynamic>>> getKhataTransactions(
@@ -1766,7 +1766,7 @@ class DBHelper {
       await _queueRow(txn, 'reminders', data);
       return inserted;
     });
-    await syncAllData(force: true);
+    await syncPendingChanges();
     return id;
   }
 
