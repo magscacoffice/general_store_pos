@@ -159,6 +159,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
                   'wholesalePrice': wholesalePrice,
+                  'damaged_quantity': product?['damaged_quantity'] ?? 0,
                   'quantity': stock,
                 };
 
