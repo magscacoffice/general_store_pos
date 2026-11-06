@@ -138,9 +138,9 @@ class DBHelper {
       for (final original in partyRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final needsQueue = syncId == null || syncId.isEmpty;
-        syncId = needsQueue ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final needsQueue = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = needsQueue ? _newSyncId() : existingSyncId!;
         partyIds[localId] = syncId;
         if (needsQueue) {
           await txn.update('parties', {'sync_id': syncId}, where: 'id = ?', whereArgs: [localId]);
@@ -154,9 +154,9 @@ class DBHelper {
       for (final original in saleRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         saleIds[localId] = syncId;
         final customerId = (row['customer_id'] as num?)?.toInt();
         final customerSyncId = customerId == null ? null : partyIds[customerId];
@@ -184,9 +184,9 @@ class DBHelper {
       for (final original in itemRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         saleItemIds[localId] = syncId;
         final saleId = (row['sale_id'] as num).toInt();
         final saleSyncId = saleIds[saleId];
@@ -205,9 +205,9 @@ class DBHelper {
       for (final original in purchaseRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         final supplierId = (row['supplier_id'] as num?)?.toInt();
         final supplierSyncId = supplierId == null ? null : partyIds[supplierId];
         if (newId || row['supplier_sync_id'] != supplierSyncId) {
@@ -225,9 +225,9 @@ class DBHelper {
       for (final original in transactionRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         final partyId = (row['party_id'] as num).toInt();
         final partySyncId = partyIds[partyId];
         if (newId || row['party_sync_id'] != partySyncId) {
@@ -261,9 +261,9 @@ class DBHelper {
       for (final original in returnRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         returnIds[localId] = syncId;
         final saleId = (row['sale_id'] as num).toInt();
         final customerId = (row['customer_id'] as num?)?.toInt();
@@ -286,9 +286,9 @@ class DBHelper {
       for (final original in returnItemRows) {
         final row = Map<String, dynamic>.from(original);
         final localId = (row['id'] as num).toInt();
-        var syncId = row['sync_id']?.toString();
-        final newId = syncId == null || syncId.isEmpty;
-        syncId = newId ? _newSyncId() : syncId;
+        final existingSyncId = row['sync_id']?.toString();
+        final newId = existingSyncId == null || existingSyncId.isEmpty;
+        final syncId = newId ? _newSyncId() : existingSyncId!;
         final returnId = (row['return_id'] as num).toInt();
         final saleItemId = (row['sale_item_id'] as num).toInt();
         final returnSyncId = returnIds[returnId];
