@@ -182,7 +182,10 @@ class _SalesScreenState extends State<SalesScreen> {
           final prepared = Map<String, dynamic>.from(scannedItem);
           if (selectedSaleType == 'Wholesale') {
             final wholesaleRate = (prepared['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-            if (wholesaleRate > 0) prepared['salePrice'] = wholesaleRate;
+            final purchaseCost = (prepared['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+            if (wholesaleRate > 0 && wholesaleRate >= purchaseCost) {
+              prepared['salePrice'] = wholesaleRate;
+            }
           }
           final index = cart.indexWhere((item) => item['barcode'] == prepared['barcode']);
           if (index >= 0) {
