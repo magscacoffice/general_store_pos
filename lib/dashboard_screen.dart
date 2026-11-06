@@ -31,7 +31,7 @@ class DashboardScreen extends StatelessWidget {
             tooltip: 'Sync store data',
             icon: const Icon(Icons.sync),
             onPressed: () async {
-              await DBHelper.syncAllData(force: true);
+              await DBHelper.syncAllData();
               final pending = await DBHelper.getPendingSyncCount();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
