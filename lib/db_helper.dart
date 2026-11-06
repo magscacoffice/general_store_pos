@@ -1355,12 +1355,19 @@ class DBHelper {
   }) async {
     if (items.isEmpty) throw Exception('Return ke liye kam az kam aik item select karein.');
     if (reason.trim().isEmpty) throw Exception('Return reason likhna zaroori hai.');
+    await _ensureLegacySyncIds();
     final db = await database;
-    return db.transaction<int>((txn) async {
+    final returnId = await db.transaction<int>((txn) async {
       final saleRows = await txn.query('sales', where: 'id = ?', whereArgs: [saleId], limit: 1);
       if (saleRows.isEmpty) throw Exception('Original invoice nahi mila.');
       final sale = saleRows.first;
-      final customerId = sale['customer_id'] as int?;
+      final customerId = (sale['customer_id'] as num?)?.toInt();
+      final saleSyncId = sale['sync_id']?.toString();
+      if (saleSyncId == null || saleSyncId.isEmpty) throw Exception('Original invoice sync ID missing hai.');
+      final partyRows = customerId == null
+          ? <Map<String, Object?>>[]
+          : await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [customerId], limit: 1);
+      final partySyncId = partyRows.isEmpty ? null : partyRows.first['sync_id']?.toString();
       if (refundMethod == 'Khata' && customerId == null) {
         throw Exception('Walk-in sale ka refund Khata mein adjust nahi ho sakta.');
       }
@@ -1377,7 +1384,7 @@ class DBHelper {
         final alreadyReturned = (returnedRows.first['qty'] as num?)?.toInt() ?? 0;
         final soldQuantity = (item['quantity'] as num).toInt();
         if (quantity > soldQuantity - alreadyReturned) {
-          throw Exception('Return quantity sold quantity se zyada hai: ${item['product_name']}');
+          throw Exception('Return quantity sold quantity se zyada hai: ' + item['product_name'].toString());
         }
         final salePrice = (item['sale_price'] as num).toDouble();
         final purchasePrice = (item['purchase_price'] as num).toDouble();
@@ -1386,6 +1393,7 @@ class DBHelper {
         grossTotal += lineTotal;
         selected.add({
           'sale_item_id': saleItemId,
+          'sale_item_sync_id': item['sync_id'],
           'product_id': item['product_id'],
           'barcode': item['barcode'].toString(),
           'product_name': item['product_name'].toString(),
@@ -1416,16 +1424,30 @@ class DBHelper {
         }
       }
       final date = DateTime.now().toIso8601String().substring(0, 19);
-      final id = await txn.insert('sale_returns', {
+      final returnSyncId = _newSyncId();
+      final returnRow = <String, dynamic>{
         'sale_id': saleId,
+        'sale_sync_id': saleSyncId,
         'customer_id': customerId,
+        'party_sync_id': partySyncId,
         'reason': reason.trim(),
         'refund_method': refundMethod,
         'refund_amount': refundAmount,
         'date': date,
-      });
+        'sync_id': returnSyncId,
+      };
+      final id = await txn.insert('sale_returns', returnRow);
+      await _queueRow(txn, 'sale_returns', returnRow, remove: ['sale_id', 'customer_id']);
       for (final item in selected) {
-        await txn.insert('sale_return_items', {'return_id': id, ...item});
+        final returnItem = <String, dynamic>{
+          'return_id': id,
+          'return_sync_id': returnSyncId,
+          ...item,
+          'sync_id': _newSyncId(),
+        };
+        await txn.insert('sale_return_items', returnItem);
+        await _queueRow(txn, 'sale_return_items', returnItem,
+            remove: ['return_id', 'sale_item_id', 'product_id']);
         final productId = item['product_id'];
         if (productId != null) {
           if (item['condition'] == 'saleable') {
@@ -1433,20 +1455,34 @@ class DBHelper {
           } else {
             await txn.rawUpdate('UPDATE products SET damaged_quantity = COALESCE(damaged_quantity, 0) + ? WHERE id = ?', [item['quantity'], productId]);
           }
+          final productRows = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+          if (productRows.isNotEmpty) {
+            final product = Map<String, dynamic>.from(productRows.first)..remove('id');
+            await _queueSync(txn, collection: 'products',
+                documentId: product['barcode'].toString(), payload: product);
+          }
         }
       }
       if (refundMethod == 'Khata' && customerId != null && refundAmount > 0) {
         await txn.rawUpdate('UPDATE parties SET balance = balance - ? WHERE id = ?', [refundAmount, customerId]);
-        await txn.insert('khata_transactions', {
+        final transaction = <String, dynamic>{
           'party_id': customerId,
+          'party_sync_id': partySyncId,
+          'sync_id': _newSyncId(),
           'type': 'return_adjustment',
           'amount': refundAmount,
-          'note': 'Return #$id against Bill #$saleId',
+          'note': 'Return #' + id.toString() + ' against Bill #' + saleId.toString(),
           'date': date,
-        });
+        };
+        await txn.insert('khata_transactions', transaction);
+        await _queueRow(txn, 'khata_transactions', transaction, remove: ['party_id']);
+        final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [customerId], limit: 1);
+        if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
       }
       return id;
     });
+    await syncAllData(force: true);
+    return returnId;
   }
 
   static Future<List<Map<String, dynamic>>> getSaleReturns() async {
