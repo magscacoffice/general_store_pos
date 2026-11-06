@@ -73,7 +73,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                           itemBuilder: (context, index) {
                             final e = entries[index];
                             final type = e['entry_type']?.toString() ?? '';
-                            final isReceipt = type == 'receipt';
+                            final isReceipt = type == 'receipt' || type == 'return_adjustment';
                             final amount = (e['amount'] as num?)?.toDouble() ?? 0;
                             final isSale = type == 'sale';
                             return Card(
@@ -95,7 +95,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                                     Text('Rs. ${amount.toStringAsFixed(2)}',
                                       style: TextStyle(fontWeight: FontWeight.bold,
                                         color: isReceipt ? Colors.green : Colors.red)),
-                                    Text(isReceipt ? 'Jama' : (isSale ? 'Khata Sale' : type),
+                                    Text(type == 'return_adjustment' ? 'Return Adjustment' : (isReceipt ? 'Jama' : (isSale ? 'Khata Sale' : type)),
                                       style: const TextStyle(fontSize: 11)),
                                   ],
                                 ),
