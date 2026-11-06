@@ -52,9 +52,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final total = (sale['effective_amount'] as num?)?.toDouble() ??
         (sale['final_amount'] as num?)?.toDouble() ??
         (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final received = (sale['received_amount'] as num?)?.toDouble() ??
+    final received = (sale['effective_received_amount'] as num?)?.toDouble() ??
+        (sale['received_amount'] as num?)?.toDouble() ??
         ((sale['payment_type']?.toString() ?? 'Cash') == 'Cash' ? total : 0.0);
-    final due = (sale['balance_due'] as num?)?.toDouble() ?? (total - received).clamp(0.0, double.infinity).toDouble();
+    final due = (sale['effective_balance_due'] as num?)?.toDouble() ??
+        (sale['balance_due'] as num?)?.toDouble() ??
+        (total - received).clamp(0.0, double.infinity).toDouble();
     await Navigator.push(
       context,
       MaterialPageRoute(
