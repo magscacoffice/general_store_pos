@@ -967,13 +967,17 @@ class DBHelper {
     required Map<String, dynamic> payload,
     String operation = 'set',
   }) async {
+    final syncPayload = Map<String, dynamic>.from(payload);
+    if (collection == 'products' && syncPayload['_deleted'] != true) {
+      syncPayload['_deleted'] = false;
+    }
     await executor.insert(
       'sync_queue',
       {
         'collection_name': collection,
         'document_id': documentId,
         'operation': operation,
-        'payload': jsonEncode(payload),
+        'payload': jsonEncode(syncPayload),
         'created_at': DateTime.now().toIso8601String(),
         'attempts': 0,
         'last_error': null,
