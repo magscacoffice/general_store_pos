@@ -15,12 +15,16 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> cart = [];
   List<Map<String, dynamic>> customers = [];
-  int? selectedCustomerId; // Null means Quick / Walk-in Customer
+  int? selectedCustomerId;
+  String selectedSaleType = 'Walk-in';
+  String wholesalePaymentMode = 'Cash';
+  final TextEditingController receivedAmountController = TextEditingController();
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
     for (final customer in customers) {
-      if ((customer['id'] as num?)?.toInt() == selectedCustomerId) return customer;
+      if ((customer['id'] as num?)?.toInt() == selectedCustomerId &&
+          (customer['customer_type']?.toString() ?? 'Khata') == selectedSaleType) return customer;
     }
     return null;
   }
@@ -35,6 +39,27 @@ class _SalesScreenState extends State<SalesScreen> {
     _loadCustomers();
   }
 
+  @override
+  void dispose() {
+    receivedAmountController.dispose();
+    super.dispose();
+  }
+
+  void _setSaleType(String type) {
+    if (cart.isNotEmpty && type != selectedSaleType) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customer type badalne se pehle cart clear karein.')),
+      );
+      return;
+    }
+    setState(() {
+      selectedSaleType = type;
+      selectedCustomerId = null;
+      wholesalePaymentMode = 'Cash';
+      receivedAmountController.clear();
+    });
+  }
+
   Future<void> _loadCustomers() async {
     // parties table se type 'Customer' wale get karein
     final data = await DBHelper.getParties('customer');
@@ -42,7 +67,8 @@ class _SalesScreenState extends State<SalesScreen> {
     setState(() {
       customers = data;
       if (selectedCustomerId != null &&
-          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId)) {
+          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId &&
+              (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)) {
         selectedCustomerId = null;
       }
     });
@@ -55,7 +81,7 @@ class _SalesScreenState extends State<SalesScreen> {
       final createdId = await showDialog<int>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Add New Khata Customer'),
+          title: Text(selectedSaleType == 'Wholesale' ? 'Add Wholesale Customer' : 'Add New Khata Customer'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -91,6 +117,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     'name': name,
                     'phone': phoneController.text.trim(),
                     'type': 'customer',
+                    'customer_type': selectedSaleType,
                     'balance': 0.0,
                   });
                   if (dialogContext.mounted) Navigator.pop(dialogContext, id);
@@ -151,14 +178,17 @@ class _SalesScreenState extends State<SalesScreen> {
         }
       }
       setState(() {
-        for (var scannedItem in result) {
-          int index = cart.indexWhere(
-            (item) => item['barcode'] == scannedItem['barcode'],
-          );
+        for (final scannedItem in result) {
+          final prepared = Map<String, dynamic>.from(scannedItem);
+          if (selectedSaleType == 'Wholesale') {
+            final wholesaleRate = (prepared['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
+            if (wholesaleRate > 0) prepared['salePrice'] = wholesaleRate;
+          }
+          final index = cart.indexWhere((item) => item['barcode'] == prepared['barcode']);
           if (index >= 0) {
-            cart[index]['quantity'] += scannedItem['quantity'];
+            cart[index]['quantity'] += prepared['quantity'];
           } else {
-            cart.add(Map<String, dynamic>.from(scannedItem));
+            cart.add(prepared);
           }
         }
       });
@@ -330,32 +360,58 @@ class _SalesScreenState extends State<SalesScreen> {
   Future<void> _checkout() async {
     if (cart.isEmpty || isCheckingOut) return;
 
-    setState(() {
-      isCheckingOut = true;
-    });
+    final saleType = selectedSaleType;
+    final selected = selectedCustomer;
+    if (saleType != 'Walk-in' && selected == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pehle customer select karein.')),
+      );
+      return;
+    }
+
+    final saleSubtotal = subTotal;
+    final saleDiscount = calculatedDiscount;
+    final saleFinalTotal = finalTotal;
+    var receivedAmount = 0.0;
+    var paymentType = 'Cash';
+    if (saleType == 'Walk-in') {
+      receivedAmount = saleFinalTotal;
+      paymentType = 'Cash';
+    } else if (saleType == 'Khata') {
+      receivedAmount = 0.0;
+      paymentType = 'Khata';
+    } else if (wholesalePaymentMode == 'Cash') {
+      receivedAmount = saleFinalTotal;
+      paymentType = 'Cash';
+    } else if (wholesalePaymentMode == 'Khata') {
+      receivedAmount = 0.0;
+      paymentType = 'Khata';
+    } else {
+      receivedAmount = double.tryParse(receivedAmountController.text.trim()) ?? -1;
+      paymentType = 'Partial';
+      if (!receivedAmount.isFinite || receivedAmount <= 0 || receivedAmount >= saleFinalTotal) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Partial payment bill total se kam aur zero se zyada honi chahiye.')),
+        );
+        return;
+      }
+    }
+
+    setState(() => isCheckingOut = true);
 
     // Receipt ke liye cart ki copy mehfooz rakhein.
     final completedCart = cart
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
 
-    // Sale values database operation se pehle calculate karein.
-    final saleSubtotal = subTotal;
-    final saleDiscount = calculatedDiscount;
-    final saleFinalTotal = finalTotal;
-
-    final customer = selectedCustomer == null
-        ? null
-        : Map<String, dynamic>.from(selectedCustomer!);
-
+    final customer = selected == null ? null : Map<String, dynamic>.from(selected);
     final customerName = customer != null
         ? customer['name'].toString()
-        : ' Walk-in Customer (Quick Bill)';
-
+        : 'Walk-in Customer (Quick Bill)';
     final customerPhone = customer != null
         ? (customer['phone']?.toString() ?? '')
         : '';
-
+    final balanceDue = (saleFinalTotal - receivedAmount).clamp(0.0, double.infinity).toDouble();
     final currentUser = FirebaseAuth.instance.currentUser;
     final sale = <String, dynamic>{
       'salesman_uid': currentUser?.uid,
@@ -363,7 +419,10 @@ class _SalesScreenState extends State<SalesScreen> {
       'total_amount': saleSubtotal,
       'discount': saleDiscount,
       'final_amount': saleFinalTotal,
-      'payment_type': customer == null ? 'Cash' : 'Khata',
+      'payment_type': paymentType,
+      'customer_type': saleType,
+      'received_amount': receivedAmount,
+      'balance_due': balanceDue,
       'customer_id': customer?['id'],
       'date': DateTime.now().toString().substring(0, 19),
     };
@@ -383,6 +442,8 @@ class _SalesScreenState extends State<SalesScreen> {
         overallDiscount = 0.0;
         isPercentageDiscount = false;
         selectedCustomerId = null;
+        wholesalePaymentMode = 'Cash';
+        receivedAmountController.clear();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -405,9 +466,11 @@ class _SalesScreenState extends State<SalesScreen> {
             subtotalAmount: saleSubtotal,
             discountAmount: saleDiscount,
             paymentType: sale['payment_type'].toString(),
+            receivedAmount: receivedAmount,
+            balanceDue: balanceDue,
             saleDate: sale['date'].toString(),
             cashierName: currentUser?.displayName ?? currentUser?.email ?? 'Admin',
-            salesType: customer == null ? 'Retail' : 'Khata',
+            salesType: saleType,
           ),
         ),
       );
@@ -448,60 +511,99 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
       body: Column(
         children: [
-          // Customer / Khata Selection Dropdown
+          // Customer category is independent from the payment method.
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
             color: Colors.teal.shade50,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   children: [
-                const Icon(Icons.person, color: Colors.teal),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: DropdownButton<int?>(
-                    isExpanded: true,
-                    value: selectedCustomerId,
-                    hint: const Text('Walk-in Customer (Quick Bill)'),
-                    items: [
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(
-                          'Walk-in Customer (Quick Bill)',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                    const Icon(Icons.person, color: Colors.teal),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedSaleType,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer Type',
+                          isDense: true,
+                          border: OutlineInputBorder(),
                         ),
+                        items: const [
+                          DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
+                          DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                          DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) _setSaleType(value);
+                        },
                       ),
-                      ...customers.map((c) {
-                        final id = (c['id'] as num).toInt();
-                        return DropdownMenuItem<int?>(
-                          value: id,
-                          child: Text('${c['name']} (Khata: Rs.${c['balance']})'),
-                        );
-                      }),
-                    ],
-                    onChanged: (id) => setState(() => selectedCustomerId = id),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Add New Khata Customer',
-                  onPressed: _addKhataCustomer,
-                  icon: const Icon(Icons.person_add_alt_1, color: Colors.teal),
-                ),
+                    ),
+                    if (selectedSaleType != 'Walk-in')
+                      IconButton(
+                        tooltip: 'Add ${selectedSaleType} Customer',
+                        onPressed: _addKhataCustomer,
+                        icon: const Icon(Icons.person_add_alt_1, color: Colors.teal),
+                      ),
                   ],
                 ),
+                if (selectedSaleType != 'Walk-in') ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: selectedCustomerId,
+                    decoration: InputDecoration(
+                      labelText: selectedSaleType == 'Wholesale' ? 'Select Wholesale Customer' : 'Select Khata Customer',
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: customers
+                        .where((c) => (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)
+                        .map((c) => DropdownMenuItem<int>(
+                              value: (c['id'] as num).toInt(),
+                              child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
+                            ))
+                        .toList(),
+                    onChanged: (id) => setState(() => selectedCustomerId = id),
+                  ),
+                ] else
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
+                  ),
+                if (selectedSaleType == 'Wholesale') ...[
+                  const SizedBox(height: 8),
+                  const Text('Wholesale Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'Cash', label: Text('Cash')),
+                      ButtonSegment(value: 'Khata', label: Text('Credit')),
+                      ButtonSegment(value: 'Partial', label: Text('Partial')),
+                    ],
+                    selected: {wholesalePaymentMode},
+                    onSelectionChanged: (selection) => setState(() => wholesalePaymentMode = selection.first),
+                  ),
+                  if (wholesalePaymentMode == 'Partial') ...[
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: receivedAmountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Cash Received (Rs.)',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ],
                 if (selectedCustomer != null)
                   Padding(
-                    padding: const EdgeInsets.only(left: 34, top: 2),
+                    padding: const EdgeInsets.only(top: 5),
                     child: Text(
-                      'Selected Khata Customer: ${selectedCustomer!['name']}  |  Balance: Rs. ${selectedCustomer!['balance']}',
+                      '${selectedCustomer!['name']}  |  Outstanding: Rs. ${selectedCustomer!['balance']}',
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
                     ),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.only(left: 34, top: 2),
-                    child: Text('Walk-in Customer (Cash Sale)', style: TextStyle(color: Colors.black54)),
                   ),
               ],
             ),
@@ -560,7 +662,9 @@ class _SalesScreenState extends State<SalesScreen> {
           ),
 
           // Subtotal, Discount & Checkout Panel
-          Container(
+          SafeArea(
+            top: false,
+            child: Container(
             padding: const EdgeInsets.all(16),
             color: Colors.grey[200],
             child: Column(
@@ -605,13 +709,16 @@ class _SalesScreenState extends State<SalesScreen> {
                           horizontal: 16,
                         ),
                       ),
-                      onPressed: cart.isEmpty ? null : _checkout,
-                      icon: const Icon(Icons.print),
-                      label: const Text('Checkout / Print'),
+                      onPressed: cart.isEmpty || isCheckingOut ? null : _checkout,
+                      icon: isCheckingOut
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.print),
+                      label: Text(isCheckingOut ? 'Saving...' : 'Checkout / Print'),
                     ),
                   ],
                 ),
               ],
+            ),
             ),
           ),
         ],
