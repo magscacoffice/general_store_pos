@@ -447,6 +447,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     'price': price,
                     'purchasePrice': purPrice,
                     'wholesalePrice': wholesalePrice,
+                    'damaged_quantity': 0,
                     'quantity': qty,
                   });
 
