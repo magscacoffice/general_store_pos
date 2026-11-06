@@ -440,7 +440,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     setState(() => _isGeneratingPdf = true);
     try {
       final bytes = await _generateInvoicePdf();
-      final savedPath = await FilePicker.platform.saveFile(
+      final savedPath = await FilePicker.saveFile(
         dialogTitle: 'Save invoice PDF',
         fileName: _pdfFileName,
         bytes: bytes,
