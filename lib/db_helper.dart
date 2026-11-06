@@ -1727,7 +1727,7 @@ class DBHelper {
             THEN 'Cash received' || CASE WHEN COALESCE(k.note, '') = '' THEN '' ELSE ' - ' || k.note END
             ELSE COALESCE(k.note, k.type) END AS description
         FROM khata_transactions k
-        WHERE k.party_id = ?
+        WHERE k.party_id = ? AND k.type NOT IN ('credit', 'return_adjustment')
         UNION ALL
         SELECT r.id AS entry_id, r.date AS date, 'return_adjustment' AS entry_type,
           r.refund_amount AS amount,
