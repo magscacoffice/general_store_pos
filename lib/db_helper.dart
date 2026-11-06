@@ -829,6 +829,20 @@ class DBHelper {
       final discount = (sale['discount'] as num?)?.toDouble() ?? 0.0;
       final discountShare = subtotal > 0 ? (discount * grossTotal / subtotal).clamp(0.0, grossTotal).toDouble() : 0.0;
       final refundAmount = (grossTotal - discountShare).clamp(0.0, double.infinity).toDouble();
+      if (refundMethod == 'Cash' && customerId != null) {
+        final priorCashRefunds = await txn.rawQuery(
+          "SELECT COALESCE(SUM(refund_amount), 0) AS amount FROM sale_returns WHERE sale_id = ? AND refund_method = 'Cash'",
+          [saleId],
+        );
+        final alreadyRefunded = (priorCashRefunds.first['amount'] as num?)?.toDouble() ?? 0.0;
+        final received = (sale['received_amount'] as num?)?.toDouble() ??
+            ((sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
+                ? ((sale['final_amount'] as num?)?.toDouble() ?? 0.0)
+                : 0.0);
+        if (alreadyRefunded + refundAmount > received) {
+          throw Exception('Cash refund received cash se zyada hai. Khata adjustment select karein.');
+        }
+      }
       final date = DateTime.now().toIso8601String().substring(0, 19);
       final id = await txn.insert('sale_returns', {
         'sale_id': saleId,
