@@ -66,7 +66,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
 
     // Purane records mein final_amount zero ho sakta hai.
-    return finalAmount > 0 ? finalAmount : totalAmount;
+    final gross = finalAmount > 0 ? finalAmount : totalAmount;
+    final returned = (sale['returned_amount'] as num?)?.toDouble() ?? 0.0;
+    return (gross - returned).clamp(0.0, double.infinity).toDouble();
   }
 
   double get _totalRevenue =>
