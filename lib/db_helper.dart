@@ -45,6 +45,23 @@ class DBHelper {
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
+  // Legacy sales may have final_amount=0 because older app versions used
+  // the column default. Reconstruct their net amount from the stored discount,
+  // while preserving a genuine 100% discounted sale as zero.
+  static double _effectiveSaleAmount(Map<String, dynamic> sale) {
+    final total = _numberAsDouble(sale['total_amount']);
+    final finalValue = sale['final_amount'];
+    final finalAmount = _numberAsDouble(finalValue);
+    if (finalValue != null && (finalAmount > 0 || total <= 0)) {
+      return finalAmount;
+    }
+    final discount = _numberAsDouble(sale['discount']);
+    if (discount > 0) {
+      return (total - discount).clamp(0.0, double.infinity).toDouble();
+    }
+    return total;
+  }
+
   static bool _isSyncingAll = false;
 
   static Map<String, dynamic> _cloudRow(
@@ -1333,11 +1350,16 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getSales() async {
     final db = await database;
-    return await db.rawQuery('''
+    final rows = await db.rawQuery('''
       SELECT s.*,
         COALESCE((SELECT SUM(refund_amount) FROM sale_returns r WHERE r.sale_id = s.id), 0) AS returned_amount
       FROM sales s ORDER BY s.id DESC
     ''');
+    return rows.map((row) {
+      final sale = Map<String, dynamic>.from(row);
+      sale['effective_amount'] = _effectiveSaleAmount(sale);
+      return sale;
+    }).toList();
   }
 
   static Future<Map<String, dynamic>?> getPartyById(int id) async {
@@ -1431,7 +1453,7 @@ class DBHelper {
         final alreadyRefunded = (priorCashRefunds.first['amount'] as num?)?.toDouble() ?? 0.0;
         final received = (sale['received_amount'] as num?)?.toDouble() ??
             ((sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
-                ? ((sale['final_amount'] as num?)?.toDouble() ?? 0.0)
+                ? _effectiveSaleAmount(sale)
                 : 0.0);
         if (alreadyRefunded + refundAmount > received) {
           throw Exception('Cash refund received cash se zyada hai. Khata adjustment select karein.');
@@ -1719,7 +1741,13 @@ class DBHelper {
     return db.rawQuery('''
       SELECT * FROM (
         SELECT s.id AS entry_id, s.date AS date, 'sale' AS entry_type,
-          COALESCE(s.final_amount, s.total_amount, 0) AS amount,
+          CASE
+            WHEN COALESCE(s.final_amount, 0) > 0 OR COALESCE(s.total_amount, 0) <= 0
+              THEN COALESCE(s.final_amount, 0)
+            WHEN COALESCE(s.discount, 0) > 0
+              THEN MAX(s.total_amount - s.discount, 0)
+            ELSE COALESCE(s.total_amount, 0)
+          END AS amount,
           ('Bill #' || s.id || ' - ' || COALESCE((
             SELECT GROUP_CONCAT(product_name || ' x' || quantity, ', ')
             FROM sale_items WHERE sale_id = s.id
@@ -1748,7 +1776,15 @@ class DBHelper {
     final db = await database;
     final sales = await db.rawQuery('''
       SELECT
-        COALESCE((SELECT SUM(CASE WHEN final_amount > 0 THEN final_amount ELSE total_amount END) FROM sales), 0)
+        COALESCE((SELECT SUM(
+          CASE
+            WHEN COALESCE(final_amount, 0) > 0 OR COALESCE(total_amount, 0) <= 0
+              THEN COALESCE(final_amount, 0)
+            WHEN COALESCE(discount, 0) > 0
+              THEN MAX(total_amount - discount, 0)
+            ELSE COALESCE(total_amount, 0)
+          END
+        ) FROM sales), 0)
         - COALESCE((SELECT SUM(refund_amount) FROM sale_returns), 0) AS revenue
     ''');
     final costs = await db.rawQuery('''
