@@ -28,6 +28,7 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
       (widget.sale['total_amount'] as num?)?.toDouble() ?? 0.0;
 
   double get _receivedAmount =>
+      (widget.sale['effective_received_amount'] as num?)?.toDouble() ??
       (widget.sale['received_amount'] as num?)?.toDouble() ??
       ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
           ? _saleTotal
