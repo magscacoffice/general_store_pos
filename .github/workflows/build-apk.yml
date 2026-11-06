@@ -8,6 +8,9 @@ on:
       - feature/stock-profit-khata-backup
       - feature/wholesale-customer-billing
       - codex/khan-baba-pos-final-test-2
+  pull_request:
+    branches:
+      - feature/wholesale-customer-billing
 
 jobs:
   build:
