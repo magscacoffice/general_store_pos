@@ -130,7 +130,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -158,6 +158,8 @@ class DBHelper {
             customer_type TEXT DEFAULT 'Walk-in',
             received_amount REAL DEFAULT 0.0,
             balance_due REAL DEFAULT 0.0,
+            sync_id TEXT,
+            customer_sync_id TEXT,
             date TEXT NOT NULL
           )
         ''');
@@ -169,6 +171,7 @@ class DBHelper {
             phone TEXT NOT NULL,
             type TEXT NOT NULL,
             customer_type TEXT DEFAULT 'Khata',
+            sync_id TEXT,
             balance REAL DEFAULT 0.0
           )
         ''');
@@ -178,7 +181,8 @@ class DBHelper {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             amount REAL NOT NULL,
-            date TEXT NOT NULL
+            date TEXT NOT NULL,
+            sync_id TEXT
           )
         ''');
 
@@ -188,7 +192,8 @@ class DBHelper {
             title TEXT NOT NULL,
             details TEXT,
             date TEXT NOT NULL,
-            is_done INTEGER DEFAULT 0
+            is_done INTEGER DEFAULT 0,
+            sync_id TEXT
           )
         ''');
 
@@ -201,6 +206,8 @@ class DBHelper {
           unit_cost REAL NOT NULL,
           total_cost REAL NOT NULL,
           supplier_id INTEGER,
+          sync_id TEXT,
+          supplier_sync_id TEXT,
           date TEXT NOT NULL
         )''');
         await db.execute('''CREATE TABLE sale_items(
@@ -213,7 +220,9 @@ class DBHelper {
           sale_price REAL NOT NULL,
           purchase_price REAL NOT NULL,
           line_total REAL NOT NULL,
-          cost_total REAL NOT NULL
+          cost_total REAL NOT NULL,
+          sync_id TEXT,
+          sale_sync_id TEXT
         )''');
         await db.execute('''CREATE TABLE sync_queue(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,7 +241,9 @@ class DBHelper {
           type TEXT NOT NULL,
           amount REAL NOT NULL,
           note TEXT,
-          date TEXT NOT NULL
+          date TEXT NOT NULL,
+          sync_id TEXT,
+          party_sync_id TEXT
         )''');
         await db.execute('''CREATE TABLE sale_returns(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +252,10 @@ class DBHelper {
           reason TEXT NOT NULL,
           refund_method TEXT NOT NULL,
           refund_amount REAL NOT NULL,
-          date TEXT NOT NULL
+          date TEXT NOT NULL,
+          sync_id TEXT,
+          sale_sync_id TEXT,
+          party_sync_id TEXT
         )''');
         await db.execute('''CREATE TABLE sale_return_items(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,7 +269,10 @@ class DBHelper {
           purchase_price REAL NOT NULL,
           line_total REAL NOT NULL,
           cost_total REAL NOT NULL,
-          condition TEXT NOT NULL DEFAULT 'saleable'
+          condition TEXT NOT NULL DEFAULT 'saleable',
+          sync_id TEXT,
+          return_sync_id TEXT,
+          sale_item_sync_id TEXT
         )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -351,6 +368,26 @@ class DBHelper {
             cost_total REAL NOT NULL,
             condition TEXT NOT NULL DEFAULT 'saleable'
           )''');
+        }
+
+        if (oldVersion < 8) {
+          await _ensureColumn(db, 'parties', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sales', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sales', 'customer_sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_items', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_items', 'sale_sync_id', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'supplier_sync_id', 'TEXT');
+          await _ensureColumn(db, 'khata_transactions', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'khata_transactions', 'party_sync_id', 'TEXT');
+          await _ensureColumn(db, 'expenses', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'reminders', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_returns', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_returns', 'sale_sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_returns', 'party_sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'return_sync_id', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'sale_item_sync_id', 'TEXT');
         }
 
         if (oldVersion < 5) {
