@@ -8,8 +8,16 @@ import 'db_helper.dart';
 
 const String storeId = 'khan-baba-general-store';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  User? _lastUser;
+  Future<DocumentSnapshot<Map<String, dynamic>>>? _membershipFuture;
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _membership(User user) async {
     final membership = await FirebaseFirestore.instance
@@ -21,9 +29,17 @@ class AuthGate extends StatelessWidget {
     final data = membership.data();
     if (data != null && data['active'] == true &&
         ['admin', 'salesman'].contains(data['role'])) {
-      await DBHelper.syncProductsFromCloud();
+      await DBHelper.syncAllData();
     }
     return membership;
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> _membershipFor(User user) {
+    if (_lastUser?.uid != user.uid || _membershipFuture == null) {
+      _lastUser = user;
+      _membershipFuture = _membership(user);
+    }
+    return _membershipFuture!;
   }
 
   @override
@@ -35,13 +51,17 @@ class AuthGate extends StatelessWidget {
           return const _StatusScreen(message: 'Account check ho raha hai...');
         }
         final user = authSnapshot.data;
-        if (user == null) return const LoginScreen();
+        if (user == null) {
+          _lastUser = null;
+          _membershipFuture = null;
+          return const LoginScreen();
+        }
 
         return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          future: _membership(user),
+          future: _membershipFor(user),
           builder: (context, memberSnapshot) {
             if (memberSnapshot.connectionState == ConnectionState.waiting) {
-              return const _StatusScreen(message: 'Store permission check ho rahi hai...');
+              return const _StatusScreen(message: 'Store permission aur data sync check ho rahi hai...');
             }
             if (memberSnapshot.hasError) {
               return _StatusScreen(
