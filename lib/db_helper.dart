@@ -599,7 +599,7 @@ class DBHelper {
     });
   }
 
-  static Future<void> syncAllData({bool force = false}) async {
+  static Future<void> syncAllData() async {
     if (_isSyncingAll) return;
     _isSyncingAll = true;
     try {
