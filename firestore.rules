@@ -32,7 +32,8 @@ service cloud.firestore {
       allow read, write: if activeMember(storeId)
         && collection in [
           'products', 'sales', 'sale_items', 'parties',
-          'purchases', 'khata_transactions', 'expenses', 'reminders'
+          'purchases', 'khata_transactions', 'expenses', 'reminders',
+          'sale_returns', 'sale_return_items'
         ];
     }
 
