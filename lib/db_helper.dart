@@ -312,19 +312,18 @@ class DBHelper {
   static Future<void> _queueMissingProducts() async {
     final db = await database;
     final products = await db.query('products');
+    final remote = await _storeCollection('products').get();
+    final remoteBarcodes = remote.docs.map((doc) => doc.id).toSet();
     for (final product in products) {
       final barcode = product['barcode']?.toString() ?? '';
-      if (barcode.isEmpty) continue;
-      final remote = await _storeCollection('products').doc(barcode).get();
-      if (!remote.exists) {
-        final payload = Map<String, dynamic>.from(product)..remove('id');
-        await db.transaction((txn) => _queueSync(
-          txn,
-          collection: 'products',
-          documentId: barcode,
-          payload: payload,
-        ));
-      }
+      if (barcode.isEmpty || remoteBarcodes.contains(barcode)) continue;
+      final payload = Map<String, dynamic>.from(product)..remove('id');
+      await db.transaction((txn) => _queueSync(
+        txn,
+        collection: 'products',
+        documentId: barcode,
+        payload: payload,
+      ));
     }
   }
 
@@ -606,8 +605,11 @@ class DBHelper {
       await _ensureLegacySyncIds();
       await _queueMissingProducts();
       for (var i = 0; i < 5; i++) {
-        if (await getPendingSyncCount() == 0) break;
+        final before = await getPendingSyncCount();
+        if (before == 0) break;
         await syncPendingChanges(batchSize: 100);
+        final after = await getPendingSyncCount();
+        if (after >= before) break;
       }
       await _pullProductsFromCloud();
       await _pullParties();
