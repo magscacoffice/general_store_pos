@@ -1085,8 +1085,7 @@ class DBHelper {
         txn,
         collection: 'products',
         documentId: barcode,
-        payload: {'barcode': barcode},
-        operation: 'delete',
+        payload: {'barcode': barcode, '_deleted': true},
       );
       return txn.delete('products', where: 'id = ?', whereArgs: [id]);
     });
@@ -1206,8 +1205,15 @@ class DBHelper {
         }
       }
 
-      // Save the sale in the same transaction.
+      // Save the sale with a stable Firestore document ID.
+      final customerSyncRows = customerId == null
+          ? <Map<String, Object?>>[]
+          : await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [customerId], limit: 1);
+      final saleSyncId = _newSyncId();
+      saleData['sync_id'] = saleSyncId;
+      saleData['customer_sync_id'] = customerSyncRows.isEmpty ? null : customerSyncRows.first['sync_id'];
       final id = await txn.insert('sales', saleData);
+      await _queueRow(txn, 'sales', saleData, remove: ['customer_id']);
 
       // Snapshot item prices/costs for future profit reports.
       for (final item in items) {
@@ -1230,7 +1236,7 @@ class DBHelper {
             ((item['purchasePrice'] ?? product['purchasePrice'] ?? 0) as num)
                 .toDouble();
         final name = (item['name'] ?? product['name'] ?? barcode).toString();
-        await txn.insert('sale_items', {
+        final saleItem = <String, dynamic>{
           'sale_id': id,
           'product_id': product['id'],
           'barcode': barcode,
@@ -1240,48 +1246,54 @@ class DBHelper {
           'purchase_price': purchasePrice,
           'line_total': salePrice * qty,
           'cost_total': purchasePrice * qty,
-        });
+          'sync_id': _newSyncId(),
+          'sale_sync_id': saleSyncId,
+        };
+        await txn.insert('sale_items', saleItem);
+        await _queueRow(txn, 'sale_items', saleItem, remove: ['sale_id', 'product_id']);
       }
 
       // Named-customer sales enter the ledger as a debit. Any cash collected
       // at checkout is recorded as a receipt so only the unpaid amount remains.
       final customerIdForLedger = saleData['customer_id'];
       if (customerIdForLedger != null) {
-        await txn.insert('khata_transactions', {
+        final partySyncId = saleData['customer_sync_id']?.toString();
+        final creditEntry = <String, dynamic>{
           'party_id': customerIdForLedger,
+          'party_sync_id': partySyncId,
+          'sync_id': _newSyncId(),
           'type': 'credit',
           'amount': saleFinalAmount,
           'note': 'Sale #$id',
           'date': saleData['date'].toString(),
-        });
+        };
+        await txn.insert('khata_transactions', creditEntry);
+        await _queueRow(txn, 'khata_transactions', creditEntry, remove: ['party_id']);
         if (receivedAmount > 0) {
-          await txn.insert('khata_transactions', {
+          final receiptEntry = <String, dynamic>{
             'party_id': customerIdForLedger,
+            'party_sync_id': partySyncId,
+            'sync_id': _newSyncId(),
             'type': 'receipt',
             'amount': receivedAmount,
             'note': 'Cash received at sale #$id',
             'date': saleData['date'].toString(),
-          });
+          };
+          await txn.insert('khata_transactions', receiptEntry);
+          await _queueRow(txn, 'khata_transactions', receiptEntry, remove: ['party_id']);
         }
         await txn.rawUpdate(
           'UPDATE parties SET balance = balance + ? WHERE id = ?',
           [balanceDue, customerIdForLedger],
         );
+        final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [customerIdForLedger], limit: 1);
+        if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
       }
 
       return id;
     });
 
-    // Stock changes were queued atomically with the local sale.
-    await syncPendingChanges();
-
-    // Sync the sale to Firebase.
-    try {
-      await _storeCollection('sales').add(sale);
-    } catch (e) {
-      developer.log('Firebase Sales Sync Error', name: 'DBHelper', error: e);
-    }
-
+    await syncAllData(force: true);
     return saleId;
   }
 
@@ -1289,14 +1301,19 @@ class DBHelper {
 
   static Future<int> insertSale(Map<String, dynamic> sale) async {
     final db = await database;
-    final result = await db.insert('sales', sale);
-
-    try {
-      await _storeCollection('sales').add(sale);
-    } catch (e) {
-      developer.log('Firebase Sales Sync Error', name: 'DBHelper', error: e);
+    final data = Map<String, dynamic>.from(sale);
+    data['sync_id'] ??= _newSyncId();
+    final customerId = (data['customer_id'] as num?)?.toInt();
+    if (customerId != null) {
+      final party = await db.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [customerId], limit: 1);
+      data['customer_sync_id'] = party.isEmpty ? null : party.first['sync_id'];
     }
-
+    final result = await db.transaction<int>((txn) async {
+      final id = await txn.insert('sales', data);
+      await _queueRow(txn, 'sales', data, remove: ['customer_id']);
+      return id;
+    });
+    await syncAllData(force: true);
     return result;
   }
 
@@ -1451,14 +1468,15 @@ class DBHelper {
 
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
-    final result = await db.insert('parties', party);
-
-    try {
-      await _storeCollection('parties').add(party);
-    } catch (e) {
-      developer.log('Firebase Party Sync Error', name: 'DBHelper', error: e);
-    }
-
+    final data = Map<String, dynamic>.from(party)
+      ..['sync_id'] = _newSyncId()
+      ..['customer_type'] ??= 'Khata';
+    final result = await db.transaction<int>((txn) async {
+      final id = await txn.insert('parties', data);
+      await _queueRow(txn, 'parties', data);
+      return id;
+    });
+    await syncAllData(force: true);
     return result;
   }
 
@@ -1475,24 +1493,47 @@ class DBHelper {
 
   static Future<int> deleteParty(int id) async {
     final db = await database;
-
-    return await db.delete('parties', where: 'id = ?', whereArgs: [id]);
+    final deleted = await db.transaction<int>((txn) async {
+      final rows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) return 0;
+      final row = Map<String, dynamic>.from(rows.first);
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) {
+        await _queueSync(txn, collection: 'parties', documentId: syncId,
+            payload: {'sync_id': syncId, '_deleted': true});
+      }
+      return txn.delete('parties', where: 'id = ?', whereArgs: [id]);
+    });
+    await syncAllData(force: true);
+    return deleted;
   }
 
   static Future<void> updatePartyBalance(int id, double amount) async {
     final db = await database;
 
-    await db.rawUpdate(
-      'UPDATE parties SET balance = balance + ? WHERE id = ?',
-      [amount, id],
-    );
+    await db.transaction((txn) async {
+      await txn.rawUpdate(
+        'UPDATE parties SET balance = balance + ? WHERE id = ?',
+        [amount, id],
+      );
+      final rows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(rows.first));
+    });
+    await syncAllData(force: true);
   }
 
   // Expense Operations
 
   static Future<int> insertExpense(Map<String, dynamic> expense) async {
     final db = await database;
-    return await db.insert('expenses', expense);
+    final data = Map<String, dynamic>.from(expense)..['sync_id'] = _newSyncId();
+    final id = await db.transaction<int>((txn) async {
+      final inserted = await txn.insert('expenses', data);
+      await _queueRow(txn, 'expenses', data);
+      return inserted;
+    });
+    await syncAllData(force: true);
+    return id;
   }
 
   static Future<List<Map<String, dynamic>>> getExpenses() async {
@@ -1542,7 +1583,10 @@ class DBHelper {
           payload: updatedProduct,
         );
       }
-      return txn.insert('purchases', {
+      final supplierRows = supplierId == null
+          ? <Map<String, Object?>>[]
+          : await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [supplierId], limit: 1);
+      final purchase = <String, dynamic>{
         'product_id': productId,
         'product_name': name,
         'barcode': barcode,
@@ -1550,10 +1594,15 @@ class DBHelper {
         'unit_cost': unitCost,
         'total_cost': quantity * unitCost,
         'supplier_id': supplierId,
+        'supplier_sync_id': supplierRows.isEmpty ? null : supplierRows.first['sync_id'],
+        'sync_id': _newSyncId(),
         'date': DateTime.now().toIso8601String().substring(0, 19),
-      });
+      };
+      final id = await txn.insert('purchases', purchase);
+      await _queueRow(txn, 'purchases', purchase, remove: ['product_id', 'supplier_id']);
+      return id;
     });
-    await syncPendingChanges();
+    await syncAllData(force: true);
     return purchaseId;
   }
 
@@ -1580,18 +1629,26 @@ class DBHelper {
         limit: 1,
       );
       if (rows.isEmpty) throw Exception('Customer not found.');
+      final partySyncId = rows.first['sync_id']?.toString();
       await txn.rawUpdate(
         'UPDATE parties SET balance = balance - ? WHERE id = ?',
         [amount, partyId],
       );
-      await txn.insert('khata_transactions', {
+      final transaction = <String, dynamic>{
         'party_id': partyId,
+        'party_sync_id': partySyncId,
+        'sync_id': _newSyncId(),
         'type': 'receipt',
         'amount': amount,
         'note': note,
         'date': DateTime.now().toIso8601String().substring(0, 19),
-      });
+      };
+      await txn.insert('khata_transactions', transaction);
+      await _queueRow(txn, 'khata_transactions', transaction, remove: ['party_id']);
+      final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
+      if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
     });
+    await syncAllData(force: true);
   }
 
   static Future<List<Map<String, dynamic>>> getKhataTransactions(
@@ -1667,7 +1724,14 @@ class DBHelper {
 
   static Future<int> insertReminder(Map<String, dynamic> reminder) async {
     final db = await database;
-    return await db.insert('reminders', reminder);
+    final data = Map<String, dynamic>.from(reminder)..['sync_id'] = _newSyncId();
+    final id = await db.transaction<int>((txn) async {
+      final inserted = await txn.insert('reminders', data);
+      await _queueRow(txn, 'reminders', data);
+      return inserted;
+    });
+    await syncAllData(force: true);
+    return id;
   }
 
   static Future<List<Map<String, dynamic>>> getReminders() async {
