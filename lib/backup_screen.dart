@@ -39,7 +39,7 @@ class _BackupScreenState extends State<BackupScreen> {
       // User ko folder choose karne ki ijazat dena
       // Android/iOS par saveFile ko bytes dena zaroori hota hai.
       final backupBytes = await dbFile.readAsBytes();
-      String? outputFile = await FilePicker.saveFile(
+      final outputFile = await FilePicker.saveFile(
         dialogTitle: 'Backup kahan save karna hai?',
         fileName: fileName,
         bytes: backupBytes,
