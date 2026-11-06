@@ -44,6 +44,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final salePriceController = TextEditingController(
       text: product != null ? product['price'].toString() : '0',
     );
+    final wholesalePriceController = TextEditingController(
+      text: product != null ? (product['wholesalePrice']?.toString() ?? '0') : '0',
+    );
 
     showDialog(
       context: context,
@@ -105,8 +108,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
                 TextField(
                   controller: salePriceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Sale Price *'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Retail Sale Price *'),
+                ),
+                TextField(
+                  controller: wholesalePriceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Wholesale Price (optional)'),
                 ),
               ],
             ),
@@ -125,6 +133,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice =
                     double.tryParse(salePriceController.text) ?? 0.0;
+                double wholesalePrice =
+                    double.tryParse(wholesalePriceController.text) ?? 0.0;
 
                 if (barcode.isEmpty || name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +150,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'name': name,
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
+                  'wholesalePrice': wholesalePrice,
                   'quantity': stock,
                 };
 
@@ -208,7 +219,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      'Stock: ${item['quantity']} | Sale Price: Rs.${item['price']}',
+                      'Stock: ${item['quantity']} | Retail: Rs.${item['price']} | Wholesale: Rs.${item['wholesalePrice'] ?? 0}',
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.teal),
