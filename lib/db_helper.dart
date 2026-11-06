@@ -896,6 +896,13 @@ class DBHelper {
         }
 
         if (oldVersion < 7) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS parties(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            type TEXT NOT NULL,
+            balance REAL DEFAULT 0.0
+          )''');
           await _ensureColumn(db, 'products', 'wholesalePrice', 'REAL DEFAULT 0.0');
           await _ensureColumn(db, 'products', 'damaged_quantity', 'INTEGER DEFAULT 0');
           await _ensureColumn(db, 'parties', 'customer_type', "TEXT DEFAULT 'Khata'");
