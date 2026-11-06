@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -17,26 +19,73 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   User? _lastUser;
-  Future<DocumentSnapshot<Map<String, dynamic>>>? _membershipFuture;
+  Future<Map<String, dynamic>?>? _membershipFuture;
+  bool _membershipRevoked = false;
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _membership(User user) async {
-    final membership = await FirebaseFirestore.instance
-        .collection('stores')
-        .doc(storeId)
-        .collection('members')
-        .doc(user.uid)
-        .get();
-    final data = membership.data();
-    if (data != null && data['active'] == true &&
-        ['admin', 'salesman'].contains(data['role'])) {
-      await DBHelper.syncAllData();
+  DocumentReference<Map<String, dynamic>> _membershipRef(User user) =>
+      FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('members')
+          .doc(user.uid);
+
+  bool _isAllowed(Map<String, dynamic>? data) =>
+      data != null &&
+      data['active'] == true &&
+      ['admin', 'salesman'].contains(data['role']);
+
+  Future<Map<String, dynamic>?> _membership(User user) async {
+    final ref = _membershipRef(user);
+
+    // Firestore's local cache lets an already-authorized device open POS
+    // without waiting for a network permission check.
+    try {
+      final cached = await ref
+          .get(const GetOptions(source: Source.cache))
+          .timeout(const Duration(seconds: 3));
+      final cachedData = cached.data();
+      if (_isAllowed(cachedData)) {
+        DBHelper.startAutoSync();
+        unawaited(DBHelper.syncAllData());
+        unawaited(_verifyMembershipOnline(user));
+        return cachedData;
+      }
+    } catch (_) {
+      // No cached membership is normal on a first login/device.
     }
-    return membership;
+
+    final serverSnapshot = await ref
+        .get(const GetOptions(source: Source.server))
+        .timeout(const Duration(seconds: 8));
+    final serverData = serverSnapshot.data();
+    if (_isAllowed(serverData)) {
+      DBHelper.startAutoSync();
+      unawaited(DBHelper.syncAllData());
+      return serverData;
+    }
+    return serverData;
   }
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _membershipFor(User user) {
+  Future<void> _verifyMembershipOnline(User user) async {
+    try {
+      final snapshot = await _membershipRef(user)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 8));
+      if (!_isAllowed(snapshot.data())) {
+        await DBHelper.stopAutoSync();
+        if (mounted && _lastUser?.uid == user.uid) {
+          setState(() => _membershipRevoked = true);
+        }
+      }
+    } catch (_) {
+      // Keep cached access during temporary network loss.
+    }
+  }
+
+  Future<Map<String, dynamic>?> _membershipFor(User user) {
     if (_lastUser?.uid != user.uid || _membershipFuture == null) {
       _lastUser = user;
+      _membershipRevoked = false;
       _membershipFuture = _membership(user);
     }
     return _membershipFuture!;
@@ -54,30 +103,37 @@ class _AuthGateState extends State<AuthGate> {
         if (user == null) {
           _lastUser = null;
           _membershipFuture = null;
+          _membershipRevoked = false;
+          DBHelper.stopAutoSync();
           return const LoginScreen();
         }
 
-        return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        return FutureBuilder<Map<String, dynamic>?>(
           future: _membershipFor(user),
           builder: (context, memberSnapshot) {
-            if (memberSnapshot.connectionState == ConnectionState.waiting) {
-              return const _StatusScreen(message: 'Store permission aur data sync check ho rahi hai...');
-            }
-            if (memberSnapshot.hasError) {
-              return _StatusScreen(
-                message: 'Permission check nahi ho saki. Internet aur Firestore Rules check karein.\n${memberSnapshot.error}',
+            if (_membershipRevoked) {
+              return const _StatusScreen(
+                message: 'Aapka store access admin ne band kar diya hai.',
                 showSignOut: true,
               );
             }
-            final data = memberSnapshot.data?.data();
-            if (data == null || data['active'] != true ||
-                !['admin', 'salesman'].contains(data['role'])) {
+            if (memberSnapshot.connectionState == ConnectionState.waiting) {
+              return const _StatusScreen(message: 'Store permission check ho rahi hai...');
+            }
+            if (memberSnapshot.hasError) {
+              return _StatusScreen(
+                message: 'Pehli dafa store permission check karne ke liye internet zaroori hai.\n${memberSnapshot.error}',
+                showSignOut: true,
+              );
+            }
+            final data = memberSnapshot.data;
+            if (!_isAllowed(data)) {
               return const _StatusScreen(
                 message: 'Aapka account is store ke liye active nahi hai. Admin se rabta karein.',
                 showSignOut: true,
               );
             }
-            return DashboardScreen(role: data['role'] as String);
+            return DashboardScreen(role: data!['role'] as String);
           },
         );
       },

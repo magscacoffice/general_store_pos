@@ -124,7 +124,7 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
                   child: ListTile(
                     title: Text('${c['name']}'),
                     subtitle: Text(
-                      '${c['customer_type'] ?? 'Khata'}  |  ${c['phone'] ?? ''}\nBalance: Rs. ${b.toStringAsFixed(2)}',
+                      'Khata Customer  |  ${c['phone'] ?? ''}\nBalance: Rs. ${b.toStringAsFixed(2)}',
                     ),
                     isThreeLine: true,
                     onTap: () async {

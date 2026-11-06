@@ -17,14 +17,13 @@ class _SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> customers = [];
   int? selectedCustomerId;
   String selectedSaleType = 'Walk-in';
-  String wholesalePaymentMode = 'Cash';
+  String customerPaymentMode = 'Cash';
   final TextEditingController receivedAmountController = TextEditingController();
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
     for (final customer in customers) {
-      if ((customer['id'] as num?)?.toInt() == selectedCustomerId &&
-          (customer['customer_type']?.toString() ?? 'Khata') == selectedSaleType) return customer;
+      if ((customer['id'] as num?)?.toInt() == selectedCustomerId) return customer;
     }
     return null;
   }
@@ -55,20 +54,18 @@ class _SalesScreenState extends State<SalesScreen> {
     setState(() {
       selectedSaleType = type;
       selectedCustomerId = null;
-      wholesalePaymentMode = 'Cash';
+      customerPaymentMode = 'Cash';
       receivedAmountController.clear();
     });
   }
 
   Future<void> _loadCustomers() async {
-    // parties table se type 'Customer' wale get karein
     final data = await DBHelper.getParties('customer');
     if (!mounted) return;
     setState(() {
       customers = data;
       if (selectedCustomerId != null &&
-          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId &&
-              (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)) {
+          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId)) {
         selectedCustomerId = null;
       }
     });
@@ -81,7 +78,7 @@ class _SalesScreenState extends State<SalesScreen> {
       final createdId = await showDialog<int>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text(selectedSaleType == 'Wholesale' ? 'Add Wholesale Customer' : 'Add New Khata Customer'),
+          title: Text('Add New Khata Customer'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -117,7 +114,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     'name': name,
                     'phone': phoneController.text.trim(),
                     'type': 'customer',
-                    'customer_type': selectedSaleType,
+                    'customer_type': 'Khata',
                     'balance': 0.0,
                   });
                   if (dialogContext.mounted) Navigator.pop(dialogContext, id);
@@ -180,13 +177,6 @@ class _SalesScreenState extends State<SalesScreen> {
       setState(() {
         for (final scannedItem in result) {
           final prepared = Map<String, dynamic>.from(scannedItem);
-          if (selectedSaleType == 'Wholesale') {
-            final wholesaleRate = (prepared['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-            final purchaseCost = (prepared['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-            if (wholesaleRate > 0 && wholesaleRate >= purchaseCost) {
-              prepared['salePrice'] = wholesaleRate;
-            }
-          }
           final index = cart.indexWhere((item) => item['barcode'] == prepared['barcode']);
           if (index >= 0) {
             cart[index]['quantity'] += prepared['quantity'];
@@ -377,16 +367,10 @@ class _SalesScreenState extends State<SalesScreen> {
     final saleFinalTotal = finalTotal;
     var receivedAmount = 0.0;
     var paymentType = 'Cash';
-    if (saleType == 'Walk-in') {
+    if (saleType == 'Walk-in' || customerPaymentMode == 'Cash') {
       receivedAmount = saleFinalTotal;
       paymentType = 'Cash';
-    } else if (saleType == 'Khata') {
-      receivedAmount = 0.0;
-      paymentType = 'Khata';
-    } else if (wholesalePaymentMode == 'Cash') {
-      receivedAmount = saleFinalTotal;
-      paymentType = 'Cash';
-    } else if (wholesalePaymentMode == 'Khata') {
+    } else if (customerPaymentMode == 'Credit') {
       receivedAmount = 0.0;
       paymentType = 'Khata';
     } else {
@@ -445,7 +429,7 @@ class _SalesScreenState extends State<SalesScreen> {
         overallDiscount = 0.0;
         isPercentageDiscount = false;
         selectedCustomerId = null;
-        wholesalePaymentMode = 'Cash';
+        customerPaymentMode = 'Cash';
         receivedAmountController.clear();
       });
 
@@ -536,7 +520,6 @@ class _SalesScreenState extends State<SalesScreen> {
                         items: const [
                           DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
                           DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
-                          DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
                         ],
                         onChanged: (value) {
                           if (value != null) _setSaleType(value);
@@ -556,12 +539,11 @@ class _SalesScreenState extends State<SalesScreen> {
                   DropdownButtonFormField<int>(
                     value: selectedCustomerId,
                     decoration: InputDecoration(
-                      labelText: selectedSaleType == 'Wholesale' ? 'Select Wholesale Customer' : 'Select Khata Customer',
+                      labelText: 'Select Khata Customer',
                       isDense: true,
                       border: const OutlineInputBorder(),
                     ),
                     items: customers
-                        .where((c) => (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)
                         .map((c) => DropdownMenuItem<int>(
                               value: (c['id'] as num).toInt(),
                               child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
@@ -574,20 +556,23 @@ class _SalesScreenState extends State<SalesScreen> {
                     padding: EdgeInsets.only(top: 6),
                     child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
                   ),
-                if (selectedSaleType == 'Wholesale') ...[
+                if (selectedSaleType == 'Khata') ...[
                   const SizedBox(height: 8),
-                  const Text('Wholesale Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'Cash', label: Text('Cash')),
-                      ButtonSegment(value: 'Khata', label: Text('Credit')),
+                      ButtonSegment(value: 'Credit', label: Text('Credit')),
                       ButtonSegment(value: 'Partial', label: Text('Partial')),
                     ],
-                    selected: {wholesalePaymentMode},
-                    onSelectionChanged: (selection) => setState(() => wholesalePaymentMode = selection.first),
+                    selected: {customerPaymentMode},
+                    onSelectionChanged: (selection) => setState(() {
+                      customerPaymentMode = selection.first;
+                      receivedAmountController.clear();
+                    }),
                   ),
-                  if (wholesalePaymentMode == 'Partial') ...[
+                  if (customerPaymentMode == 'Partial') ...[
                     const SizedBox(height: 6),
                     TextField(
                       controller: receivedAmountController,

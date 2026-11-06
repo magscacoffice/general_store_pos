@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:developer' as developer;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class DBHelper {
   static Database? _db;
@@ -17,6 +19,34 @@ class DBHelper {
   }
 
   static bool _isPullingProducts = false;
+  static StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  static bool _isSyncingPending = false;
+  static bool _syncPendingAgain = false;
+  static bool _syncAllAgain = false;
+
+  static void startAutoSync() {
+    if (_connectivitySubscription != null) return;
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      if (results.any((result) => result != ConnectivityResult.none)) {
+        unawaited(syncAllData());
+      }
+    });
+    unawaited(() async {
+      try {
+        final results = await Connectivity().checkConnectivity();
+        if (results.any((result) => result != ConnectivityResult.none)) {
+          await syncAllData();
+        }
+      } catch (error) {
+        developer.log('Connectivity check failed', name: 'DBHelper', error: error);
+      }
+    }());
+  }
+
+  static Future<void> stopAutoSync() async {
+    await _connectivitySubscription?.cancel();
+    _connectivitySubscription = null;
+  }
 
   static String _newSyncId() {
     final random = math.Random.secure();
@@ -198,11 +228,7 @@ class DBHelper {
         saleIds[localId] = syncId;
         final customerId = (row['customer_id'] as num?)?.toInt();
         final customerSyncId = customerId == null ? null : partyIds[customerId];
-        final customerType = customerId == null
-            ? 'Walk-in'
-            : (row['customer_type']?.toString() == 'Wholesale'
-                ? 'Wholesale'
-                : 'Khata');
+        final customerType = customerId == null ? 'Walk-in' : 'Khata';
         if (newId || row['customer_sync_id'] != customerSyncId ||
             row['customer_type'] != customerType) {
           await txn.update('sales', {
@@ -417,7 +443,7 @@ class DBHelper {
           ..remove('_deleted')
           ..remove('updated_at')
           ..['sync_id'] = doc.id;
-        values['customer_type'] ??= 'Khata';
+        values['customer_type'] = 'Khata';
         values['balance'] ??= 0.0;
         await _upsertSyncRecord(txn, 'parties', doc.id, values);
       }
@@ -637,7 +663,10 @@ class DBHelper {
   }
 
   static Future<void> syncAllData() async {
-    if (_isSyncingAll) return;
+    if (_isSyncingAll) {
+      _syncAllAgain = true;
+      return;
+    }
     _isSyncingAll = true;
     try {
       await _ensureLegacySyncIds();
@@ -663,6 +692,10 @@ class DBHelper {
       developer.log('Firebase Full Sync Error', name: 'DBHelper', error: e);
     } finally {
       _isSyncingAll = false;
+      if (_syncAllAgain) {
+        _syncAllAgain = false;
+        unawaited(syncAllData());
+      }
     }
   }
 
@@ -688,7 +721,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -993,7 +1026,11 @@ class DBHelper {
           await _ensureColumn(db, 'sale_return_items', 'return_sync_id', 'TEXT');
           await _ensureColumn(db, 'sale_return_items', 'sale_item_sync_id', 'TEXT');
         }
-
+        if (oldVersion < 9) {
+          // Preserve existing customers, balances and ledger entries while
+          // removing the separate Wholesale customer classification.
+          await db.execute("UPDATE parties SET customer_type = 'Khata' WHERE type = 'customer' AND customer_type = 'Wholesale'");
+        }
       },
     );
   }
@@ -1033,36 +1070,52 @@ class DBHelper {
   }
 
   static Future<void> syncPendingChanges({int batchSize = 50}) async {
-    final db = await database;
-    final pending = await db.query(
-      'sync_queue',
-      orderBy: 'id ASC',
-      limit: batchSize,
-    );
-
-    for (final row in pending) {
-      final id = row['id'] as int;
-      final collection = row['collection_name'].toString();
-      final documentId = row['document_id'].toString();
-      final operation = row['operation'].toString();
-      try {
-        final ref = _storeCollection(collection).doc(documentId);
-        if (operation == 'delete') {
-          await ref.delete();
-        } else {
-          final decoded = jsonDecode(row['payload'].toString());
-          if (decoded is! Map<String, dynamic>) {
-            throw const FormatException('Invalid sync payload.');
-          }
-          await ref.set(decoded, SetOptions(merge: true));
-        }
-        await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
-      } catch (e) {
-        await db.rawUpdate(
-          'UPDATE sync_queue SET attempts = attempts + 1, last_error = ? WHERE id = ?',
-          [e.toString(), id],
+    if (_isSyncingPending) {
+      _syncPendingAgain = true;
+      return;
+    }
+    _isSyncingPending = true;
+    try {
+      do {
+        _syncPendingAgain = false;
+        final db = await database;
+        final pending = await db.query(
+          'sync_queue',
+          orderBy: 'id ASC',
+          limit: batchSize,
         );
-      }
+
+        for (final row in pending) {
+          final id = row['id'] as int;
+          final collection = row['collection_name'].toString();
+          final documentId = row['document_id'].toString();
+          final operation = row['operation'].toString();
+          try {
+            final ref = _storeCollection(collection).doc(documentId);
+            if (operation == 'delete') {
+              await ref.delete().timeout(const Duration(seconds: 8));
+            } else {
+              final decoded = jsonDecode(row['payload'].toString());
+              if (decoded is! Map<String, dynamic>) {
+                throw const FormatException('Invalid sync payload.');
+              }
+              await ref.set(decoded, SetOptions(merge: true))
+                  .timeout(const Duration(seconds: 8));
+            }
+            await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
+          } catch (e) {
+            await db.rawUpdate(
+              'UPDATE sync_queue SET attempts = attempts + 1, last_error = ? WHERE id = ?',
+              [e.toString(), id],
+            );
+            // Stop on the first network/permission error. Keep the remaining
+            // outbox rows for the next successful connection.
+            break;
+          }
+        }
+      } while (_syncPendingAgain);
+    } finally {
+      _isSyncingPending = false;
     }
   }
 
@@ -1085,7 +1138,7 @@ class DBHelper {
       );
       return inserted;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return result;
   }
 
@@ -1113,7 +1166,7 @@ class DBHelper {
       );
       return updated;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return result;
   }
 
@@ -1141,7 +1194,7 @@ class DBHelper {
       );
       return txn.delete('products', where: 'id = ?', whereArgs: [id]);
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return deleted;
   }
 
@@ -1158,9 +1211,7 @@ class DBHelper {
     final db = await database;
     final saleData = Map<String, dynamic>.from(sale);
     final customerId = saleData['customer_id'];
-    final customerType = (saleData['customer_type'] ??
-            (customerId == null ? 'Walk-in' : 'Khata'))
-        .toString();
+    final customerType = customerId == null ? 'Walk-in' : 'Khata';
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
     final receivedAmount = customerId == null
@@ -1210,13 +1261,9 @@ class DBHelper {
         final product = products.first;
         final stock = (product['quantity'] as num?)?.toInt() ?? 0;
 
-        // Newly arrived goods may be sold before the stock entry is recorded.
-        // Add only the shortage, then the normal sale deduction consumes it.
         if (stock < requestedQuantity) {
-          final shortage = requestedQuantity - stock;
-          await txn.rawUpdate(
-            'UPDATE products SET quantity = quantity + ? WHERE barcode = ?',
-            [shortage, barcode],
+          throw Exception(
+            'Insufficient stock. Available: $stock, required: $requestedQuantity.',
           );
         }
       }
@@ -1345,7 +1392,7 @@ class DBHelper {
       return id;
     });
 
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return saleId;
   }
 
@@ -1365,7 +1412,7 @@ class DBHelper {
       await _queueRow(txn, 'sales', data, remove: ['customer_id']);
       return id;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return result;
   }
 
@@ -1538,7 +1585,7 @@ class DBHelper {
       }
       return id;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return returnId;
   }
 
@@ -1561,15 +1608,14 @@ class DBHelper {
 
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
-    final data = Map<String, dynamic>.from(party)
-      ..['sync_id'] = _newSyncId()
-      ..['customer_type'] ??= 'Khata';
+    final data = Map<String, dynamic>.from(party)..['sync_id'] = _newSyncId();
+    if (data['type'] == 'customer') data['customer_type'] = 'Khata';
     final result = await db.transaction<int>((txn) async {
       final id = await txn.insert('parties', data);
       await _queueRow(txn, 'parties', data);
       return id;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return result;
   }
 
@@ -1597,7 +1643,7 @@ class DBHelper {
       }
       return txn.delete('parties', where: 'id = ?', whereArgs: [id]);
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return deleted;
   }
 
@@ -1612,7 +1658,7 @@ class DBHelper {
       final rows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
       if (rows.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(rows.first));
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
   }
 
   // Expense Operations
@@ -1625,7 +1671,7 @@ class DBHelper {
       await _queueRow(txn, 'expenses', data);
       return inserted;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return id;
   }
 
@@ -1695,7 +1741,7 @@ class DBHelper {
       await _queueRow(txn, 'purchases', purchase, remove: ['product_id', 'supplier_id']);
       return id;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return purchaseId;
   }
 
@@ -1741,7 +1787,7 @@ class DBHelper {
       final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
       if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
   }
 
   static Future<List<Map<String, dynamic>>> getKhataTransactions(
@@ -1837,7 +1883,7 @@ class DBHelper {
       await _queueRow(txn, 'reminders', data);
       return inserted;
     });
-    await syncPendingChanges();
+    unawaited(syncPendingChanges());
     return id;
   }
 

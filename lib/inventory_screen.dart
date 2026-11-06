@@ -44,9 +44,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final salePriceController = TextEditingController(
       text: product != null ? product['price'].toString() : '0',
     );
-    final wholesalePriceController = TextEditingController(
-      text: product != null ? (product['wholesalePrice']?.toString() ?? '0') : '0',
-    );
 
     showDialog(
       context: context,
@@ -111,11 +108,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Retail Sale Price *'),
                 ),
-                TextField(
-                  controller: wholesalePriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Wholesale Price (optional)'),
-                ),
               ],
             ),
           ),
@@ -133,8 +125,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice =
                     double.tryParse(salePriceController.text) ?? 0.0;
-                double wholesalePrice =
-                    double.tryParse(wholesalePriceController.text) ?? 0.0;
 
                 if (barcode.isEmpty || name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -145,20 +135,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   return;
                 }
 
-                if (wholesalePrice < 0 ||
-                    (wholesalePrice > 0 && wholesalePrice < purchasePrice)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Wholesale price purchase cost se kam nahi ho sakti.')),
-                  );
-                  return;
-                }
-
                 final productData = {
                   'barcode': barcode,
                   'name': name,
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
-                  'wholesalePrice': wholesalePrice,
                   'damaged_quantity': product?['damaged_quantity'] ?? 0,
                   'quantity': stock,
                 };
@@ -228,7 +209,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      'Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Retail: Rs.${item['price']} | Wholesale: Rs.${item['wholesalePrice'] ?? 0}',
+                      'Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']}',
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.teal),
