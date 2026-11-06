@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:developer' as developer;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -16,6 +17,23 @@ class DBHelper {
   }
 
   static bool _isPullingProducts = false;
+
+  static String _newSyncId() {
+    final random = math.Random.secure();
+    return '${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(1 << 32)}';
+  }
+
+  static Future<void> _ensureColumn(
+    DatabaseExecutor executor,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final columns = await executor.rawQuery('PRAGMA table_info($table)');
+    if (!columns.any((row) => row['name'] == column)) {
+      await executor.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
+  }
 
   static double _numberAsDouble(dynamic value) {
     if (value is num) return value.toDouble();
@@ -112,7 +130,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -121,6 +139,8 @@ class DBHelper {
             barcode TEXT UNIQUE NOT NULL,
             price REAL NOT NULL,
             purchasePrice REAL DEFAULT 0.0,
+            wholesalePrice REAL DEFAULT 0.0,
+            damaged_quantity INTEGER DEFAULT 0,
             quantity INTEGER NOT NULL
           )
         ''');
@@ -135,6 +155,9 @@ class DBHelper {
             customer_id INTEGER,
             salesman_uid TEXT,
             salesman_name TEXT,
+            customer_type TEXT DEFAULT 'Walk-in',
+            received_amount REAL DEFAULT 0.0,
+            balance_due REAL DEFAULT 0.0,
             date TEXT NOT NULL
           )
         ''');
@@ -145,6 +168,7 @@ class DBHelper {
             name TEXT NOT NULL,
             phone TEXT NOT NULL,
             type TEXT NOT NULL,
+            customer_type TEXT DEFAULT 'Khata',
             balance REAL DEFAULT 0.0
           )
         ''');
@@ -210,6 +234,29 @@ class DBHelper {
           note TEXT,
           date TEXT NOT NULL
         )''');
+        await db.execute('''CREATE TABLE sale_returns(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sale_id INTEGER NOT NULL,
+          customer_id INTEGER,
+          reason TEXT NOT NULL,
+          refund_method TEXT NOT NULL,
+          refund_amount REAL NOT NULL,
+          date TEXT NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE sale_return_items(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          return_id INTEGER NOT NULL,
+          sale_item_id INTEGER NOT NULL,
+          product_id INTEGER,
+          barcode TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          sale_price REAL NOT NULL,
+          purchase_price REAL NOT NULL,
+          line_total REAL NOT NULL,
+          cost_total REAL NOT NULL,
+          condition TEXT NOT NULL DEFAULT 'saleable'
+        )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -271,6 +318,38 @@ class DBHelper {
             attempts INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
             UNIQUE(collection_name, document_id)
+          )''');
+        }
+
+        if (oldVersion < 7) {
+          await _ensureColumn(db, 'products', 'wholesalePrice', 'REAL DEFAULT 0.0');
+          await _ensureColumn(db, 'products', 'damaged_quantity', 'INTEGER DEFAULT 0');
+          await _ensureColumn(db, 'parties', 'customer_type', "TEXT DEFAULT 'Khata'");
+          await _ensureColumn(db, 'sales', 'customer_type', "TEXT DEFAULT 'Walk-in'");
+          await _ensureColumn(db, 'sales', 'received_amount', 'REAL DEFAULT 0.0');
+          await _ensureColumn(db, 'sales', 'balance_due', 'REAL DEFAULT 0.0');
+          await db.execute('''CREATE TABLE IF NOT EXISTS sale_returns(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            customer_id INTEGER,
+            reason TEXT NOT NULL,
+            refund_method TEXT NOT NULL,
+            refund_amount REAL NOT NULL,
+            date TEXT NOT NULL
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS sale_return_items(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            return_id INTEGER NOT NULL,
+            sale_item_id INTEGER NOT NULL,
+            product_id INTEGER,
+            barcode TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            sale_price REAL NOT NULL,
+            purchase_price REAL NOT NULL,
+            line_total REAL NOT NULL,
+            cost_total REAL NOT NULL,
+            condition TEXT NOT NULL DEFAULT 'saleable'
           )''');
         }
 
@@ -471,6 +550,23 @@ class DBHelper {
     }
 
     final db = await database;
+    final saleData = Map<String, dynamic>.from(sale);
+    final customerId = saleData['customer_id'];
+    final customerType = (saleData['customer_type'] ??
+            (customerId == null ? 'Walk-in' : 'Khata'))
+        .toString();
+    final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
+        (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final receivedAmount = customerId == null
+        ? saleFinalAmount
+        : ((saleData['received_amount'] as num?)?.toDouble() ?? 0.0);
+    if (!receivedAmount.isFinite || receivedAmount < 0 || receivedAmount > saleFinalAmount) {
+      throw Exception('Received amount must be between zero and the bill total.');
+    }
+    final balanceDue = customerId == null ? 0.0 : saleFinalAmount - receivedAmount;
+    saleData['customer_type'] = customerType;
+    saleData['received_amount'] = receivedAmount;
+    saleData['balance_due'] = balanceDue;
 
     // Combine quantities for repeated barcodes.
     final quantitiesByBarcode = <String, int>{};
@@ -556,7 +652,7 @@ class DBHelper {
       }
 
       // Save the sale in the same transaction.
-      final id = await txn.insert('sales', sale);
+      final id = await txn.insert('sales', saleData);
 
       // Snapshot item prices/costs for future profit reports.
       for (final item in items) {
@@ -592,28 +688,29 @@ class DBHelper {
         });
       }
 
-      // Record credit sale in the ledger; balance update remains in this transaction.
-      final customerIdForLedger = sale['customer_id'];
+      // Named-customer sales enter the ledger as a debit. Any cash collected
+      // at checkout is recorded as a receipt so only the unpaid amount remains.
+      final customerIdForLedger = saleData['customer_id'];
       if (customerIdForLedger != null) {
         await txn.insert('khata_transactions', {
           'party_id': customerIdForLedger,
           'type': 'credit',
-          'amount': (sale['final_amount'] as num?)?.toDouble() ?? 0.0,
-          'note': 'Credit sale #$id',
-          'date': sale['date'].toString(),
+          'amount': saleFinalAmount,
+          'note': 'Sale #$id',
+          'date': saleData['date'].toString(),
         });
-      }
-
-      // Update customer balance for credit/Khata sales.
-      final customerId = sale['customer_id'];
-
-      if (customerId != null) {
-        final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? 0.0;
-
+        if (receivedAmount > 0) {
+          await txn.insert('khata_transactions', {
+            'party_id': customerIdForLedger,
+            'type': 'receipt',
+            'amount': receivedAmount,
+            'note': 'Cash received at sale #$id',
+            'date': saleData['date'].toString(),
+          });
+        }
         await txn.rawUpdate(
-          'UPDATE parties '
-          'SET balance = balance + ? WHERE id = ?',
-          [finalAmount, customerId],
+          'UPDATE parties SET balance = balance + ? WHERE id = ?',
+          [balanceDue, customerIdForLedger],
         );
       }
 
@@ -650,7 +747,135 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getSales() async {
     final db = await database;
-    return await db.query('sales', orderBy: 'id DESC');
+    return await db.rawQuery('''
+      SELECT s.*,
+        COALESCE((SELECT SUM(refund_amount) FROM sale_returns r WHERE r.sale_id = s.id), 0) AS returned_amount
+      FROM sales s ORDER BY s.id DESC
+    ''');
+  }
+
+  static Future<Map<String, dynamic>?> getPartyById(int id) async {
+    final db = await database;
+    final rows = await db.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<List<Map<String, dynamic>>> getSaleItems(int saleId) async {
+    final db = await database;
+    return db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id ASC');
+  }
+
+  static Future<List<Map<String, dynamic>>> getReturnableSaleItems(int saleId) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT si.*,
+        COALESCE((SELECT SUM(ri.quantity) FROM sale_return_items ri WHERE ri.sale_item_id = si.id), 0) AS returned_quantity,
+        si.quantity - COALESCE((SELECT SUM(ri.quantity) FROM sale_return_items ri WHERE ri.sale_item_id = si.id), 0) AS returnable_quantity
+      FROM sale_items si WHERE si.sale_id = ? ORDER BY si.id ASC
+    ''', [saleId]);
+  }
+
+  static Future<int> recordSaleReturn({
+    required int saleId,
+    required String reason,
+    required String refundMethod,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (items.isEmpty) throw Exception('Return ke liye kam az kam aik item select karein.');
+    if (reason.trim().isEmpty) throw Exception('Return reason likhna zaroori hai.');
+    final db = await database;
+    return db.transaction<int>((txn) async {
+      final saleRows = await txn.query('sales', where: 'id = ?', whereArgs: [saleId], limit: 1);
+      if (saleRows.isEmpty) throw Exception('Original invoice nahi mila.');
+      final sale = saleRows.first;
+      final customerId = sale['customer_id'] as int?;
+      if (refundMethod == 'Khata' && customerId == null) {
+        throw Exception('Walk-in sale ka refund Khata mein adjust nahi ho sakta.');
+      }
+      final selected = <Map<String, dynamic>>[];
+      var grossTotal = 0.0;
+      for (final request in items) {
+        final saleItemId = (request['sale_item_id'] as num?)?.toInt();
+        final quantity = (request['quantity'] as num?)?.toInt() ?? 0;
+        if (saleItemId == null || quantity <= 0) throw Exception('Return quantity valid honi chahiye.');
+        final rows = await txn.query('sale_items', where: 'id = ? AND sale_id = ?', whereArgs: [saleItemId, saleId], limit: 1);
+        if (rows.isEmpty) throw Exception('Selected item original invoice ka hissa nahi hai.');
+        final item = rows.first;
+        final returnedRows = await txn.rawQuery('SELECT COALESCE(SUM(quantity), 0) AS qty FROM sale_return_items WHERE sale_item_id = ?', [saleItemId]);
+        final alreadyReturned = (returnedRows.first['qty'] as num?)?.toInt() ?? 0;
+        final soldQuantity = (item['quantity'] as num).toInt();
+        if (quantity > soldQuantity - alreadyReturned) {
+          throw Exception('Return quantity sold quantity se zyada hai: ${item['product_name']}');
+        }
+        final salePrice = (item['sale_price'] as num).toDouble();
+        final purchasePrice = (item['purchase_price'] as num).toDouble();
+        final condition = request['condition'] == 'damaged' ? 'damaged' : 'saleable';
+        final lineTotal = salePrice * quantity;
+        grossTotal += lineTotal;
+        selected.add({
+          'sale_item_id': saleItemId,
+          'product_id': item['product_id'],
+          'barcode': item['barcode'].toString(),
+          'product_name': item['product_name'].toString(),
+          'quantity': quantity,
+          'sale_price': salePrice,
+          'purchase_price': purchasePrice,
+          'line_total': lineTotal,
+          'cost_total': purchasePrice * quantity,
+          'condition': condition,
+        });
+      }
+      final subtotal = (sale['total_amount'] as num?)?.toDouble() ?? grossTotal;
+      final discount = (sale['discount'] as num?)?.toDouble() ?? 0.0;
+      final discountShare = subtotal > 0 ? (discount * grossTotal / subtotal).clamp(0.0, grossTotal).toDouble() : 0.0;
+      final refundAmount = (grossTotal - discountShare).clamp(0.0, double.infinity).toDouble();
+      final date = DateTime.now().toIso8601String().substring(0, 19);
+      final id = await txn.insert('sale_returns', {
+        'sale_id': saleId,
+        'customer_id': customerId,
+        'reason': reason.trim(),
+        'refund_method': refundMethod,
+        'refund_amount': refundAmount,
+        'date': date,
+      });
+      for (final item in selected) {
+        await txn.insert('sale_return_items', {'return_id': id, ...item});
+        final productId = item['product_id'];
+        if (productId != null) {
+          if (item['condition'] == 'saleable') {
+            await txn.rawUpdate('UPDATE products SET quantity = quantity + ? WHERE id = ?', [item['quantity'], productId]);
+          } else {
+            await txn.rawUpdate('UPDATE products SET damaged_quantity = COALESCE(damaged_quantity, 0) + ? WHERE id = ?', [item['quantity'], productId]);
+          }
+        }
+      }
+      if (refundMethod == 'Khata' && customerId != null && refundAmount > 0) {
+        await txn.rawUpdate('UPDATE parties SET balance = balance - ? WHERE id = ?', [refundAmount, customerId]);
+        await txn.insert('khata_transactions', {
+          'party_id': customerId,
+          'type': 'return_adjustment',
+          'amount': refundAmount,
+          'note': 'Return #$id against Bill #$saleId',
+          'date': date,
+        });
+      }
+      return id;
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getSaleReturns() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT r.*, s.date AS sale_date, p.name AS customer_name
+      FROM sale_returns r JOIN sales s ON s.id = r.sale_id
+      LEFT JOIN parties p ON p.id = r.customer_id
+      ORDER BY r.id DESC
+    ''');
+  }
+
+  static Future<List<Map<String, dynamic>>> getSaleReturnItems(int returnId) async {
+    final db = await database;
+    return db.query('sale_return_items', where: 'return_id = ?', whereArgs: [returnId], orderBy: 'id ASC');
   }
 
   // Party Operations (Customers & Suppliers) + Firebase Sync
@@ -833,19 +1058,28 @@ class DBHelper {
             ELSE COALESCE(k.note, k.type) END AS description
         FROM khata_transactions k
         WHERE k.party_id = ?
+        UNION ALL
+        SELECT r.id AS entry_id, r.date AS date, 'return_adjustment' AS entry_type,
+          r.refund_amount AS amount,
+          ('Return against Bill #' || r.sale_id || ' - ' || r.reason) AS description
+        FROM sale_returns r WHERE r.customer_id = ? AND r.refund_method = 'Khata'
       )
       ORDER BY date DESC, entry_id DESC
-    ''', [partyId, partyId]);
+    ''', [partyId, partyId, partyId]);
   }
 
   static Future<Map<String, double>> getProfitLossSummary() async {
     final db = await database;
-    final sales = await db.rawQuery(
-      "SELECT COALESCE(SUM(final_amount), SUM(total_amount), 0) AS revenue FROM sales",
-    );
-    final costs = await db.rawQuery(
-      'SELECT COALESCE(SUM(cost_total), 0) AS cost FROM sale_items',
-    );
+    final sales = await db.rawQuery('''
+      SELECT
+        COALESCE((SELECT SUM(CASE WHEN final_amount > 0 THEN final_amount ELSE total_amount END) FROM sales), 0)
+        - COALESCE((SELECT SUM(refund_amount) FROM sale_returns), 0) AS revenue
+    ''');
+    final costs = await db.rawQuery('''
+      SELECT
+        COALESCE((SELECT SUM(cost_total) FROM sale_items), 0)
+        - COALESCE((SELECT SUM(cost_total) FROM sale_return_items WHERE condition = 'saleable'), 0) AS cost
+    ''');
     final expenses = await db.rawQuery(
       'SELECT COALESCE(SUM(amount), 0) AS expenses FROM expenses',
     );
