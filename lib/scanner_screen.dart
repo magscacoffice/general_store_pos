@@ -117,6 +117,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             'barcode': barcode,
             'name': product['name'],
             'purchasePrice': product['purchasePrice'] ?? 0.0,
+            'wholesalePrice': product['wholesalePrice'] ?? 0.0,
             'salePrice': product['price'],
             'quantity': enteredQty,
           });
@@ -205,6 +206,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'barcode': product['barcode'].toString(),
                       'name': product['name'].toString(),
                       'purchasePrice': cost,
+                      'wholesalePrice': product['wholesalePrice'] ?? 0.0,
                       'salePrice': (product['price'] as num).toDouble(),
                       'quantity': saleQty,
                     });
@@ -341,6 +343,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     TextEditingController nameController = TextEditingController();
     TextEditingController priceController = TextEditingController();
     TextEditingController purPriceController = TextEditingController();
+    TextEditingController wholesalePriceController = TextEditingController(text: '0');
     TextEditingController qtyController = TextEditingController(text: '10');
 
     await showDialog(
@@ -398,9 +401,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ),
                 TextField(
                   controller: purPriceController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Purchase Price (Rupe)',
+                  ),
+                ),
+                TextField(
+                  controller: wholesalePriceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Wholesale Price (optional)',
                   ),
                 ),
                 TextField(
@@ -424,15 +434,18 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 double price = double.tryParse(priceController.text) ?? 0.0;
                 double purPrice =
                     double.tryParse(purPriceController.text) ?? 0.0;
+                double wholesalePrice =
+                    double.tryParse(wholesalePriceController.text) ?? 0.0;
                 int qty = int.tryParse(qtyController.text) ?? 0;
 
-                if (name.isNotEmpty && price > 0 && purPrice >= 0 && qty > 0) {
+                if (name.isNotEmpty && price > 0 && purPrice >= 0 && wholesalePrice >= 0 && qty > 0) {
                   // Database mein naya product save karein
                   await DBHelper.insertProduct({
                     'barcode': barcode,
                     'name': name,
                     'price': price,
                     'purchasePrice': purPrice,
+                    'wholesalePrice': wholesalePrice,
                     'quantity': qty,
                   });
 
@@ -445,6 +458,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'barcode': barcode,
                       'name': name,
                       'purchasePrice': purPrice,
+                      'wholesalePrice': wholesalePrice,
                       'price': price,
                       'quantity': qty,
                     };
@@ -452,6 +466,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'barcode': barcode,
                       'name': name,
                       'purchasePrice': purPrice,
+                      'wholesalePrice': wholesalePrice,
                       'salePrice': price,
                       'quantity': 1,
                     });
