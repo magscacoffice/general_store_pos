@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'salesmen_management_screen.dart';
 import 'package:flutter/material.dart';
+import 'db_helper.dart';
 
 import 'sales_screen.dart';
 import 'inventory_screen.dart';
@@ -26,6 +27,19 @@ class DashboardScreen extends StatelessWidget {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            tooltip: 'Sync store data',
+            icon: const Icon(Icons.sync),
+            onPressed: () async {
+              await DBHelper.syncAllData(force: true);
+              final pending = await DBHelper.getPendingSyncCount();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Sync check complete. Pending uploads: $pending')),
+                );
+              }
+            },
+          ),
           IconButton(
             tooltip: 'Logout',
             icon: const Icon(Icons.logout),
