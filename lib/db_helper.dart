@@ -62,6 +62,27 @@ class DBHelper {
     return total;
   }
 
+  static double _effectiveReceivedAmount(Map<String, dynamic> sale) {
+    final received = _numberAsDouble(sale['received_amount']);
+    if (received > 0) return received;
+    if (sale['payment_type']?.toString() == 'Cash') {
+      return _effectiveSaleAmount(sale);
+    }
+    return received;
+  }
+
+  static double _effectiveBalanceDue(Map<String, dynamic> sale) {
+    final balance = _numberAsDouble(sale['balance_due']);
+    if (balance > 0) return balance;
+    final paymentType = sale['payment_type']?.toString() ?? 'Cash';
+    if (paymentType == 'Khata' || paymentType == 'Partial') {
+      return (_effectiveSaleAmount(sale) - _effectiveReceivedAmount(sale))
+          .clamp(0.0, double.infinity)
+          .toDouble();
+    }
+    return balance;
+  }
+
   static bool _isSyncingAll = false;
 
   static Map<String, dynamic> _cloudRow(
@@ -1358,6 +1379,8 @@ class DBHelper {
     return rows.map((row) {
       final sale = Map<String, dynamic>.from(row);
       sale['effective_amount'] = _effectiveSaleAmount(sale);
+      sale['effective_received_amount'] = _effectiveReceivedAmount(sale);
+      sale['effective_balance_due'] = _effectiveBalanceDue(sale);
       return sale;
     }).toList();
   }
@@ -1451,10 +1474,7 @@ class DBHelper {
           [saleId],
         );
         final alreadyRefunded = (priorCashRefunds.first['amount'] as num?)?.toDouble() ?? 0.0;
-        final received = (sale['received_amount'] as num?)?.toDouble() ??
-            ((sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
-                ? _effectiveSaleAmount(sale)
-                : 0.0);
+        final received = _effectiveReceivedAmount(sale);
         if (alreadyRefunded + refundAmount > received) {
           throw Exception('Cash refund received cash se zyada hai. Khata adjustment select karein.');
         }
