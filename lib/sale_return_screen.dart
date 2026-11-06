@@ -185,6 +185,7 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                                             controller: _quantities[id],
                                             enabled: available > 0,
                                             keyboardType: TextInputType.number,
+                                            onChanged: (_) => setState(() {}),
                                             decoration: InputDecoration(
                                               labelText: 'Return quantity (max $available)',
                                               isDense: true,
