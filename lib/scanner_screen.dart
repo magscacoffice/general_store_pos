@@ -560,7 +560,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           controller: manualController,
                           focusNode: barcodeInputFocus,
                           autofocus: true,
-                          keyboardType: TextInputType.none,
+                          keyboardType: TextInputType.text,
                           textInputAction: TextInputAction.done,
                           onChanged: _searchProducts,
                           onSubmitted: (value) async {

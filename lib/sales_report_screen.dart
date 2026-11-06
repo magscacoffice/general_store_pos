@@ -71,7 +71,34 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   double get _totalRevenue =>
       _filteredSales.fold(0.0, (sum, sale) => sum + _amount(sale));
 
+  double get _totalDiscount => _filteredSales.fold(
+        0.0,
+        (sum, sale) => sum + ((sale['discount'] as num?)?.toDouble() ?? 0.0),
+      );
+
+  double get _totalReturned => _filteredSales.fold(
+        0.0,
+        (sum, sale) => sum + ((sale['returned_amount'] as num?)?.toDouble() ?? 0.0),
+      );
+
+  int get _totalReturnsCount => _filteredSales.fold(
+        0,
+        (sum, sale) => sum + ((sale['returned_count'] as num?)?.toInt() ?? 0),
+      );
+
   String _money(double amount) => 'Rs. ${amount.toStringAsFixed(2)}';
+
+  Widget _summaryRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,9 +156,12 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                               color: Colors.teal,
                             ),
                           ),
-                          const Text('Total Sales Amount'),
-                          const SizedBox(height: 8),
-                          Text('Number of Sales: ${sales.length}'),
+                          const Text('Net Sales (discount aur returns ke baad)'),
+                          const Divider(height: 24),
+                          _summaryRow('Bills', '${sales.length}'),
+                          _summaryRow('Discount', _money(_totalDiscount)),
+                          _summaryRow('Returns', '${_totalReturnsCount}  |  ${_money(_totalReturned)}'),
+                          _summaryRow('Net Sales', _money(_totalRevenue)),
                         ],
                       ),
                     ),
@@ -168,11 +198,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                             ),
                           ),
                           title: Text(
-                            _money(amount),
+                            'Bill #${sale['id']}  |  ${_money(amount)}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            'Date: $date\nPayment: ${sale['payment_type'] ?? 'Cash'}',
+                            'Date: $date  |  Payment: ${sale['payment_type'] ?? 'Cash'}\n'
+                            'Discount: ${_money((sale['discount'] as num?)?.toDouble() ?? 0)}  |  '
+                            'Returned: ${_money((sale['returned_amount'] as num?)?.toDouble() ?? 0)}',
                           ),
                           isThreeLine: true,
                         ),

@@ -125,7 +125,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       'Bill Total: Rs. ${sale['effective_amount'] ?? sale['final_amount'] ?? sale['total_amount']}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text('Invoice #${sale['id']}  |  Waqt: ${sale['date']}'),
+                    subtitle: Text(
+                      'Invoice #${sale['id']}  |  Waqt: ${sale['date']}\n'
+                      'Payment: ${sale['payment_type'] ?? 'Cash'}  |  '
+                      'Received: Rs. ${((sale['effective_received_amount'] as num?)?.toDouble() ?? (sale['received_amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}  |  '
+                      'Due: Rs. ${((sale['effective_balance_due'] as num?)?.toDouble() ?? (sale['balance_due'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}'
+                      '${((sale['returned_amount'] as num?)?.toDouble() ?? 0) > 0 ? '\nReturned: Rs. ${((sale['returned_amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}' : ''}',
+                    ),
                     trailing: PopupMenuButton<String>(
                       tooltip: 'Bill options',
                       onSelected: (value) {

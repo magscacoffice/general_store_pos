@@ -1373,7 +1373,8 @@ class DBHelper {
     final db = await database;
     final rows = await db.rawQuery('''
       SELECT s.*,
-        COALESCE((SELECT SUM(refund_amount) FROM sale_returns r WHERE r.sale_id = s.id), 0) AS returned_amount
+        COALESCE((SELECT SUM(refund_amount) FROM sale_returns r WHERE r.sale_id = s.id), 0) AS returned_amount,
+        (SELECT COUNT(*) FROM sale_returns r WHERE r.sale_id = s.id) AS returned_count
       FROM sales s ORDER BY s.id DESC
     ''');
     return rows.map((row) {
