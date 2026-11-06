@@ -82,60 +82,39 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _processScannedBarcode(String barcode) async {
     final products = await DBHelper.getProducts();
-    final productList = products.where((p) => p['barcode'] == barcode).toList();
-
-    if (productList.isNotEmpty) {
-      final product = productList.first;
-      int stock = (product['quantity'] as num?)?.toInt() ?? 0;
-      if (mounted) {
-        setState(() => lastScannedProduct = Map<String, dynamic>.from(product));
-      }
-
-      if (stock <= 0) {
-        await _showAddStockAndAddToCartDialog(product);
-        return;
-      }
-
-      final index = scannedItems.indexWhere((item) => item['barcode'] == barcode);
-      final alreadyAdded = index >= 0 ? (scannedItems[index]['quantity'] as num).toInt() : 0;
-      final remainingStock = stock - alreadyAdded;
-      if (remainingStock <= 0) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Cart mein ${product['name']} ki tamam available quantity add ho chuki hai.')),
-        );
-        return;
-      }
-      int? enteredQty = await _showQuantityDialog(product['name'], remainingStock);
-      if (enteredQty == null || enteredQty <= 0) return;
-      if (enteredQty > remainingStock) return;
-      if (!mounted) return;
-      setState(() {
-        if (index >= 0) {
-          scannedItems[index]['quantity'] += enteredQty;
-        } else {
-          scannedItems.add({
-            'barcode': barcode,
-            'name': product['name'],
-            'purchasePrice': product['purchasePrice'] ?? 0.0,
-                        'salePrice': product['price'],
-            'quantity': enteredQty,
-          });
-        }
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${product['name']} added to cart (Quantity: $enteredQty)',
-            ),
-          ),
-        );
-      }
-    } else {
-      // Agar product inventory mein nahi hai, toh automatic naya product add karne ka dialog kholen!
-      await _showAddNewProductDialog(barcode);
+    final productList = products.where((p) => p['barcode']?.toString() == barcode).toList();
+    if (productList.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Barcode ' + barcode + ' inventory mein nahi mila. Product pehle add karein.')),
+      );
+      return;
     }
+    final product = productList.first;
+    final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+    if (mounted) setState(() => lastScannedProduct = Map<String, dynamic>.from(product));
+    final index = scannedItems.indexWhere((item) => item['barcode']?.toString() == barcode);
+    final alreadyAdded = index >= 0 ? (scannedItems[index]['quantity'] as num).toInt() : 0;
+    if (stock <= alreadyAdded) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(product['name'].toString() + ' ka available stock khatam ho gaya hai.')),
+      );
+      return;
+    }
+    // Har successful scan sirf aik piece add karta hai. Quantity popup nahi khulta.
+    if (!mounted) return;
+    setState(() {
+      if (index >= 0) {
+        scannedItems[index]['quantity'] = alreadyAdded + 1;
+      } else {
+        scannedItems.add({
+          'barcode': barcode,
+          'name': product['name'],
+          'purchasePrice': product['purchasePrice'] ?? 0.0,
+          'salePrice': product['price'],
+          'quantity': 1,
+        });
+      }
+    });
   }
 
   Future<void> _showAddStockAndAddToCartDialog(

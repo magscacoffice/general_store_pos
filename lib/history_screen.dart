@@ -42,12 +42,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final customerId = (sale['customer_id'] as num?)?.toInt();
     final customer = customerId == null ? null : await DBHelper.getPartyById(customerId);
     if (!mounted) return;
-    final items = storedItems.map((item) => <String, dynamic>{
-      'barcode': item['barcode'],
-      'name': item['product_name'],
-      'quantity': item['quantity'],
-      'salePrice': item['sale_price'],
-      'purchasePrice': item['purchase_price'],
+    final items = storedItems.map((item) {
+      final name = (item['product_name'] ?? item['name'] ?? 'Product').toString();
+      final rate = item['sale_price'] ?? item['salePrice'] ?? item['price'] ?? 0;
+      final quantity = item['quantity'] ?? item['qty'] ?? 0;
+      return <String, dynamic>{
+        'barcode': item['barcode']?.toString() ?? '',
+        'name': name, 'product_name': name,
+        'quantity': quantity,
+        'salePrice': rate, 'sale_price': rate,
+        'purchasePrice': item['purchase_price'] ?? item['purchasePrice'] ?? 0,
+      };
     }).toList();
     final total = (sale['effective_amount'] as num?)?.toDouble() ??
         (sale['final_amount'] as num?)?.toDouble() ??

@@ -72,8 +72,18 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   double _itemTotal(Map<String, dynamic> item) {
-    return _number(item['quantity']) * _number(item['salePrice']);
+    return _number(item['quantity'] ?? item['qty']) *
+        _number(item['salePrice'] ?? item['sale_price'] ?? item['price']);
   }
+
+  String _itemName(Map<String, dynamic> item) =>
+      (item['name'] ?? item['product_name'] ?? 'Product').toString();
+
+  double _itemRate(Map<String, dynamic> item) =>
+      _number(item['salePrice'] ?? item['sale_price'] ?? item['price']);
+
+  double _itemQuantity(Map<String, dynamic> item) =>
+      _number(item['quantity'] ?? item['qty']);
 
   String _money(double amount) => amount.toStringAsFixed(2);
 
@@ -112,9 +122,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
       ..writeln(_line('No  Description', 'Amount', width: width));
     for (var i = 0; i < widget.cartItems.length; i++) {
       final item = widget.cartItems[i];
-      final name = (item['name']?.toString() ?? 'Product');
-      final qty = _number(item['quantity']).toStringAsFixed(0);
-      final rate = _number(item['salePrice']);
+      final name = _itemName(item);
+      final qty = _itemQuantity(item).toStringAsFixed(0);
+      final rate = _itemRate(item);
       final amount = _itemTotal(item);
       buffer
         ..writeln('${i + 1}. ${name.length > 25 ? name.substring(0, 25) : name}')
@@ -361,9 +371,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ),
             pw.SizedBox(height: 3),
             ...widget.cartItems.map((item) {
-              final name = item['name']?.toString() ?? 'Product';
-              final qty = _number(item['quantity']);
-              final rate = _number(item['salePrice']);
+              final name = _itemName(item);
+              final qty = _itemQuantity(item);
+              final rate = _itemRate(item);
               return pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 4),
                 child: pw.Column(

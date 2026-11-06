@@ -188,6 +188,50 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> _editQuantity(int index) async {
+    final currentQuantity = (cart[index]['quantity'] as num?)?.toInt() ?? 1;
+    final controller = TextEditingController(text: currentQuantity.toString());
+    try {
+      final updatedQuantity = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Quantity: ' + cart[index]['name'].toString()),
+          content: TextField(
+            controller: controller, autofocus: true, keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Final quantity', helperText: 'Bill review mein quantity set karein.'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                final value = int.tryParse(controller.text.trim());
+                if (value == null || value <= 0) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Quantity zero se zyada honi chahiye.')));
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      if (updatedQuantity != null && mounted) {
+        final products = await DBHelper.getProducts();
+        final barcode = cart[index]['barcode']?.toString();
+        final matchingProducts = products.where((p) => p['barcode']?.toString() == barcode).toList();
+        final availableStock = matchingProducts.isEmpty ? 0 : (matchingProducts.first['quantity'] as num?)?.toInt() ?? 0;
+        if (updatedQuantity > availableStock) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Available stock sirf ' + availableStock.toString() + ' pieces hai.')));
+          return;
+        }
+        setState(() => cart[index]['quantity'] = updatedQuantity);
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
   Future<void> _editSalePrice(int index) async {
     final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
     final purchasePrice =
@@ -597,6 +641,11 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
 
+          // Bill Review: final quantity/rate edits happen here before Save/Print.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
+          ),
           // Live Bill Items Display
           Expanded(
             child: cart.isEmpty
@@ -611,36 +660,14 @@ class _SalesScreenState extends State<SalesScreen> {
                           vertical: 4,
                         ),
                         child: ListTile(
-                          onTap: () => _editSalePrice(index),
-                          title: Text(
-                            item['name'],
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            'Rs. ${item['salePrice']} x ${item['quantity']}',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
+                          title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                          trailing: Wrap(
+                            spacing: 0,
                             children: [
-                              Text(
-                                'Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt())}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Edit sale price',
-                                icon: const Icon(Icons.edit, color: Colors.teal),
-                                onPressed: () => _editSalePrice(index),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () =>
-                                    setState(() => cart.removeAt(index)),
-                              ),
+                              IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                              IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                              IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => cart.removeAt(index))),
                             ],
                           ),
                         ),
