@@ -145,6 +145,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   return;
                 }
 
+                if (wholesalePrice < 0 ||
+                    (wholesalePrice > 0 && wholesalePrice < purchasePrice)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Wholesale price purchase cost se kam nahi ho sakti.')),
+                  );
+                  return;
+                }
+
                 final productData = {
                   'barcode': barcode,
                   'name': name,
@@ -219,7 +227,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      'Stock: ${item['quantity']} | Retail: Rs.${item['price']} | Wholesale: Rs.${item['wholesalePrice'] ?? 0}',
+                      'Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Retail: Rs.${item['price']} | Wholesale: Rs.${item['wholesalePrice'] ?? 0}',
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.teal),
