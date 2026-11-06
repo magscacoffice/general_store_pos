@@ -22,14 +22,21 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
   int get _saleId => (widget.sale['id'] as num).toInt();
   int? get _customerId => (widget.sale['customer_id'] as num?)?.toInt();
 
+  double get _saleTotal =>
+      (widget.sale['effective_amount'] as num?)?.toDouble() ??
+      (widget.sale['final_amount'] as num?)?.toDouble() ??
+      (widget.sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+
+  double get _receivedAmount =>
+      (widget.sale['received_amount'] as num?)?.toDouble() ??
+      ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
+          ? _saleTotal
+          : 0.0);
+
   @override
   void initState() {
     super.initState();
-    final received = (widget.sale['received_amount'] as num?)?.toDouble() ??
-        ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
-            ? ((widget.sale['final_amount'] as num?)?.toDouble() ?? 0.0)
-            : 0.0);
-    _refundMethod = _customerId != null && received <= 0 ? 'Khata' : 'Cash';
+    _refundMethod = _customerId != null && _receivedAmount <= 0 ? 'Khata' : 'Cash';
     _load();
   }
 
@@ -151,7 +158,7 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                       title: Text('Original Bill #$_saleId'),
                       subtitle: Text('${widget.sale['date'] ?? ''}  |  $customerName'),
                       trailing: Text(
-                        'Rs. ${((widget.sale['final_amount'] as num?)?.toDouble() ?? (widget.sale['total_amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}',
+                        'Rs. ${_saleTotal.toStringAsFixed(2)}',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -236,10 +243,7 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: SegmentedButton<String>(
                       segments: [
-                        if (((widget.sale['received_amount'] as num?)?.toDouble() ??
-                            ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
-                                ? ((widget.sale['final_amount'] as num?)?.toDouble() ?? 0.0)
-                                : 0.0)) > 0)
+                        if (_receivedAmount > 0)
                           const ButtonSegment(value: 'Cash', label: Text('Cash Refund')),
                         const ButtonSegment(value: 'Khata', label: Text('Adjust Khata')),
                       ],
