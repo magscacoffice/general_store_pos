@@ -62,11 +62,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   double _amount(Map<String, dynamic> sale) {
-    final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? 0.0;
-    final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-
-    // Purane records mein final_amount zero ho sakta hai.
-    final gross = finalAmount > 0 ? finalAmount : totalAmount;
+    final gross = (sale['effective_amount'] as num?)?.toDouble() ??
+        ((sale['final_amount'] as num?)?.toDouble() ?? 0.0);
     final returned = (sale['returned_amount'] as num?)?.toDouble() ?? 0.0;
     return (gross - returned).clamp(0.0, double.infinity).toDouble();
   }
