@@ -25,6 +25,11 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
   @override
   void initState() {
     super.initState();
+    final received = (widget.sale['received_amount'] as num?)?.toDouble() ??
+        ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
+            ? ((widget.sale['final_amount'] as num?)?.toDouble() ?? 0.0)
+            : 0.0);
+    _refundMethod = _customerId != null && received <= 0 ? 'Khata' : 'Cash';
     _load();
   }
 
@@ -229,9 +234,13 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(value: 'Cash', label: Text('Cash Refund')),
-                        ButtonSegment(value: 'Khata', label: Text('Adjust Khata')),
+                      segments: [
+                        if (((widget.sale['received_amount'] as num?)?.toDouble() ??
+                            ((widget.sale['payment_type']?.toString() ?? 'Khata') == 'Cash'
+                                ? ((widget.sale['final_amount'] as num?)?.toDouble() ?? 0.0)
+                                : 0.0)) > 0)
+                          const ButtonSegment(value: 'Cash', label: Text('Cash Refund')),
+                        const ButtonSegment(value: 'Khata', label: Text('Adjust Khata')),
                       ],
                       selected: {_refundMethod},
                       onSelectionChanged: (selection) => setState(() => _refundMethod = selection.first),
