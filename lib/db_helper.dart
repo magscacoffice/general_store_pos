@@ -856,6 +856,45 @@ class DBHelper {
           )''');
         }
 
+        if (oldVersion < 5) {
+          await db.execute('ALTER TABLE sales ADD COLUMN salesman_uid TEXT');
+          await db.execute('ALTER TABLE sales ADD COLUMN salesman_name TEXT');
+        }
+
+        if (oldVersion < 4) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS purchases(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            barcode TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_cost REAL NOT NULL,
+            total_cost REAL NOT NULL,
+            supplier_id INTEGER,
+            date TEXT NOT NULL
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS sale_items(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER,
+            barcode TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            sale_price REAL NOT NULL,
+            purchase_price REAL NOT NULL,
+            line_total REAL NOT NULL,
+            cost_total REAL NOT NULL
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS khata_transactions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            party_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT,
+            date TEXT NOT NULL
+          )''');
+        }
+
         if (oldVersion < 7) {
           await _ensureColumn(db, 'products', 'wholesalePrice', 'REAL DEFAULT 0.0');
           await _ensureColumn(db, 'products', 'damaged_quantity', 'INTEGER DEFAULT 0');
@@ -908,44 +947,6 @@ class DBHelper {
           await _ensureColumn(db, 'sale_return_items', 'sale_item_sync_id', 'TEXT');
         }
 
-        if (oldVersion < 5) {
-          await db.execute('ALTER TABLE sales ADD COLUMN salesman_uid TEXT');
-          await db.execute('ALTER TABLE sales ADD COLUMN salesman_name TEXT');
-        }
-
-        if (oldVersion < 4) {
-          await db.execute('''CREATE TABLE IF NOT EXISTS purchases(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            product_name TEXT NOT NULL,
-            barcode TEXT NOT NULL,
-            quantity INTEGER NOT NULL,
-            unit_cost REAL NOT NULL,
-            total_cost REAL NOT NULL,
-            supplier_id INTEGER,
-            date TEXT NOT NULL
-          )''');
-          await db.execute('''CREATE TABLE IF NOT EXISTS sale_items(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sale_id INTEGER NOT NULL,
-            product_id INTEGER,
-            barcode TEXT NOT NULL,
-            product_name TEXT NOT NULL,
-            quantity INTEGER NOT NULL,
-            sale_price REAL NOT NULL,
-            purchase_price REAL NOT NULL,
-            line_total REAL NOT NULL,
-            cost_total REAL NOT NULL
-          )''');
-          await db.execute('''CREATE TABLE IF NOT EXISTS khata_transactions(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            party_id INTEGER NOT NULL,
-            type TEXT NOT NULL,
-            amount REAL NOT NULL,
-            note TEXT,
-            date TEXT NOT NULL
-          )''');
-        }
       },
     );
   }
