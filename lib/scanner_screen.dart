@@ -438,7 +438,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     double.tryParse(wholesalePriceController.text) ?? 0.0;
                 int qty = int.tryParse(qtyController.text) ?? 0;
 
-                if (name.isNotEmpty && price > 0 && purPrice >= 0 && wholesalePrice >= 0 && qty > 0) {
+                if (name.isNotEmpty && price > 0 && purPrice >= 0 && wholesalePrice >= 0 &&
+                    (wholesalePrice == 0 || wholesalePrice >= purPrice) && qty > 0) {
                   // Database mein naya product save karein
                   await DBHelper.insertProduct({
                     'barcode': barcode,
@@ -486,7 +487,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Please enter a name, positive sale price, non-negative purchase price and stock quantity.'),
+                        content: Text('Please enter a name, valid prices (wholesale rate cannot be below purchase cost) and stock quantity.'),
                       ),
                     );
                   }
