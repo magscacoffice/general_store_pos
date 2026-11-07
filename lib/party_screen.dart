@@ -176,8 +176,13 @@ class _PartyScreenState extends State<PartyScreen> {
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.grey),
                           onPressed: () async {
-                            await DBHelper.deleteParty(party['id']);
-                            _loadParties();
+                            try {
+                              await DBHelper.deleteParty((party['id'] as num).toInt());
+                              _loadParties();
+                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account delete ho gaya.')));
+                            } catch (e) {
+                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                            }
                           },
                         ),
                       ],

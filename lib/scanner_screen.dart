@@ -6,7 +6,9 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'db_helper.dart';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  final bool captureBarcodeOnly;
+
+  const ScannerScreen({super.key, this.captureBarcodeOnly = false});
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -80,26 +82,43 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
-  Future<void> _processScannedBarcode(String barcode) async {
-    final products = await DBHelper.getProducts();
-    final productList = products.where((p) => p['barcode']?.toString() == barcode).toList();
-    if (productList.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Barcode ' + barcode + ' inventory mein nahi mila. Product pehle add karein.')),
-      );
+  Future<void> _processScannedBarcode(String rawBarcode) async {
+    final barcode = rawBarcode.trim();
+    if (barcode.isEmpty) return;
+
+    // Inventory form ko sirf barcode chahiye; product ka pehle se hona zaroori nahi.
+    if (widget.captureBarcodeOnly) {
+      if (mounted) Navigator.pop(context, barcode);
       return;
     }
+
+    final products = await DBHelper.getProducts();
+    final productList = products
+        .where((p) => p['barcode']?.toString().trim() == barcode)
+        .toList();
+    if (productList.isEmpty) {
+      // New Sale se unknown barcode par product yahin create ho kar
+      // inventory aur isi bill dono mein add hoga.
+      if (mounted) await _showAddNewProductDialog(barcode);
+      return;
+    }
+
     final product = productList.first;
     final stock = (product['quantity'] as num?)?.toInt() ?? 0;
     if (mounted) setState(() => lastScannedProduct = Map<String, dynamic>.from(product));
     final index = scannedItems.indexWhere((item) => item['barcode']?.toString() == barcode);
-    final alreadyAdded = index >= 0 ? (scannedItems[index]['quantity'] as num).toInt() : 0;
+    final alreadyAdded = index >= 0
+        ? (scannedItems[index]['quantity'] as num).toInt()
+        : 0;
     if (stock <= alreadyAdded) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(product['name'].toString() + ' ka available stock khatam ho gaya hai.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(product['name'].toString() + ' ka available stock khatam ho gaya hai.')),
+        );
+      }
       return;
     }
+
     // Har successful scan sirf aik piece add karta hai. Quantity popup nahi khulta.
     if (!mounted) return;
     setState(() {
@@ -317,152 +336,145 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   // Naya product inventory mein automatic save karne ka dialog
   Future<void> _showAddNewProductDialog(String barcode) async {
-    TextEditingController nameController = TextEditingController();
-    TextEditingController priceController = TextEditingController();
-    TextEditingController purPriceController = TextEditingController();
-    TextEditingController qtyController = TextEditingController(text: '10');
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final purPriceController = TextEditingController();
+    final qtyController = TextEditingController(text: '10');
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New Product to Inventory'),
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('New Product - Inventory Mein Add Karein'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Barcode: $barcode',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.teal,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: nameController,
+                  autofocus: true,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Product ka Naam',
-                    hintText: 'Naam type karein ya camera se read karein',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Product ka Naam *'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _isReadingProductName
                       ? null
-                      : () => _readProductNameFromCamera(
-                            nameController,
-                            context,
-                          ),
+                      : () => _readProductNameFromCamera(nameController, dialogContext),
                   icon: _isReadingProductName
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.camera_alt),
-                  label: Text(
-                    _isReadingProductName
-                        ? 'Image se text read ho raha hai...'
-                        : 'Camera se Product Name Read Karein',
-                  ),
-                ),
-                TextField(
-                  controller: priceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Sale Price (Rupe)',
-                  ),
+                  label: Text(_isReadingProductName ? 'Naam read ho raha hai...' : 'Camera se Product Name Read Karein'),
                 ),
                 TextField(
                   controller: purPriceController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Purchase Price (Rupe)',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Purchase Price (Rs.) *'),
+                ),
+                TextField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Sale Price (Rs.) *'),
                 ),
                 TextField(
                   controller: qtyController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Initial Stock Quantity',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Initial Stock Quantity *'),
                 ),
+                const SizedBox(height: 4),
+                const Text('Product save hone ke baad isi bill mein 1 piece add ho jayega.'),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
-                String name = nameController.text.trim();
-                double price = double.tryParse(priceController.text) ?? 0.0;
-                double purPrice =
-                    double.tryParse(purPriceController.text) ?? 0.0;
-                int qty = int.tryParse(qtyController.text) ?? 0;
+                final name = nameController.text.trim();
+                final price = double.tryParse(priceController.text.trim());
+                final purchasePrice = double.tryParse(purPriceController.text.trim());
+                final quantity = int.tryParse(qtyController.text.trim());
 
-                if (name.isNotEmpty && price > 0 && purPrice >= 0 && qty > 0) {
-                  // Database mein naya product save karein
+                if (name.isEmpty ||
+                    price == null || !price.isFinite || price <= 0 ||
+                    purchasePrice == null || !purchasePrice.isFinite || purchasePrice < 0 ||
+                    quantity == null || quantity <= 0 ||
+                    price < purchasePrice) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Naam, stock aur prices durust likhein. Sale price purchase price se kam nahi ho sakti.')),
+                  );
+                  return;
+                }
+
+                try {
                   await DBHelper.insertProduct({
                     'barcode': barcode,
                     'name': name,
                     'price': price,
-                    'purchasePrice': purPrice,
-                                        'damaged_quantity': 0,
-                    'quantity': qty,
+                    'purchasePrice': purchasePrice,
+                    'damaged_quantity': 0,
+                    'quantity': quantity,
                   });
 
-                  if (!mounted || !context.mounted) return;
-                  Navigator.pop(context);
-
-                  // Foran cart mein bhi add kar dein
+                  if (!mounted || !dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
                   setState(() {
                     lastScannedProduct = {
                       'barcode': barcode,
                       'name': name,
-                      'purchasePrice': purPrice,
-                                            'price': price,
-                      'quantity': qty,
+                      'purchasePrice': purchasePrice,
+                      'price': price,
+                      'quantity': quantity,
                     };
-                    scannedItems.add({
-                      'barcode': barcode,
-                      'name': name,
-                      'purchasePrice': purPrice,
-                                            'salePrice': price,
-                      'quantity': 1,
-                    });
+                    final existingIndex = scannedItems.indexWhere(
+                      (item) => item['barcode']?.toString() == barcode,
+                    );
+                    if (existingIndex >= 0) {
+                      scannedItems[existingIndex]['quantity'] =
+                          (scannedItems[existingIndex]['quantity'] as num).toInt() + 1;
+                    } else {
+                      scannedItems.add({
+                        'barcode': barcode,
+                        'name': name,
+                        'purchasePrice': purchasePrice,
+                        'salePrice': price,
+                        'quantity': 1,
+                      });
+                    }
                   });
                   await _loadProducts();
-
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'New product saved to inventory and added to cart!',
-                        ),
-                      ),
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('Naya product inventory mein save ho gaya aur isi bill mein add ho gaya.')),
                     );
                   }
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter a name, valid prices and stock quantity.'),
-                      ),
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('Product save nahi ho saka: ${e.toString().replaceFirst('Exception: ', '')}')),
                     );
                   }
                 }
               },
-              child: const Text('Save & Add'),
+              child: const Text('Save & Add to Bill'),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    } finally {
+      nameController.dispose();
+      priceController.dispose();
+      purPriceController.dispose();
+      qtyController.dispose();
+    }
   }
 
   @override

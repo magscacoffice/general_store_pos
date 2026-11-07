@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'db_helper.dart';
 import 'scanner_screen.dart';
@@ -92,6 +93,33 @@ class _SalesScreenState extends State<SalesScreen> {
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: 'Phone Number'),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final permission = await FlutterContacts.permissions.request(PermissionType.read);
+                      if (permission != PermissionStatus.granted) {
+                        if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Contacts permission allow karein.')),
+                        );
+                        return;
+                      }
+                      final contact = await FlutterContacts.native.showPicker(properties: {ContactProperty.phone});
+                      if (contact != null && dialogContext.mounted) {
+                        nameController.text = contact.displayName ?? '';
+                        if (contact.phones.isNotEmpty) phoneController.text = contact.phones.first.number;
+                      }
+                    } catch (e) {
+                      if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        SnackBar(content: Text('Contact open nahi ho saka: $e')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.contacts),
+                  label: const Text('Phone Contacts Se Chunein'),
+                ),
               ),
             ],
           ),

@@ -95,57 +95,87 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return left + List.filled(available, ' ').join() + right;
   }
 
+  List<String> _wrapReceiptText(String value, int maxWidth) {
+    final words = value.trim().split(RegExp(r'\s+'));
+    final lines = <String>[];
+    var current = '';
+    for (final word in words) {
+      if (current.isEmpty) {
+        current = word;
+      } else if ((current.length + word.length + 1) <= maxWidth) {
+        current = '$current $word';
+      } else {
+        lines.add(current);
+        current = word;
+      }
+    }
+    if (current.isNotEmpty) lines.add(current);
+    return lines.isEmpty ? [''] : lines;
+  }
+
   String _billText({required bool plain}) {
     const width = 32;
     final separator = List.filled(width, '-').join();
+    final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
     final received = widget.receivedAmount ?? widget.totalAmount;
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final due = widget.balanceDue ?? (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
-    final tax = widget.taxAmount;
     final buffer = StringBuffer()
-      ..writeln('       KHAN BABA')
-      ..writeln(' GENERAL STORE & PERFUMERY')
-      ..writeln(' Perfume | Cosmetics | Daily Needs')
-      ..writeln('        Gift Items')
-      ..writeln('       GT Road Sanawa')
-      ..writeln('      WhatsApp: 0345-1444325')
+      ..writeln('          KHAN BABA')
+      ..writeln('  GENERAL STORE & PERFUMERY')
+      ..writeln('GT Road Sanawa')
+      ..writeln('WhatsApp: 0345-1444325')
       ..writeln(separator)
-      ..writeln(_line('Bill No', ': ${widget.invoiceId.toString().padLeft(6, '0')}', width: width))
-      ..writeln(_line('Date', ': ${DateFormat('dd-MM-yyyy').format(DateTime.tryParse(widget.saleDate) ?? DateTime.now())}', width: width))
-      ..writeln(_line('Time', ': ${DateFormat('hh:mm a').format(DateTime.tryParse(widget.saleDate) ?? DateTime.now())}', width: width))
-      ..writeln(_line('Cashier', ': ${widget.cashierName}', width: width))
-      ..writeln(_line('Sales Type', ': ${widget.salesType}', width: width))
+      ..writeln(_line('Bill No', widget.invoiceId.toString().padLeft(6, '0'), width: width))
+      ..writeln(_line('Date', DateFormat('dd-MM-yyyy').format(parsedDate), width: width))
+      ..writeln(_line('Time', DateFormat('hh:mm a').format(parsedDate), width: width))
+      ..writeln(_line('Cashier', widget.cashierName, width: width))
+      ..writeln(_line('Type', widget.salesType, width: width))
       ..writeln(separator)
-      ..writeln('Customer : ${widget.customerName}')
-      ..writeln('Phone    : ${widget.customerPhone.isEmpty ? 'N/A' : widget.customerPhone}')
-      ..writeln(separator)
-      ..writeln(_line('No  Description', 'Amount', width: width));
-    for (var i = 0; i < widget.cartItems.length; i++) {
-      final item = widget.cartItems[i];
-      final name = _itemName(item);
-      final qty = _itemQuantity(item).toStringAsFixed(0);
-      final rate = _itemRate(item);
-      final amount = _itemTotal(item);
-      buffer
-        ..writeln('${i + 1}. ${name.length > 25 ? name.substring(0, 25) : name}')
-        ..writeln('   ${_money(rate)} x $qty = ${_money(amount)}');
+      ..writeln('Customer: ${widget.customerName}');
+    if (widget.customerPhone.trim().isNotEmpty) {
+      buffer.writeln('Phone: ${widget.customerPhone}');
     }
     buffer
       ..writeln(separator)
-      ..writeln(_line('Sub Total', _money(_subtotal), width: width))
-      ..writeln(_line('Discount', _money(widget.discountAmount), width: width))
-      ..writeln(_line('Tax (GST)', _money(tax), width: width))
+      ..writeln('ITEM')
+      ..writeln(_line('QTY x RATE', 'AMOUNT', width: width))
+      ..writeln(separator);
+
+    for (var i = 0; i < widget.cartItems.length; i++) {
+      final item = widget.cartItems[i];
+      final nameLines = _wrapReceiptText('${i + 1}. ${_itemName(item)}', 30);
+      for (final line in nameLines) {
+        buffer.writeln(line);
+      }
+      buffer.writeln(_line(
+        '${_itemQuantity(item).toStringAsFixed(0)} x ${_money(_itemRate(item))}',
+        _money(_itemTotal(item)),
+        width: width,
+      ));
+    }
+
+    buffer
       ..writeln(separator)
-      ..writeln(_line('TOTAL AMOUNT', _money(widget.totalAmount), width: width))
+      ..writeln(_line('Sub Total', _money(_subtotal), width: width));
+    if (widget.discountAmount > 0) {
+      buffer.writeln(_line('Discount', _money(widget.discountAmount), width: width));
+    }
+    if (widget.taxAmount > 0) {
+      buffer.writeln(_line('Tax (GST)', _money(widget.taxAmount), width: width));
+    }
+    buffer
+      ..writeln(_line('TOTAL', _money(widget.totalAmount), width: width))
       ..writeln(separator)
-      ..writeln(_line('Payment Method', widget.paymentType, width: width))
-      ..writeln(_line('Received Amount', _money(received), width: width))
-      ..writeln(_line('Balance Due', _money(due), width: width))
-      ..writeln(_line('Change', _money(change), width: width))
+      ..writeln(_line('Payment', widget.paymentType, width: width))
+      ..writeln(_line('Received', _money(received), width: width));
+    if (due > 0) buffer.writeln(_line('Balance Due', _money(due), width: width));
+    if (change > 0) buffer.writeln(_line('Change', _money(change), width: width));
+    buffer
       ..writeln(separator)
-      ..writeln('       Thank You For Shopping')
-      ..writeln('             Visit Again')
-      ..writeln('\n\n');
+      ..writeln('       THANK YOU - VISIT AGAIN')
+      ..writeln(' Developed by MagScac Office')
+      ..writeln('\n');
     return buffer.toString();
   }
 
@@ -312,21 +342,22 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   Future<Uint8List> _generateInvoicePdf() async {
     final document = pw.Document();
-    final invoiceNumber =
-        widget.invoiceId > 0 ? widget.invoiceId.toString() : 'N/A';
+    final invoiceNumber = widget.invoiceId > 0 ? widget.invoiceId.toString() : 'N/A';
     final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
     final received = widget.receivedAmount ?? widget.totalAmount;
-    final change =
-        (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
+    final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final due = widget.balanceDue ??
         (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
 
-    // 58mm thermal receipt: compact width with height based on item count.
-    final pageHeight = (155 + widget.cartItems.length * 13).toDouble();
+    // Compact 58mm receipt: short header, aligned Qty/Rate/Amount and tight spacing.
+    final pageHeight = (112 + widget.cartItems.length * 11).toDouble();
     final pageFormat = PdfPageFormat(
       58 * PdfPageFormat.mm,
       pageHeight * PdfPageFormat.mm,
-      marginAll: 4 * PdfPageFormat.mm,
+      marginLeft: 3 * PdfPageFormat.mm,
+      marginRight: 3 * PdfPageFormat.mm,
+      marginTop: 3 * PdfPageFormat.mm,
+      marginBottom: 3 * PdfPageFormat.mm,
     );
 
     document.addPage(
@@ -338,72 +369,115 @@ class _PrinterScreenState extends State<PrinterScreen> {
             pw.Center(
               child: pw.Text(
                 'KHAN BABA',
-                style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
               ),
             ),
             pw.Center(
               child: pw.Text(
                 'GENERAL STORE & PERFUMERY',
                 textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
               ),
             ),
-            pw.Center(child: pw.Text('Perfume | Cosmetics | Daily Needs', style: const pw.TextStyle(fontSize: 6))),
-            pw.Center(child: pw.Text('Gift Items', style: const pw.TextStyle(fontSize: 7))),
-            pw.Center(child: pw.Text('GT Road Sanawa', style: const pw.TextStyle(fontSize: 7))),
-            pw.Center(child: pw.Text('WhatsApp: 0345-1444325', style: const pw.TextStyle(fontSize: 7))),
-            pw.Divider(),
+            pw.Center(
+              child: pw.Text(
+                'GT Road Sanawa | WhatsApp: 0345-1444325',
+                textAlign: pw.TextAlign.center,
+                style: const pw.TextStyle(fontSize: 6),
+              ),
+            ),
+            pw.Divider(height: 5, thickness: 0.6),
             _pdfInfoRow('Bill No', invoiceNumber),
             _pdfInfoRow('Date', DateFormat('dd-MM-yyyy').format(parsedDate)),
             _pdfInfoRow('Time', DateFormat('hh:mm a').format(parsedDate)),
             _pdfInfoRow('Cashier', widget.cashierName),
-            _pdfInfoRow('Sales Type', widget.salesType),
-            pw.Divider(),
-            pw.Text('Customer: ${widget.customerName}', style: const pw.TextStyle(fontSize: 7)),
-            pw.Text('Phone: ${widget.customerPhone.isEmpty ? 'N/A' : widget.customerPhone}', style: const pw.TextStyle(fontSize: 7)),
-            pw.Divider(),
+            _pdfInfoRow('Type', widget.salesType),
+            pw.Divider(height: 5, thickness: 0.6),
+            pw.Text(
+              'Customer: ${widget.customerName}',
+              style: const pw.TextStyle(fontSize: 6.5),
+            ),
+            if (widget.customerPhone.trim().isNotEmpty)
+              pw.Text(
+                'Phone: ${widget.customerPhone}',
+                style: const pw.TextStyle(fontSize: 6.5),
+              ),
+            pw.Divider(height: 5, thickness: 0.6),
             pw.Row(
               children: [
-                pw.Expanded(flex: 5, child: pw.Text('Description', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
-                pw.Expanded(flex: 2, child: pw.Text('Qty', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
-                pw.Expanded(flex: 3, child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text('QTY', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Expanded(
+                  flex: 3,
+                  child: pw.Text('RATE', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.Expanded(
+                  flex: 3,
+                  child: pw.Text('AMOUNT', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
+                ),
               ],
             ),
-            pw.SizedBox(height: 3),
+            pw.SizedBox(height: 2),
             ...widget.cartItems.map((item) {
               final name = _itemName(item);
               final qty = _itemQuantity(item);
               final rate = _itemRate(item);
               return pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 4),
+                padding: const pw.EdgeInsets.only(bottom: 2),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
-                    pw.Text(name, style: const pw.TextStyle(fontSize: 7)),
+                    pw.Text(
+                      name,
+                      style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.Row(
                       children: [
-                        pw.Expanded(child: pw.Text('${_money(rate)} x ${qty.toStringAsFixed(0)}', style: const pw.TextStyle(fontSize: 6))),
-                        pw.Text(_money(_itemTotal(item)), style: const pw.TextStyle(fontSize: 7)),
+                        pw.Expanded(
+                          flex: 2,
+                          child: pw.Text(qty.toStringAsFixed(0), style: const pw.TextStyle(fontSize: 6.5)),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(_money(rate), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5)),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(_money(_itemTotal(item)), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5)),
+                        ),
                       ],
                     ),
                   ],
                 ),
               );
             }),
-            pw.Divider(),
+            pw.Divider(height: 5, thickness: 0.6),
             _pdfInfoRow('Sub Total', _money(_subtotal)),
-            _pdfInfoRow('Discount', _money(widget.discountAmount)),
-            _pdfInfoRow('Tax (GST)', _money(widget.taxAmount)),
-            pw.Divider(),
-            _pdfInfoRow('TOTAL AMOUNT', _money(widget.totalAmount), bold: true),
-            pw.Divider(),
+            if (widget.discountAmount > 0)
+              _pdfInfoRow('Discount', _money(widget.discountAmount)),
+            if (widget.taxAmount > 0)
+              _pdfInfoRow('Tax (GST)', _money(widget.taxAmount)),
+            _pdfInfoRow('TOTAL', _money(widget.totalAmount), bold: true),
+            pw.Divider(height: 5, thickness: 0.6),
             _pdfInfoRow('Payment', widget.paymentType),
             _pdfInfoRow('Received', _money(received)),
-            _pdfInfoRow('Balance Due', _money(due)),
-            _pdfInfoRow('Change', _money(change)),
-            pw.SizedBox(height: 8),
-            pw.Center(child: pw.Text('Thank You For Shopping', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
-            pw.Center(child: pw.Text('Visit Again', style: const pw.TextStyle(fontSize: 7))),
+            if (due > 0) _pdfInfoRow('Balance Due', _money(due)),
+            if (change > 0) _pdfInfoRow('Change', _money(change)),
+            pw.SizedBox(height: 4),
+            pw.Center(
+              child: pw.Text(
+                'THANK YOU - VISIT AGAIN',
+                style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.Center(
+              child: pw.Text(
+                'Developed by MagScac Office',
+                style: const pw.TextStyle(fontSize: 6),
+              ),
+            ),
           ],
         ),
       ),

@@ -1123,18 +1123,32 @@ class DBHelper {
 
   static Future<int> insertProduct(Map<String, dynamic> product) async {
     final db = await database;
+    final data = Map<String, dynamic>.from(product);
+    final barcode = (data['barcode'] ?? '').toString().trim();
+    if (barcode.isEmpty) throw Exception('Product barcode zaroori hai.');
+    data['barcode'] = barcode;
 
     final result = await db.transaction<int>((txn) async {
+      final existing = await txn.query(
+        'products',
+        columns: ['id'],
+        where: 'barcode = ?',
+        whereArgs: [barcode],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        throw Exception('Is barcode ka product pehle se inventory mein mojood hai. Existing product ko edit karein.');
+      }
       final inserted = await txn.insert(
         'products',
-        product,
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        data,
+        conflictAlgorithm: ConflictAlgorithm.abort,
       );
       await _queueSync(
         txn,
         collection: 'products',
-        documentId: product['barcode'].toString(),
-        payload: product,
+        documentId: barcode,
+        payload: data,
       );
       return inserted;
     });
@@ -1149,21 +1163,17 @@ class DBHelper {
     final db = await database;
 
     final result = await db.transaction<int>((txn) async {
-      final updated = await txn.update(
-        'products',
-        product,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      if (updated == 0) {
-        throw Exception('Product not found. Please refresh and try again.');
+      final oldRows = await txn.query('products', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (oldRows.isEmpty) throw Exception('Product not found. Please refresh and try again.');
+      final oldBarcode = oldRows.first['barcode'].toString();
+      final newBarcode = product['barcode'].toString();
+      final updated = await txn.update('products', product, where: 'id = ?', whereArgs: [id]);
+      if (updated == 0) throw Exception('Product not found. Please refresh and try again.');
+      if (oldBarcode != newBarcode) {
+        await _queueSync(txn, collection: 'products', documentId: oldBarcode,
+            payload: {'barcode': oldBarcode, '_deleted': true});
       }
-      await _queueSync(
-        txn,
-        collection: 'products',
-        documentId: product['barcode'].toString(),
-        payload: product,
-      );
+      await _queueSync(txn, collection: 'products', documentId: newBarcode, payload: product);
       return updated;
     });
     unawaited(syncPendingChanges());
@@ -1178,20 +1188,22 @@ class DBHelper {
   static Future<int> deleteProduct(int id) async {
     final db = await database;
     final deleted = await db.transaction<int>((txn) async {
-      final rows = await txn.query(
-        'products',
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
+      final rows = await txn.query('products', where: 'id = ?', whereArgs: [id], limit: 1);
       if (rows.isEmpty) return 0;
       final barcode = rows.first['barcode'].toString();
-      await _queueSync(
-        txn,
-        collection: 'products',
-        documentId: barcode,
-        payload: {'barcode': barcode, '_deleted': true},
-      );
+      final availableStock = (rows.first['quantity'] as num?)?.toInt() ?? 0;
+      final damagedStock = (rows.first['damaged_quantity'] as num?)?.toInt() ?? 0;
+      if (availableStock > 0 || damagedStock > 0) {
+        throw Exception('Pehle is product ka saleable aur damaged stock zero karein; stock mojood honay par delete nahi kar sakte.');
+      }
+      final saleHistory = await txn.rawQuery('SELECT COUNT(*) AS count FROM sale_items WHERE barcode = ?', [barcode]);
+      final purchaseHistory = await txn.rawQuery('SELECT COUNT(*) AS count FROM purchases WHERE product_id = ? OR barcode = ?', [id, barcode]);
+      final salesCount = (saleHistory.first['count'] as num).toInt();
+      final purchasesCount = (purchaseHistory.first['count'] as num).toInt();
+      if (salesCount > 0 || purchasesCount > 0) {
+        throw Exception('Is product ki $salesCount sale aur $purchasesCount purchase history mojood hai. Purana record mehfooz rakhne ke liye delete nahi kar sakte; Edit se stock zero ya details update karein.');
+      }
+      await _queueSync(txn, collection: 'products', documentId: barcode, payload: {'barcode': barcode, '_deleted': true});
       return txn.delete('products', where: 'id = ?', whereArgs: [id]);
     });
     unawaited(syncPendingChanges());
@@ -1636,10 +1648,21 @@ class DBHelper {
       final rows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
       if (rows.isEmpty) return 0;
       final row = Map<String, dynamic>.from(rows.first);
+      final partyType = row['type']?.toString();
+      final references = partyType == 'customer'
+          ? await txn.rawQuery(
+              '''SELECT (SELECT COUNT(*) FROM sales WHERE customer_id = ?) +
+                        (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) AS count''',
+              [id, id])
+          : await txn.rawQuery('SELECT COUNT(*) AS count FROM purchases WHERE supplier_id = ?', [id]);
+      final referenceCount = (references.first['count'] as num).toInt();
+      final balance = (row['balance'] as num?)?.toDouble() ?? 0.0;
+      if (referenceCount > 0 || balance.abs() > 0.000001) {
+        throw Exception('Is account ki transaction history ya outstanding balance mojood hai. Ledger aur purane records mehfooz rakhne ke liye delete nahi kar sakte.');
+      }
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {
-        await _queueSync(txn, collection: 'parties', documentId: syncId,
-            payload: {'sync_id': syncId, '_deleted': true});
+        await _queueSync(txn, collection: 'parties', documentId: syncId, payload: {'sync_id': syncId, '_deleted': true});
       }
       return txn.delete('parties', where: 'id = ?', whereArgs: [id]);
     });
@@ -1768,6 +1791,13 @@ class DBHelper {
         limit: 1,
       );
       if (rows.isEmpty) throw Exception('Customer not found.');
+      final currentBalance = (rows.first['balance'] as num?)?.toDouble() ?? 0.0;
+      if (currentBalance <= 0) {
+        throw Exception('Is customer ke khate mein koi baqi raqam mojood nahi.');
+      }
+      if (amount > currentBalance + 0.000001) {
+        throw Exception('Receipt baqi Khata balance (Rs. ${currentBalance.toStringAsFixed(2)}) se zyada nahi ho sakti.');
+      }
       final partySyncId = rows.first['sync_id']?.toString();
       await txn.rawUpdate(
         'UPDATE parties SET balance = balance - ? WHERE id = ?',

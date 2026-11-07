@@ -73,7 +73,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         final code = await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ScannerScreen(),
+                            builder: (context) => const ScannerScreen(captureBarcodeOnly: true),
                           ),
                         );
                         if (code != null) {
@@ -179,6 +179,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
+  Future<void> _confirmDeleteProduct(Map<String, dynamic> product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete product?'),
+        content: Text('Kya "${product['name']}" ko inventory se delete karna hai? Agar is product ki sale ya purchase history hai to system deletion rok dega.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await DBHelper.deleteProduct((product['id'] as num).toInt());
+      await _loadProducts();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Product inventory se delete ho gaya.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -211,10 +233,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     subtitle: Text(
                       'Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']}',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.teal),
-                      onPressed: () =>
-                          _showAddOrEditProductDialog(product: item),
+                    trailing: Wrap(
+                      spacing: 0,
+                      children: [
+                        IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _showAddOrEditProductDialog(product: item)),
+                        IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),
+                      ],
                     ),
                   ),
                 );
