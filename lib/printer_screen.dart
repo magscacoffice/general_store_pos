@@ -174,7 +174,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
     buffer
       ..writeln(separator)
       ..writeln('       THANK YOU - VISIT AGAIN')
-      ..writeln(' Developed by MagScac Office')
+      ..writeln(' Developed by SohaibTech')
+      ..writeln(' WhatsApp: 03401832381')
       ..writeln('\n');
     return buffer.toString();
   }
@@ -474,7 +475,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ),
             pw.Center(
               child: pw.Text(
-                'Developed by MagScac Office',
+                'Developed by SohaibTech\nWhatsApp: 03401832381',
+                textAlign: pw.TextAlign.center,
                 style: const pw.TextStyle(fontSize: 6),
               ),
             ),
