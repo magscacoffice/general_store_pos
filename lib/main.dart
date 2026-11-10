@@ -172,7 +172,7 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_ready) return const DashboardScreen(role: 'admin');
+    if (_ready) return const WindowsRenderDiagnosticScreen();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F8),
@@ -239,6 +239,110 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
                         ),
                       ],
                     ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Temporary Windows-only rendering probe.
+///
+/// This deliberately starts with a very small, high-contrast Flutter screen.
+/// If this screen is visible, the Windows Flutter renderer is working and the
+/// Dashboard can be opened separately to isolate any dashboard-specific issue.
+class WindowsRenderDiagnosticScreen extends StatefulWidget {
+  const WindowsRenderDiagnosticScreen({super.key});
+
+  @override
+  State<WindowsRenderDiagnosticScreen> createState() =>
+      _WindowsRenderDiagnosticScreenState();
+}
+
+class _WindowsRenderDiagnosticScreenState
+    extends State<WindowsRenderDiagnosticScreen> {
+  bool _showDashboard = false;
+  bool _dashboardFrameLogged = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showDashboard) {
+      if (!_dashboardFrameLogged) {
+        _dashboardFrameLogged = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_writeWindowsStartupLog(
+              'Dashboard screen first frame completed after diagnostic probe.'));
+        });
+      }
+      return const DashboardScreen(role: 'admin');
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B6E69),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Card(
+              color: Colors.white,
+              margin: const EdgeInsets.all(28),
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.desktop_windows,
+                        size: 72, color: Color(0xFF0B6E69)),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'KHAN BABA POS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF164B48),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Windows display test passed',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Agar yeh screen nazar aa rahi hai to Flutter ki basic '
+                      'screen rendering kaam kar rahi hai. Ab Dashboard ko '
+                      'alag se test karne ke liye neeche button dabayen.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          unawaited(_writeWindowsStartupLog(
+                              'User opened Dashboard from Windows rendering probe.'));
+                          setState(() => _showDashboard = true);
+                        },
+                        icon: const Icon(Icons.dashboard),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('Open POS Dashboard',
+                              style: TextStyle(fontSize: 17)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
