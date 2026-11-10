@@ -23,8 +23,22 @@ jobs:
           flutter-version: '3.47.9'
           cache: true
 
-      - name: Generate Windows desktop runner
-        run: flutter create --platforms=windows .
+      # Keep the committed native runner intact; regenerating it can discard
+      # project-specific startup fixes and diagnostics.
+      - name: Verify committed Windows runner
+        shell: pwsh
+        run: |
+          foreach ($required in @(
+            "windows/runner/main.cpp",
+            "windows/runner/flutter_window.cpp",
+            "windows/runner/startup_diagnostics.h",
+            "windows/runner/Runner.rc",
+            "windows/CMakeLists.txt"
+          )) {
+            if (-not (Test-Path $required)) {
+              throw "Required committed Windows runner file is missing: $required"
+            }
+          }
 
       - name: Resolve packages
         run: flutter pub get
@@ -111,7 +125,9 @@ jobs:
           Updating the app ZIP does not replace the database. Continue to use Backup & Restore regularly.
 
           STARTUP DIAGNOSTICS
-          If database startup fails, the app displays the error and saves details to:
+          Native startup stages are recorded in:
+          %LOCALAPPDATA%\KhanBabaPOS\Logs\native-startup.log
+          Dart/database startup errors are recorded in:
           %LOCALAPPDATA%\KhanBabaPOS\Logs\startup.log
           The app does not need administrator rights. If Windows or office security policy blocks the EXE,
           ask the IT administrator to allow this app rather than running it as Administrator.

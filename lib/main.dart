@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,13 +12,54 @@ import 'auth_gate.dart';
 import 'dashboard_screen.dart';
 import 'db_helper.dart';
 
+Future<void> _writeWindowsStartupLog(String message,
+    [Object? error, StackTrace? stackTrace]) async {
+  if (!Platform.isWindows) return;
+  final bases = <String?>[
+    Platform.environment['LOCALAPPDATA'],
+    Platform.environment['TEMP'],
+    Directory.systemTemp.path,
+  ];
+  for (final base in bases.whereType<String>().where((value) => value.isNotEmpty).toSet()) {
+    try {
+      final directory = Directory(p.join(base, 'KhanBabaPOS', 'Logs'));
+      await directory.create(recursive: true);
+      final file = File(p.join(directory.path, 'startup.log'));
+      final entry = StringBuffer()
+        ..writeln('--- ${DateTime.now().toIso8601String()} ---')
+        ..writeln(message);
+      if (error != null) entry.writeln(error);
+      if (stackTrace != null) entry.writeln(stackTrace);
+      await file.writeAsString(entry.toString(), mode: FileMode.append, flush: true);
+      return;
+    } catch (_) {
+      // Try another writable per-user temporary location.
+    }
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isWindows) {
+    unawaited(_writeWindowsStartupLog('Dart main() entered.'));
+    FlutterError.onError = (details) {
+      unawaited(_writeWindowsStartupLog(
+          'Flutter framework error.', details.exception, details.stack));
+      FlutterError.presentError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stackTrace) {
+      unawaited(_writeWindowsStartupLog(
+          'Uncaught Dart platform error.', error, stackTrace));
+      return false;
+    };
+
     // The portable Windows edition is local/offline-only.
     DBHelper.localOnlyMode = true;
     runApp(const KhanBabaPOSApp(windowsLocalMode: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_writeWindowsStartupLog('First Dart frame rendered.'));
+    });
     return;
   }
 
@@ -72,10 +114,13 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
     });
 
     try {
+      unawaited(_writeWindowsStartupLog('Initializing SQLite FFI.'));
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
       DBHelper.localOnlyMode = true;
+      unawaited(_writeWindowsStartupLog('Opening local database.'));
       await DBHelper.database;
+      unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
 
       if (!mounted) return;
       setState(() {
@@ -85,6 +130,8 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
       });
     } catch (error, stackTrace) {
       final logPath = await _writeStartupLog(error, stackTrace);
+      await _writeWindowsStartupLog(
+          'Windows startup database initialization failed.', error, stackTrace);
       if (!mounted) return;
       setState(() {
         _ready = false;
