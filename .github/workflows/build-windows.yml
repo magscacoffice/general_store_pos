@@ -1,0 +1,132 @@
+name: Build Windows POS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/khan-baba-pos-final-test-2
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Generate Windows desktop runner
+        run: flutter create --platforms=windows .
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Set CMake compatibility policy
+        shell: pwsh
+        run: |
+          $cmakeFile = "windows/CMakeLists.txt"
+          $content = Get-Content $cmakeFile -Raw
+          $anchor = 'add_subdirectory(${FLUTTER_MANAGED_DIR})'
+          if (-not $content.Contains('set(CMAKE_POLICY_VERSION_MINIMUM 3.5)')) {
+            if (-not $content.Contains($anchor)) {
+              throw "Could not find Flutter CMake subdirectory anchor."
+            }
+            $content = $content.Replace($anchor, "set(CMAKE_POLICY_VERSION_MINIMUM 3.5)`r`n$anchor")
+            Set-Content -Path $cmakeFile -Value $content -NoNewline
+          }
+
+      - name: Build release
+        run: flutter build windows --release
+
+      - name: Verify portable runtime files
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Get-ChildItem $releaseDir -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "Windows POS executable was not found." }
+          foreach ($required in @("flutter_windows.dll", "data/flutter_assets")) {
+            if (-not (Test-Path (Join-Path $releaseDir $required))) {
+              throw "Required portable runtime item is missing: $required"
+            }
+          }
+          $sqliteDll = Get-ChildItem $releaseDir -Filter "sqlite3.dll" -Recurse | Select-Object -First 1
+          if (-not $sqliteDll) {
+            throw "SQLite native runtime (sqlite3.dll) is missing from the release package."
+          }
+          Write-Host "Verified executable: $($exe.Name)"
+          Write-Host "Verified SQLite runtime: $($sqliteDll.FullName)"
+
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Get-ChildItem $releaseDir -Filter *.exe | Select-Object -First 1
+
+          @"
+          @echo off
+          setlocal
+          set "APP_DIR=%~dp0"
+          set "APP_EXE=%APP_DIR%$($exe.Name)"
+          if not exist "%APP_EXE%" (
+            echo Khan Baba POS executable was not found.
+            echo Please extract the complete ZIP again and keep all files together.
+            pause
+            exit /b 1
+          )
+          pushd "%APP_DIR%"
+          start "" "%APP_EXE%"
+          set "LAUNCH_RESULT=%ERRORLEVEL%"
+          popd
+          if not "%LAUNCH_RESULT%"=="0" (
+            echo Windows could not launch Khan Baba POS. Check Windows Security or office application-control policy.
+            pause
+            exit /b %LAUNCH_RESULT%
+          )
+          endlocal
+          "@ | Set-Content -Path (Join-Path $releaseDir "Start-Khan-Baba-POS.bat") -Encoding ASCII
+
+          @"
+          KHAN BABA GENERAL STORE - WINDOWS PORTABLE POS
+
+          QUICK START
+          1. Extract the complete ZIP to a normal folder such as Documents or Desktop.
+          2. Double-click Start-Khan-Baba-POS.bat.
+          3. Keep all files together in the extracted folder.
+
+          NO INSTALLER / ADMIN RIGHTS
+          This is a portable release. It does not require installation or administrator access.
+          The database is stored in your Windows user profile, not inside the extracted app folder.
+
+          DATA LOCATION
+          %LOCALAPPDATA%\KhanBabaPOS\Data\khan_baba_pos.db
+          If Local AppData is unavailable, the app checks the roaming AppData and local user profile paths.
+          Updating the app ZIP does not replace the database. Continue to use Backup & Restore regularly.
+
+          STARTUP DIAGNOSTICS
+          If database startup fails, the app displays the error and saves details to:
+          %LOCALAPPDATA%\KhanBabaPOS\Logs\startup.log
+          The app does not need administrator rights. If Windows or office security policy blocks the EXE,
+          ask the IT administrator to allow this app rather than running it as Administrator.
+
+          IMPORTANT
+          This Windows edition is local/offline only and does not currently sync with Android/Firebase.
+          USB scanner and printer behavior depends on device mode and installed Windows drivers.
+          "@ | Set-Content -Path (Join-Path $releaseDir "README-PORTABLE.txt") -Encoding UTF8
+
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath build/khan-baba-pos-windows.zip -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: khan-baba-pos-windows
+          path: build/khan-baba-pos-windows.zip
+          if-no-files-found: error
+          retention-days: 3

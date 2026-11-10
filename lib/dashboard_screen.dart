@@ -27,26 +27,28 @@ class DashboardScreen extends StatelessWidget {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            tooltip: 'Sync store data',
-            icon: const Icon(Icons.sync),
-            onPressed: () async {
-              await DBHelper.syncAllData();
-              final pending = await DBHelper.getPendingSyncCount();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Sync check complete. Pending uploads: $pending')),
-                );
-              }
-            },
-          ),
-          IconButton(
-            tooltip: 'Logout',
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
-          ),
+          if (!DBHelper.localOnlyMode) ...[
+            IconButton(
+              tooltip: 'Sync store data',
+              icon: const Icon(Icons.sync),
+              onPressed: () async {
+                await DBHelper.syncAllData();
+                final pending = await DBHelper.getPendingSyncCount();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Sync check complete. Pending uploads: $pending')),
+                  );
+                }
+              },
+            ),
+            IconButton(
+              tooltip: 'Logout',
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+              },
+            ),
+          ],
         ],
       ),
       body: Padding(
@@ -122,7 +124,7 @@ class DashboardScreen extends StatelessWidget {
                     Colors.deepPurple,
                     const ProfitLossScreen(),
                   ),
-                  if (role == 'admin')
+                  if (role == 'admin' && !DBHelper.localOnlyMode)
                     _buildMenuCard(
                       context,
                       'Salesmen / عملہ',

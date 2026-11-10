@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +10,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 class DBHelper {
   static Database? _db;
+  // Windows portable mode runs locally without Firebase/cloud synchronization.
+  static bool localOnlyMode = false;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _storeId = 'khan-baba-general-store';
 
@@ -25,7 +28,7 @@ class DBHelper {
   static bool _syncAllAgain = false;
 
   static void startAutoSync() {
-    if (_connectivitySubscription != null) return;
+    if (localOnlyMode || _connectivitySubscription != null) return;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       if (results.any((result) => result != ConnectivityResult.none)) {
         unawaited(syncAllData());
@@ -663,6 +666,7 @@ class DBHelper {
   }
 
   static Future<void> syncAllData() async {
+    if (localOnlyMode) return;
     if (_isSyncingAll) {
       _syncAllAgain = true;
       return;
@@ -716,12 +720,50 @@ class DBHelper {
     }
   }
 
+  // Keep Windows data in the user's profile, outside the extracted app folder.
+  static Future<String> getDatabaseDirectory() async {
+    if (Platform.isWindows) {
+      final userProfile = Platform.environment['USERPROFILE'];
+      final candidates = <String?>[
+        Platform.environment['LOCALAPPDATA'],
+        Platform.environment['APPDATA'],
+        if (userProfile != null && userProfile.isNotEmpty)
+          join(userProfile, 'AppData', 'Local'),
+      ];
+      final failures = <String>[];
+      for (final base in candidates.whereType<String>().where((value) => value.isNotEmpty).toSet()) {
+        final directory = Directory(join(base, 'KhanBabaPOS', 'Data'));
+        try {
+          await directory.create(recursive: true);
+          final probe = File(join(directory.path, '.write_test_${pid}'));
+          await probe.writeAsString('ok', flush: true);
+          await probe.delete();
+          return directory.path;
+        } catch (error) {
+          failures.add('${directory.path}: $error');
+        }
+      }
+      throw FileSystemException(
+        'Khan Baba POS could not find a writable Windows user-data folder. '
+        'The app does not need administrator rights. Check your Windows profile permissions. '
+        '${failures.join(' | ')}',
+      );
+    }
+
+    final directory = await getDatabasesPath();
+    await Directory(directory).create(recursive: true);
+    return directory;
+  }
+
+  static Future<String> getDatabaseFilePath() async =>
+      join(await getDatabaseDirectory(), 'khan_baba_pos.db');
+
   static Future<Database> initDB() async {
-    final path = join(await getDatabasesPath(), 'khan_baba_pos.db');
+    final path = await getDatabaseFilePath();
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -732,7 +774,8 @@ class DBHelper {
             purchasePrice REAL DEFAULT 0.0,
             wholesalePrice REAL DEFAULT 0.0,
             damaged_quantity INTEGER DEFAULT 0,
-            quantity INTEGER NOT NULL
+            quantity INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1
           )
         ''');
 
@@ -867,6 +910,9 @@ class DBHelper {
         )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 10) {
+          await _ensureColumn(db, 'products', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
+        }
         if (oldVersion < 2) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS expenses(
@@ -1044,6 +1090,7 @@ class DBHelper {
     required Map<String, dynamic> payload,
     String operation = 'set',
   }) async {
+    if (localOnlyMode) return;
     final syncPayload = Map<String, dynamic>.from(payload);
     if (collection == 'products' && syncPayload['_deleted'] != true) {
       syncPayload['_deleted'] = false;
@@ -1070,6 +1117,7 @@ class DBHelper {
   }
 
   static Future<void> syncPendingChanges({int batchSize = 50}) async {
+    if (localOnlyMode) return;
     if (_isSyncingPending) {
       _syncPendingAgain = true;
       return;

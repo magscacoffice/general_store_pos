@@ -471,10 +471,12 @@ class _SalesScreenState extends State<SalesScreen> {
         ? (customer['phone']?.toString() ?? '')
         : '';
     final balanceDue = (saleFinalTotal - receivedAmount).clamp(0.0, double.infinity).toDouble();
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = DBHelper.localOnlyMode ? null : FirebaseAuth.instance.currentUser;
     final sale = <String, dynamic>{
       'salesman_uid': currentUser?.uid,
-      'salesman_name': currentUser?.displayName ?? currentUser?.email ?? 'Unknown',
+      'salesman_name': DBHelper.localOnlyMode
+          ? 'Local Windows User'
+          : (currentUser?.displayName ?? currentUser?.email ?? 'Unknown'),
       'total_amount': saleSubtotal,
       'discount': saleDiscount,
       'final_amount': saleFinalTotal,

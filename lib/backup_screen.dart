@@ -20,7 +20,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _createBackup() async {
     setState(() => _isWorking = true);
     try {
-      final dbPath = p.join(await getDatabasesPath(), 'khan_baba_pos.db');
+      final dbPath = await DBHelper.getDatabaseFilePath();
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {
@@ -88,8 +88,8 @@ class _BackupScreenState extends State<BackupScreen> {
         throw Exception('Please select a valid .db backup file.');
       }
 
-      final dbDirectory = await getDatabasesPath();
-      final dbPath = p.join(dbDirectory, 'khan_baba_pos.db');
+      final dbDirectory = await DBHelper.getDatabaseDirectory();
+      final dbPath = await DBHelper.getDatabaseFilePath();
       final currentDb = File(dbPath);
       final tempPath = p.join(
         dbDirectory,
