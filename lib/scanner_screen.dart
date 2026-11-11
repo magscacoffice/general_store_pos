@@ -18,7 +18,7 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
-  final MobileScannerController controller = MobileScannerController();
+  MobileScannerController? controller;
   bool _isProcessing = false;
   bool _isReadingProductName = false;
   final ImagePicker _imagePicker = ImagePicker();
@@ -32,6 +32,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   void initState() {
     super.initState();
+    // mobile_scanner has no Windows implementation; Windows uses HID keyboard scanners.
+    if (!Platform.isWindows) controller = MobileScannerController();
     _loadProducts();
   }
 
@@ -60,7 +62,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   void dispose() {
-    controller.dispose();
+    controller?.dispose();
     manualController.dispose();
     barcodeInputFocus.dispose();
     super.dispose();
@@ -379,15 +381,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   decoration: const InputDecoration(labelText: 'Product ka Naam *'),
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _isReadingProductName
-                      ? null
-                      : () => _readProductNameFromCamera(nameController, dialogContext),
-                  icon: _isReadingProductName
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.camera_alt),
-                  label: Text(_isReadingProductName ? 'Naam read ho raha hai...' : 'Camera se Product Name Read Karein'),
-                ),
+                if (!Platform.isWindows)
+                  OutlinedButton.icon(
+                    onPressed: _isReadingProductName
+                        ? null
+                        : () => _readProductNameFromCamera(nameController, dialogContext),
+                    icon: _isReadingProductName
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.camera_alt),
+                    label: Text(_isReadingProductName ? 'Naam read ho raha hai...' : 'Camera se Product Name Read Karein'),
+                  ),
                 TextField(
                   controller: purPriceController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -504,45 +507,47 @@ class _ScannerScreenState extends State<ScannerScreen> {
         title: const Text('Live Barcode Scanner'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        actions: [
-          // Simple Flash Toggle Button (No torchState dependency error)
-          IconButton(
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => controller.toggleTorch(),
-            tooltip: 'Flash On/Off',
-          ),
-          IconButton(
-            icon: const Icon(Icons.camera_front),
-            onPressed: () => controller.switchCamera(),
-            tooltip: 'Switch Camera',
-          ),
-        ],
+        actions: Platform.isWindows
+            ? const []
+            : [
+                IconButton(
+                  icon: const Icon(Icons.flash_on),
+                  onPressed: () => controller?.toggleTorch(),
+                  tooltip: 'Flash On/Off',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.camera_front),
+                  onPressed: () => controller?.switchCamera(),
+                  tooltip: 'Switch Camera',
+                ),
+              ],
       ),
       body: Column(
         children: [
-          // Live Camera Scanner View
-          Expanded(
-            flex: 2,
-            child: Stack(
-              children: [
-                MobileScanner(controller: controller, onDetect: _onDetect),
-                Center(
-                  child: Container(
-                    width: 250,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: 3),
-                      borderRadius: BorderRadius.circular(12),
+          // Android/iOS camera scanner. Windows uses USB/Bluetooth HID input below.
+          if (!Platform.isWindows)
+            Expanded(
+              flex: 2,
+              child: Stack(
+                children: [
+                  MobileScanner(controller: controller!, onDetect: _onDetect),
+                  Center(
+                    child: Container(
+                      width: 250,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.green, width: 3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
           // Manual input & scanned items list section
           Expanded(
-            flex: 3,
+            flex: Platform.isWindows ? 1 : 3,
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(

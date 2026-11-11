@@ -36,13 +36,6 @@ dependencies:
   desktop_multi_window: ^0.3.1
   window_manager: ^0.6.0
 
-# window_manager 0.6.0 currently resolves nativeapi 0.5.10, whose
-# runNativeApp helper uses Isolate.create, unavailable in stable Dart 3.13.
-# Pin the compatible nativeapi pair until upstream publishes a stable fix.
-dependency_overrides:
-  nativeapi: 0.5.9
-  nativeapi_flutter: 0.5.9
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
