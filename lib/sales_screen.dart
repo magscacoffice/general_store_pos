@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
@@ -32,15 +36,195 @@ class _SalesScreenState extends State<SalesScreen> {
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
   bool isCheckingOut = false;
+  String _activeBillId = DateTime.now().microsecondsSinceEpoch.toString();
+  List<Map<String, dynamic>> _openBills = [];
+  Future<void> _pendingSaveQueue = Future<void>.value();
+  bool _restoringBills = false;
 
   @override
   void initState() {
     super.initState();
     _loadCustomers();
+    if (Platform.isWindows) unawaited(_restorePendingBills());
+  }
+
+  Map<String, dynamic> _snapshotCurrentBill() => {
+    'bill_id': _activeBillId,
+    'label': _billLabel(_activeBillId),
+    'cart': cart.map((item) => Map<String, dynamic>.from(item)).toList(),
+    'selectedCustomerId': selectedCustomerId,
+    'selectedSaleType': selectedSaleType,
+    'customerPaymentMode': customerPaymentMode,
+    'overallDiscount': overallDiscount,
+    'isPercentageDiscount': isPercentageDiscount,
+    'receivedAmount': receivedAmountController.text,
+  };
+
+  String _billLabel(String billId) {
+    for (final bill in _openBills) {
+      if (bill['bill_id'] == billId) return bill['label']?.toString() ?? 'Pending Bill';
+    }
+    return 'Bill ${_openBills.length + 1}';
+  }
+
+  Future<void> _persistActiveBill() async {
+    if (!Platform.isWindows || _restoringBills || _activeBillId.isEmpty) return;
+    final snapshot = _snapshotCurrentBill();
+    final index = _openBills.indexWhere((bill) => bill['bill_id'] == _activeBillId);
+    if (index >= 0) {
+      _openBills[index] = snapshot;
+    } else {
+      _openBills.insert(0, snapshot);
+    }
+    _pendingSaveQueue = _pendingSaveQueue.then((_) async {
+      await DBHelper.savePendingBill(snapshot);
+    }).catchError((Object error) {
+      debugPrint('Pending bill save failed: $error');
+    });
+    await _pendingSaveQueue;
+  }
+
+  Future<void> _restorePendingBills() async {
+    _restoringBills = true;
+    try {
+      final saved = await DBHelper.getPendingBills();
+      if (!mounted) return;
+      if (saved.isEmpty) {
+        _openBills = [_snapshotCurrentBill()];
+        return;
+      }
+      _openBills = saved;
+      _applyBillSnapshot(saved.first);
+    } catch (error) {
+      debugPrint('Pending bills restore failed: $error');
+      if (mounted) _openBills = [_snapshotCurrentBill()];
+    } finally {
+      _restoringBills = false;
+      if (mounted) await _persistActiveBill();
+    }
+  }
+
+  void _applyBillSnapshot(Map<String, dynamic> snapshot) {
+    _restoringBills = true;
+    setState(() {
+      _activeBillId = snapshot['bill_id'].toString();
+      cart = (snapshot['cart'] as List? ?? [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      selectedCustomerId = (snapshot['selectedCustomerId'] as num?)?.toInt();
+      selectedSaleType = snapshot['selectedSaleType']?.toString() ?? 'Walk-in';
+      customerPaymentMode = snapshot['customerPaymentMode']?.toString() ?? 'Cash';
+      overallDiscount = (snapshot['overallDiscount'] as num?)?.toDouble() ?? 0.0;
+      isPercentageDiscount = snapshot['isPercentageDiscount'] == true;
+      receivedAmountController.text = snapshot['receivedAmount']?.toString() ?? '';
+    });
+    _restoringBills = false;
+  }
+
+  Future<void> _createNewBill() async {
+    await _persistActiveBill();
+    final nextId = DateTime.now().microsecondsSinceEpoch.toString();
+    final nextLabel = 'Bill ${_openBills.length + 1}';
+    setState(() {
+      _activeBillId = nextId;
+      cart = [];
+      selectedCustomerId = null;
+      selectedSaleType = 'Walk-in';
+      customerPaymentMode = 'Cash';
+      overallDiscount = 0;
+      isPercentageDiscount = false;
+      receivedAmountController.clear();
+      _openBills.insert(0, {
+        'bill_id': nextId,
+        'label': nextLabel,
+        'cart': <Map<String, dynamic>>[],
+        'selectedCustomerId': null,
+        'selectedSaleType': 'Walk-in',
+        'customerPaymentMode': 'Cash',
+        'overallDiscount': 0.0,
+        'isPercentageDiscount': false,
+        'receivedAmount': '',
+      });
+    });
+    await _persistActiveBill();
+  }
+
+  Future<void> _switchBill(String billId) async {
+    if (billId == _activeBillId) return;
+    await _persistActiveBill();
+    final selected = _openBills.firstWhere(
+      (bill) => bill['bill_id'] == billId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (selected.isEmpty || !mounted) return;
+    _applyBillSnapshot(selected);
+  }
+
+  Future<void> _completeActiveBill() async {
+    await DBHelper.deletePendingBill(_activeBillId);
+    _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
+    if (_openBills.isNotEmpty) {
+      _applyBillSnapshot(_openBills.first);
+    } else {
+      final nextId = DateTime.now().microsecondsSinceEpoch.toString();
+      setState(() {
+        _activeBillId = nextId;
+        cart = [];
+        selectedCustomerId = null;
+        selectedSaleType = 'Walk-in';
+        customerPaymentMode = 'Cash';
+        overallDiscount = 0;
+        isPercentageDiscount = false;
+        receivedAmountController.clear();
+      });
+      await _persistActiveBill();
+    }
+  }
+
+  Widget _buildBillSwitcher() {
+    if (!Platform.isWindows) return const SizedBox.shrink();
+    final bills = _openBills.isEmpty ? [_snapshotCurrentBill()] : _openBills;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: Colors.blueGrey.shade50,
+      child: Row(
+        children: [
+          const Icon(Icons.receipt_long, color: Colors.teal),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: _activeBillId,
+              underline: const SizedBox.shrink(),
+              items: bills.map((bill) {
+                final id = bill['bill_id'].toString();
+                final label = bill['label']?.toString() ?? 'Pending Bill';
+                final count = (bill['cart'] as List? ?? []).length;
+                return DropdownMenuItem<String>(
+                  value: id,
+                  child: Text('$label ($count items)'),
+                );
+              }).toList(),
+              onChanged: _openBills.length < 2
+                  ? null
+                  : (id) { if (id != null) unawaited(_switchBill(id)); },
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            onPressed: () => unawaited(_createNewBill()),
+            icon: const Icon(Icons.add),
+            label: const Text('New Bill'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
+    unawaited(_persistActiveBill());
     receivedAmountController.dispose();
     super.dispose();
   }
@@ -58,6 +242,7 @@ class _SalesScreenState extends State<SalesScreen> {
       customerPaymentMode = 'Cash';
       receivedAmountController.clear();
     });
+    unawaited(_persistActiveBill());
   }
 
   Future<void> _loadCustomers() async {
@@ -163,6 +348,7 @@ class _SalesScreenState extends State<SalesScreen> {
         await _loadCustomers();
         if (!mounted) return;
         setState(() => selectedCustomerId = createdId);
+        await _persistActiveBill();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('New Khata customer added and selected.')),
         );
@@ -213,6 +399,7 @@ class _SalesScreenState extends State<SalesScreen> {
           }
         }
       });
+      await _persistActiveBill();
     }
   }
 
@@ -254,6 +441,7 @@ class _SalesScreenState extends State<SalesScreen> {
           return;
         }
         setState(() => cart[index]['quantity'] = updatedQuantity);
+        await _persistActiveBill();
       }
     } finally {
       controller.dispose();
@@ -314,6 +502,7 @@ class _SalesScreenState extends State<SalesScreen> {
       );
       if (updatedPrice != null && mounted) {
         setState(() => cart[index]['salePrice'] = updatedPrice);
+        await _persistActiveBill();
       }
     } finally {
       controller.dispose();
@@ -409,6 +598,7 @@ class _SalesScreenState extends State<SalesScreen> {
                       overallDiscount = value;
                       isPercentageDiscount = isPercent;
                     });
+                    unawaited(_persistActiveBill());
                     Navigator.pop(context);
                   },
                   child: const Text('Apply'),
@@ -420,6 +610,40 @@ class _SalesScreenState extends State<SalesScreen> {
       },
     );
     discountController.dispose();
+  }
+
+  Future<bool> _confirmLeaveBill() async {
+    if (!Platform.isWindows) return true;
+    if (cart.isEmpty) {
+      await _persistActiveBill();
+      return true;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bill abhi complete nahi hua'),
+        content: const Text(
+          'Aap ke bill mein items mojood hain. Billing jari rakhne ke liye Continue Billing dabayen, ya bill band karne ke liye Discard Bill.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Continue Billing'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Discard Bill'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true) {
+      await DBHelper.deletePendingBill(_activeBillId);
+      _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
+      return true;
+    }
+    await _persistActiveBill();
+    return false;
   }
 
   Future<void> _checkout() async {
@@ -498,14 +722,18 @@ class _SalesScreenState extends State<SalesScreen> {
       if (!mounted) return;
 
       // Sirf successful sale ke baad cart clear karein.
-      setState(() {
-        cart.clear();
-        overallDiscount = 0.0;
-        isPercentageDiscount = false;
-        selectedCustomerId = null;
-        customerPaymentMode = 'Cash';
-        receivedAmountController.clear();
-      });
+      if (Platform.isWindows) {
+        await _completeActiveBill();
+      } else {
+        setState(() {
+          cart.clear();
+          overallDiscount = 0.0;
+          isPercentageDiscount = false;
+          selectedCustomerId = null;
+          customerPaymentMode = 'Cash';
+          receivedAmountController.clear();
+        });
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -558,7 +786,45 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _confirmLeaveBill,
+      child: Focus(
+        autofocus: Platform.isWindows,
+        onKeyEvent: (node, event) {
+          if (!Platform.isWindows) return KeyEventResult.ignored;
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.keyN &&
+                HardwareKeyboard.instance.isControlPressed) {
+              unawaited(_createNewBill());
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.f3 &&
+                _openBills.length > 1) {
+              final current = _openBills.indexWhere(
+                (bill) => bill['bill_id'] == _activeBillId,
+              );
+              final next = _openBills[(current + 1) % _openBills.length];
+              unawaited(_switchBill(next['bill_id'].toString()));
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.f4) {
+              // Hold the current bill and open a fresh one.
+              unawaited(_createNewBill());
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.f5 &&
+                _openBills.length > 1) {
+              // Resume the most recently saved bill.
+              final resume = _openBills.firstWhere(
+                (bill) => bill['bill_id'] != _activeBillId,
+              );
+              unawaited(_switchBill(resume['bill_id'].toString()));
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Scaffold(
       appBar: AppBar(
         title: const Text('POS Billing (Quick & Khata)'),
         backgroundColor: Colors.teal,
@@ -572,6 +838,7 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
       body: Column(
         children: [
+          _buildBillSwitcher(),
           // Customer category is independent from the payment method.
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
@@ -623,7 +890,10 @@ class _SalesScreenState extends State<SalesScreen> {
                               child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
                             ))
                         .toList(),
-                    onChanged: (id) => setState(() => selectedCustomerId = id),
+                    onChanged: (id) {
+                      setState(() => selectedCustomerId = id);
+                      unawaited(_persistActiveBill());
+                    },
                   ),
                 ] else
                   const Padding(
@@ -641,16 +911,20 @@ class _SalesScreenState extends State<SalesScreen> {
                       ButtonSegment(value: 'Partial', label: Text('Partial')),
                     ],
                     selected: {customerPaymentMode},
-                    onSelectionChanged: (selection) => setState(() {
-                      customerPaymentMode = selection.first;
-                      receivedAmountController.clear();
-                    }),
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        customerPaymentMode = selection.first;
+                        receivedAmountController.clear();
+                      });
+                      unawaited(_persistActiveBill());
+                    },
                   ),
                   if (customerPaymentMode == 'Partial') ...[
                     const SizedBox(height: 6),
                     TextField(
                       controller: receivedAmountController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => unawaited(_persistActiveBill()),
                       decoration: const InputDecoration(
                         labelText: 'Cash Received (Rs.)',
                         isDense: true,
@@ -697,7 +971,10 @@ class _SalesScreenState extends State<SalesScreen> {
                             children: [
                               IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
                               IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                              IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => cart.removeAt(index))),
+                              IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                                setState(() => cart.removeAt(index));
+                                unawaited(_persistActiveBill());
+                              }),
                             ],
                           ),
                         ),
@@ -767,6 +1044,8 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
         ],
+      ),
+      ),
       ),
     );
   }

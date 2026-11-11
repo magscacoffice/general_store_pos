@@ -763,7 +763,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 10,
+      version: 12,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -908,10 +908,40 @@ class DBHelper {
           return_sync_id TEXT,
           sale_item_sync_id TEXT
         )''');
+        await db.execute('''CREATE TABLE khata_reminder_log(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          party_id INTEGER NOT NULL,
+          oldest_due_date TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE(party_id, oldest_due_date)
+        )''');
+        await db.execute('''CREATE TABLE pending_bills(
+          bill_id TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 10) {
           await _ensureColumn(db, 'products', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
+        }
+        if (oldVersion < 11) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS khata_reminder_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            party_id INTEGER NOT NULL,
+            oldest_due_date TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(party_id, oldest_due_date)
+          )''');
+        }
+        if (oldVersion < 12) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS pending_bills(
+            bill_id TEXT PRIMARY KEY,
+            label TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )''');
         }
         if (oldVersion < 2) {
           await db.execute('''
@@ -1395,6 +1425,13 @@ class DBHelper {
             ((item['purchasePrice'] ?? product['purchasePrice'] ?? 0) as num)
                 .toDouble();
         final name = (item['name'] ?? product['name'] ?? barcode).toString();
+        if (!salePrice.isFinite || !purchasePrice.isFinite ||
+            salePrice < purchasePrice) {
+          throw Exception(
+            'Sale price for $name must not be below purchase cost '
+            '(Rs. ${purchasePrice.toStringAsFixed(2)}).',
+          );
+        }
         final saleItem = <String, dynamic>{
           'sale_id': id,
           'product_id': product['id'],
@@ -1690,6 +1727,161 @@ class DBHelper {
     );
   }
 
+  // Identify the oldest still-unpaid credit using FIFO receipt allocation.
+  // Unmatched legacy balance is treated as current rather than falsely aged.
+  static Future<List<Map<String, dynamic>>> getOverdueKhataCustomers({
+    int overdueDays = 30,
+  }) async {
+    final db = await database;
+    final parties = await db.query(
+      'parties',
+      where: "type = 'customer' AND balance > 0",
+      orderBy: 'name COLLATE NOCASE',
+    );
+    final cutoff = DateTime.now().subtract(Duration(days: overdueDays));
+    final results = <Map<String, dynamic>>[];
+
+    for (final party in parties) {
+      final partyId = (party['id'] as num).toInt();
+      final balance = _numberAsDouble(party['balance']);
+      final sales = await db.query(
+        'sales',
+        where: 'customer_id = ?',
+        whereArgs: [partyId],
+        columns: ['id', 'date', 'total_amount', 'discount', 'final_amount'],
+        orderBy: 'date ASC, id ASC',
+      );
+      final receipts = await db.query(
+        'khata_transactions',
+        where: "party_id = ? AND type = 'receipt'",
+        whereArgs: [partyId],
+        columns: ['date', 'amount', 'id'],
+        orderBy: 'date ASC, id ASC',
+      );
+      final returns = await db.query(
+        'sale_returns',
+        where: "customer_id = ? AND refund_method = 'Khata'",
+        whereArgs: [partyId],
+        columns: ['date', 'refund_amount', 'id'],
+        orderBy: 'date ASC, id ASC',
+      );
+      final events = <Map<String, dynamic>>[];
+      for (final sale in sales) {
+        events.add({
+          'date': sale['date']?.toString() ?? '',
+          'kind': 'credit',
+          'amount': _effectiveSaleAmount(sale),
+          'id': (sale['id'] as num?)?.toInt() ?? 0,
+        });
+      }
+      for (final receipt in receipts) {
+        events.add({
+          'date': receipt['date']?.toString() ?? '',
+          'kind': 'payment',
+          'amount': _numberAsDouble(receipt['amount']),
+          'id': (receipt['id'] as num?)?.toInt() ?? 0,
+        });
+      }
+      for (final saleReturn in returns) {
+        events.add({
+          'date': saleReturn['date']?.toString() ?? '',
+          'kind': 'payment',
+          'amount': _numberAsDouble(saleReturn['refund_amount']),
+          'id': (saleReturn['id'] as num?)?.toInt() ?? 0,
+        });
+      }
+      events.sort((a, b) {
+        final ad = DateTime.tryParse(a['date'].toString()) ?? DateTime.now();
+        final bd = DateTime.tryParse(b['date'].toString()) ?? DateTime(1970);
+        final byDate = ad.compareTo(bd);
+        if (byDate != 0) return byDate;
+        final kindOrder = (a['kind'] == 'credit' ? 0 : 1)
+            .compareTo(b['kind'] == 'credit' ? 0 : 1);
+        return kindOrder != 0
+            ? kindOrder
+            : (a['id'] as int).compareTo(b['id'] as int);
+      });
+      final unpaid = <Map<String, dynamic>>[];
+      for (final event in events) {
+        final amount = _numberAsDouble(event['amount']);
+        if (amount <= 0) continue;
+        if (event['kind'] == 'credit') {
+          unpaid.add({'date': event['date'], 'remaining': amount});
+        } else {
+          var payment = amount;
+          for (final debt in unpaid) {
+            if (payment <= 0) break;
+            final remaining = _numberAsDouble(debt['remaining']);
+            final applied = remaining < payment ? remaining : payment;
+            debt['remaining'] = remaining - applied;
+            payment -= applied;
+          }
+        }
+      }
+      var ledgerOpen = unpaid.fold<double>(
+        0,
+        (sum, debt) => sum + _numberAsDouble(debt['remaining']),
+      );
+      if (ledgerOpen < balance) {
+        unpaid.add({
+          'date': DateTime.now().toIso8601String(),
+          'remaining': balance - ledgerOpen,
+        });
+      } else if (ledgerOpen > balance) {
+        var excess = ledgerOpen - balance;
+        for (final debt in unpaid) {
+          if (excess <= 0) break;
+          final remaining = _numberAsDouble(debt['remaining']);
+          final applied = remaining < excess ? remaining : excess;
+          debt['remaining'] = remaining - applied;
+          excess -= applied;
+        }
+      }
+      unpaid.removeWhere((debt) => _numberAsDouble(debt['remaining']) <= 0.000001);
+      unpaid.sort((a, b) {
+        final ad = DateTime.tryParse(a['date'].toString()) ?? DateTime.now();
+        final bd = DateTime.tryParse(b['date'].toString()) ?? DateTime.now();
+        return ad.compareTo(bd);
+      });
+      if (unpaid.isEmpty) continue;
+      final oldestDate = DateTime.tryParse(unpaid.first['date'].toString());
+      if (oldestDate == null || oldestDate.isAfter(cutoff)) continue;
+      final dueDate = DateTime(oldestDate.year, oldestDate.month, oldestDate.day);
+      final ageDays = DateTime.now().difference(dueDate).inDays;
+      final overdue = <String, dynamic>{
+        ...party,
+        'oldest_due_date': dueDate.toIso8601String().substring(0, 10),
+        'overdue_days': ageDays,
+      };
+      results.add(overdue);
+      await db.transaction((txn) async {
+        final inserted = await txn.insert(
+          'khata_reminder_log',
+          {
+            'party_id': partyId,
+            'oldest_due_date': overdue['oldest_due_date'],
+            'created_at': DateTime.now().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        if (inserted <= 0) return;
+        final reminder = <String, dynamic>{
+          'title': 'Khata overdue: ${party['name']}',
+          'details': 'Outstanding Rs. ${balance.toStringAsFixed(2)} | '
+              'Oldest unpaid credit: ${overdue['oldest_due_date']} | '
+              '${ageDays} days overdue | Party ID: $partyId',
+          'date': DateTime.now().toIso8601String().substring(0, 10),
+          'is_done': 0,
+          'sync_id': _newSyncId(),
+        };
+        await txn.insert('reminders', reminder);
+        await _queueRow(txn, 'reminders', reminder);
+      });
+    }
+    if (results.isNotEmpty) unawaited(syncPendingChanges());
+    return results;
+  }
+
   static Future<int> deleteParty(int id) async {
     final db = await database;
     final deleted = await db.transaction<int>((txn) async {
@@ -1963,6 +2155,52 @@ class DBHelper {
     });
     unawaited(syncPendingChanges());
     return id;
+  }
+
+  // Draft bills are local working documents and never enter cloud sales sync.
+  static Future<void> savePendingBill(Map<String, dynamic> bill) async {
+    final billId = bill['bill_id']?.toString() ?? '';
+    if (billId.isEmpty) throw Exception('Pending bill ID is missing.');
+    final payload = Map<String, dynamic>.from(bill)
+      ..remove('bill_id')
+      ..remove('label');
+    final db = await database;
+    await db.insert(
+      'pending_bills',
+      {
+        'bill_id': billId,
+        'label': bill['label']?.toString() ?? 'Pending Bill',
+        'payload': jsonEncode(payload),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getPendingBills() async {
+    final db = await database;
+    final rows = await db.query('pending_bills', orderBy: 'updated_at DESC');
+    final bills = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      try {
+        final payload = jsonDecode(row['payload']?.toString() ?? '{}');
+        if (payload is! Map) continue;
+        bills.add({
+          ...Map<String, dynamic>.from(payload),
+          'bill_id': row['bill_id'].toString(),
+          'label': row['label']?.toString() ?? 'Pending Bill',
+          'updated_at': row['updated_at']?.toString(),
+        });
+      } catch (error) {
+        developer.log('Skipping unreadable pending bill', name: 'DBHelper', error: error);
+      }
+    }
+    return bills;
+  }
+
+  static Future<void> deletePendingBill(String billId) async {
+    final db = await database;
+    await db.delete('pending_bills', where: 'bill_id = ?', whereArgs: [billId]);
   }
 
   static Future<List<Map<String, dynamic>>> getReminders() async {

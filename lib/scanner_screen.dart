@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -82,6 +83,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  Future<void> _playScanBeep() async {
+    if (!mounted || widget.captureBarcodeOnly) return;
+    try {
+      await SystemSound.play(SystemSoundType.click);
+    } catch (_) {
+      // Audio feedback is optional; never interrupt barcode handling.
+    }
+  }
+
   Future<void> _processScannedBarcode(String rawBarcode) async {
     final barcode = rawBarcode.trim();
     if (barcode.isEmpty) return;
@@ -111,11 +121,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         ? (scannedItems[index]['quantity'] as num).toInt()
         : 0;
     if (stock <= alreadyAdded) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(product['name'].toString() + ' ka available stock khatam ho gaya hai.')),
-        );
-      }
+      if (mounted) await _showAddStockAndAddToCartDialog(product);
       return;
     }
 
@@ -129,11 +135,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
           'barcode': barcode,
           'name': product['name'],
           'purchasePrice': product['purchasePrice'] ?? 0.0,
-          'salePrice': product['price'],
+          'salePrice': (product['price'] as num).toDouble() <
+                  (product['purchasePrice'] as num? ?? 0).toDouble()
+              ? (product['purchasePrice'] as num? ?? 0).toDouble()
+              : (product['price'] as num).toDouble(),
           'quantity': 1,
         });
       }
     });
+    await _playScanBeep();
   }
 
   Future<void> _showAddStockAndAddToCartDialog(
@@ -153,7 +163,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Is item ka stock zero hai. Yahin stock purchase record ke sath add karein.'),
+                const Text('Is item ka available stock is bill ki requirement se kam hai. Yahin stock purchase record ke sath add karein.'),
                 TextField(
                   controller: stockController,
                   keyboardType: TextInputType.number,
@@ -203,12 +213,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'barcode': product['barcode'].toString(),
                       'name': product['name'].toString(),
                       'purchasePrice': cost,
-                                            'salePrice': (product['price'] as num).toDouble(),
+                      // This bill must never sell below the newly entered cost.
+                      // The saved product sale price is deliberately unchanged.
+                      'salePrice': (product['price'] as num).toDouble() < cost
+                          ? cost
+                          : (product['price'] as num).toDouble(),
                       'quantity': saleQty,
                     });
                   });
                   await _loadProducts();
                   if (!mounted) return;
+                  await _playScanBeep();
                   Navigator.pop(dialogContext);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('$addQty stock purchase mein record hua aur $saleQty sale cart mein add ho gaya.')),
@@ -452,6 +467,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   });
                   await _loadProducts();
                   if (mounted) {
+                    await _playScanBeep();
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       const SnackBar(content: Text('Naya product inventory mein save ho gaya aur isi bill mein add ho gaya.')),
                     );

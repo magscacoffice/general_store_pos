@@ -63,6 +63,19 @@ class _PrinterScreenState extends State<PrinterScreen> {
   bool _isUsbScanning = false;
   bool _isUsbConnected = false;
   int _usbPaperWidth = 58;
+  int _receiptTextScale = 1;
+  int _paperMarginMm = 2;
+
+  usb_print.TextSize get _receiptTextSize {
+    switch (_receiptTextScale) {
+      case 2:
+        return usb_print.TextSize.size2;
+      case 3:
+        return usb_print.TextSize.size3;
+      default:
+        return usb_print.TextSize.size1;
+    }
+  }
 
   double get _subtotal => widget.subtotalAmount ?? widget.totalAmount;
 
@@ -114,17 +127,24 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   String _billText({required bool plain}) {
-    const width = 32;
+    final paperDots = _usbPaperWidth == 80 ? 576 : 384;
+    final marginDots = _paperMarginMm * 8;
+    final baseCharacters = _usbPaperWidth == 80 ? 48 : 32;
+    final width = (baseCharacters *
+            (paperDots - marginDots * 2) /
+            paperDots /
+            _receiptTextScale)
+        .floor()
+        .clamp(10, baseCharacters);
     final separator = List.filled(width, '-').join();
     final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
     final received = widget.receivedAmount ?? widget.totalAmount;
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final due = widget.balanceDue ?? (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
     final buffer = StringBuffer()
-      ..writeln('          KHAN BABA')
-      ..writeln('  GENERAL STORE & PERFUMERY')
-      ..writeln('GT Road Sanawa')
-      ..writeln('WhatsApp: 0345-1444325')
+      ..writeln('     🛒 KHAN BABA 🛒')
+      ..writeln(_wrapReceiptText('General Store G.T Road Sanawan', width).join(String.fromCharCode(10)))
+      ..writeln('Phone: 0345-1444325')
       ..writeln(separator)
       ..writeln(_line('Bill No', widget.invoiceId.toString().padLeft(6, '0'), width: width))
       ..writeln(_line('Date', DateFormat('dd-MM-yyyy').format(parsedDate), width: width))
@@ -144,7 +164,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
     for (var i = 0; i < widget.cartItems.length; i++) {
       final item = widget.cartItems[i];
-      final nameLines = _wrapReceiptText('${i + 1}. ${_itemName(item)}', 30);
+      final nameLines = _wrapReceiptText('${i + 1}. ${_itemName(item)}', width - 2);
       for (final line in nameLines) {
         buffer.writeln(line);
       }
@@ -312,8 +332,63 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ? usb_print.PaperSize.mm80
             : usb_print.PaperSize.mm58;
         final ticket = await usb_print.Ticket.create(paperSize);
-        for (final line in _billText(plain: true).split(String.fromCharCode(10))) {
-          ticket.text(line);
+        final paperDots = _usbPaperWidth == 80 ? 576 : 384;
+        final marginDots = _paperMarginMm * 8;
+        if (marginDots > 0) {
+          final printWidth = paperDots - (marginDots * 2);
+          ticket.rawBytes([
+            0x1D, 0x4C, marginDots & 0xFF, (marginDots >> 8) & 0xFF,
+            0x1D, 0x57, printWidth & 0xFF, (printWidth >> 8) & 0xFF,
+          ]);
+        }
+        final lines = _billText(plain: true).split(String.fromCharCode(10));
+        for (final line in lines) {
+          if (line.contains('KHAN BABA')) {
+            await ticket.textRaster(
+              '🛒 KHAN BABA 🛒',
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              align: usb_print.PrintAlign.center,
+            );
+          } else if (line.startsWith('General Store') || line.trim() == 'Sanawan') {
+            ticket.text(
+              line.trim(),
+              align: usb_print.PrintAlign.center,
+              style: const usb_print.PrintTextStyle(bold: true),
+            );
+          } else if (line.startsWith('TOTAL')) {
+            final totalValue = line.trim().split(RegExp(r'\s+')).last;
+            ticket.text(
+              'TOTAL',
+              style: const usb_print.PrintTextStyle(
+                bold: true,
+                height: usb_print.TextSize.size2,
+                width: usb_print.TextSize.size2,
+              ),
+            );
+            ticket.text(
+              totalValue,
+              align: usb_print.PrintAlign.right,
+              style: const usb_print.PrintTextStyle(
+                bold: true,
+                height: usb_print.TextSize.size2,
+                width: usb_print.TextSize.size2,
+              ),
+            );
+          } else {
+            ticket.text(
+              line,
+              style: usb_print.PrintTextStyle(
+                height: _receiptTextSize,
+                width: _receiptTextSize,
+              ),
+            );
+          }
+        }
+        if (marginDots > 0) {
+          ticket.rawBytes([
+            0x1D, 0x4C, 0, 0,
+            0x1D, 0x57, paperDots & 0xFF, (paperDots >> 8) & 0xFF,
+          ]);
         }
         ticket.cut();
         await _usbPrinterManager.printTicket(ticket);
@@ -353,12 +428,12 @@ class _PrinterScreenState extends State<PrinterScreen> {
     // Compact 58mm receipt: short header, aligned Qty/Rate/Amount and tight spacing.
     final pageHeight = (112 + widget.cartItems.length * 11).toDouble();
     final pageFormat = PdfPageFormat(
-      58 * PdfPageFormat.mm,
+      _usbPaperWidth * PdfPageFormat.mm,
       pageHeight * PdfPageFormat.mm,
-      marginLeft: 3 * PdfPageFormat.mm,
-      marginRight: 3 * PdfPageFormat.mm,
-      marginTop: 3 * PdfPageFormat.mm,
-      marginBottom: 3 * PdfPageFormat.mm,
+      marginLeft: _paperMarginMm * PdfPageFormat.mm,
+      marginRight: _paperMarginMm * PdfPageFormat.mm,
+      marginTop: _paperMarginMm * PdfPageFormat.mm,
+      marginBottom: _paperMarginMm * PdfPageFormat.mm,
     );
 
     document.addPage(
@@ -375,16 +450,16 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ),
             pw.Center(
               child: pw.Text(
-                'GENERAL STORE & PERFUMERY',
+                'General Store G.T Road Sanawan',
                 textAlign: pw.TextAlign.center,
                 style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
               ),
             ),
             pw.Center(
               child: pw.Text(
-                'GT Road Sanawa | WhatsApp: 0345-1444325',
+                'Phone: 0345-1444325',
                 textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(fontSize: 6),
+                style: const pw.TextStyle(fontSize: 6.5),
               ),
             ),
             pw.Divider(height: 5, thickness: 0.6),
@@ -656,19 +731,64 @@ class _PrinterScreenState extends State<PrinterScreen> {
                       ),
               ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 16,
+              runSpacing: 8,
               children: [
-                const Text('USB Paper Size:'),
-                const SizedBox(width: 12),
-                DropdownButton<int>(
-                  value: _usbPaperWidth,
-                  items: const [
-                    DropdownMenuItem(value: 58, child: Text('58 mm')),
-                    DropdownMenuItem(value: 80, child: Text('80 mm')),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Paper:'),
+                    const SizedBox(width: 8),
+                    DropdownButton<int>(
+                      value: _usbPaperWidth,
+                      items: const [
+                        DropdownMenuItem(value: 58, child: Text('58 mm')),
+                        DropdownMenuItem(value: 80, child: Text('80 mm')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _usbPaperWidth = value);
+                      },
+                    ),
                   ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _usbPaperWidth = value);
-                  },
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Text Size:'),
+                    const SizedBox(width: 8),
+                    DropdownButton<int>(
+                      value: _receiptTextScale,
+                      items: const [
+                        DropdownMenuItem(value: 1, child: Text('Small')),
+                        DropdownMenuItem(value: 2, child: Text('Medium')),
+                        DropdownMenuItem(value: 3, child: Text('Large')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _receiptTextScale = value);
+                      },
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Margins:'),
+                    const SizedBox(width: 8),
+                    DropdownButton<int>(
+                      value: _paperMarginMm,
+                      items: const [
+                        DropdownMenuItem(value: 0, child: Text('0 mm')),
+                        DropdownMenuItem(value: 2, child: Text('2 mm')),
+                        DropdownMenuItem(value: 4, child: Text('4 mm')),
+                        DropdownMenuItem(value: 6, child: Text('6 mm')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _paperMarginMm = value);
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

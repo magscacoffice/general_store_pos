@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'db_helper.dart';
 
@@ -13,6 +14,7 @@ class PartyScreen extends StatefulWidget {
 
 class _PartyScreenState extends State<PartyScreen> {
   List<Map<String, dynamic>> _parties = [];
+  Map<int, Map<String, dynamic>> _overdueByParty = {};
 
   @override
   void initState() {
@@ -20,11 +22,55 @@ class _PartyScreenState extends State<PartyScreen> {
     _loadParties();
   }
 
-  void _loadParties() async {
+  Future<void> _loadParties() async {
     final data = await DBHelper.getParties(widget.type);
+    final overdue = widget.type == 'customer'
+        ? await DBHelper.getOverdueKhataCustomers(overdueDays: 30)
+        : <Map<String, dynamic>>[];
+    if (!mounted) return;
     setState(() {
       _parties = data;
+      _overdueByParty = {
+        for (final item in overdue)
+          (item['id'] as num).toInt(): item,
+      };
     });
+  }
+
+  Future<void> _sendKhataReminder(Map<String, dynamic> party) async {
+    final rawPhone = (party['phone'] ?? '').toString();
+    var phone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.startsWith('0')) phone = '92${phone.substring(1)}';
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Is customer ka phone number mojood nahi.')),
+      );
+      return;
+    }
+    final overdue = _overdueByParty[(party['id'] as num).toInt()];
+    final balance = (party['balance'] as num?)?.toDouble() ?? 0;
+    final message = 'Assalam-o-Alaikum ${party['name']}, '
+        'aap ke Khan Baba General Store Khata mein Rs. '
+        '${balance.toStringAsFixed(2)} baqi hain. '
+        'Sab se purani unpaid raqam ki tareekh '
+        '${overdue?['oldest_due_date'] ?? 'available'} hai. '
+        'Meharbani farma kar payment ka intizam karein. Shukriya.';
+    final uri = Uri.parse(
+      'https://wa.me/$phone?text=${Uri.encodeComponent(message)}',
+    );
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp link open nahi ho saka.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('WhatsApp open nahi ho saka: $error')),
+        );
+      }
+    }
   }
 
   void _showAddPartyDialog() {
@@ -138,16 +184,19 @@ class _PartyScreenState extends State<PartyScreen> {
               itemCount: _parties.length,
               itemBuilder: (context, index) {
                 final party = _parties[index];
+                final partyId = (party['id'] as num).toInt();
+                final overdue = _overdueByParty[partyId];
                 return Card(
                   margin: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 5,
                   ),
+                  color: overdue != null ? Colors.red.shade50 : null,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: isCustomer
-                          ? Colors.orange
-                          : Colors.indigo,
+                      backgroundColor: overdue != null
+                          ? Colors.red
+                          : (isCustomer ? Colors.orange : Colors.indigo),
                       child: Text(
                         party['name'].isNotEmpty
                             ? party['name'][0].toUpperCase()
@@ -159,9 +208,17 @@ class _PartyScreenState extends State<PartyScreen> {
                       party['name'],
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text(widget.type == 'customer'
-                        ? 'Phone: ${party['phone']}  |  Khata Customer'
-                        : 'Phone: ${party['phone']}'),
+                    subtitle: Text(
+                      widget.type == 'customer'
+                          ? overdue == null
+                              ? 'Phone: ${party['phone']}  |  Khata Customer'
+                              : 'OVERDUE ${overdue['overdue_days']} days | Oldest unpaid: ${overdue['oldest_due_date']} | Phone: ${party['phone']}'
+                          : 'Phone: ${party['phone']}',
+                      style: TextStyle(
+                        color: overdue != null ? Colors.red.shade900 : null,
+                        fontWeight: overdue != null ? FontWeight.w600 : null,
+                      ),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -173,6 +230,12 @@ class _PartyScreenState extends State<PartyScreen> {
                             fontSize: 16,
                           ),
                         ),
+                        if (overdue != null)
+                          IconButton(
+                            tooltip: 'WhatsApp overdue reminder',
+                            icon: const Icon(Icons.message, color: Colors.green),
+                            onPressed: () => _sendKhataReminder(party),
+                          ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.grey),
                           onPressed: () async {
