@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
@@ -27,6 +28,8 @@ class _SalesScreenState extends State<SalesScreen> {
   String selectedSaleType = 'Walk-in';
   String customerPaymentMode = 'Cash';
   final TextEditingController receivedAmountController = TextEditingController();
+  final TextEditingController _usbBarcodeController = TextEditingController();
+  final FocusNode _usbBarcodeFocusNode = FocusNode();
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
@@ -214,6 +217,8 @@ class _SalesScreenState extends State<SalesScreen> {
   void dispose() {
     unawaited(_persistActiveBill());
     receivedAmountController.dispose();
+    _usbBarcodeController.dispose();
+    _usbBarcodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -344,6 +349,176 @@ class _SalesScreenState extends State<SalesScreen> {
     } finally {
       nameController.dispose();
       phoneController.dispose();
+    }
+  }
+
+  Future<void> _addUsbBarcode(String rawBarcode) async {
+    final barcode = rawBarcode.trim();
+    if (barcode.isEmpty || !mounted) return;
+    _usbBarcodeController.clear();
+    try {
+      final products = await DBHelper.getProducts();
+      if (!mounted) return;
+      final matches = products.where(
+        (product) => product['barcode']?.toString().trim() == barcode,
+      );
+      if (matches.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Barcode $barcode ka product inventory mein nahi mila.')),
+        );
+        return;
+      }
+      final product = matches.first;
+      final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+      final existingIndex = cart.indexWhere(
+        (item) => item['barcode']?.toString() == barcode,
+      );
+      final alreadyInCart = existingIndex < 0
+          ? 0
+          : (cart[existingIndex]['quantity'] as num?)?.toInt() ?? 0;
+      if (stock <= alreadyInCart) {
+        await _showUsbRestockDialog(product, barcode);
+        return;
+      }
+      setState(() {
+        if (existingIndex >= 0) {
+          cart[existingIndex]['quantity'] = alreadyInCart + 1;
+        } else {
+          cart.add({
+            'barcode': barcode,
+            'name': product['name']?.toString() ?? 'Product',
+            'purchasePrice': (product['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+            'salePrice': (product['price'] as num?)?.toDouble() ?? 0.0,
+            'quantity': 1,
+          });
+        }
+      });
+      await _persistActiveBill();
+      if (Platform.isWindows) {
+        final window = WindowManager.instance.getCurrent();
+        window?.show();
+        window?.focus();
+        _usbBarcodeFocusNode.requestFocus();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Barcode add nahi ho saka: $error')),
+      );
+    }
+  }
+
+  Future<void> _showUsbRestockDialog(
+    Map<String, dynamic> product,
+    String barcode,
+  ) async {
+    final quantityController = TextEditingController(text: '10');
+    final saleQuantityController = TextEditingController(text: '1');
+    final costController = TextEditingController(
+      text: ((product['purchasePrice'] as num?)?.toDouble() ?? 0).toString(),
+    );
+    try {
+      final details = await showDialog<Map<String, double>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${product['name']} - Stock khatam'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Naya stock record kar ke isi bill mein item add karein.'),
+              const SizedBox(height: 10),
+              TextField(
+                controller: quantityController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Restock quantity'),
+              ),
+              TextField(
+                controller: costController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Purchase cost per item (Rs.)'),
+              ),
+              TextField(
+                controller: saleQuantityController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity for this bill'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final quantity = int.tryParse(quantityController.text.trim());
+                final saleQuantity = int.tryParse(saleQuantityController.text.trim());
+                final cost = double.tryParse(costController.text.trim());
+                if (quantity == null || quantity <= 0 ||
+                    saleQuantity == null || saleQuantity <= 0 ||
+                    saleQuantity > quantity || cost == null ||
+                    !cost.isFinite || cost < 0) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Quantity aur purchase cost durust enter karein.')),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, {
+                  'quantity': quantity.toDouble(),
+                  'saleQuantity': saleQuantity.toDouble(),
+                  'cost': cost,
+                });
+              },
+              child: const Text('Restock & Add'),
+            ),
+          ],
+        ),
+      );
+      if (details == null || !mounted) return;
+      final quantity = details['quantity']!.toInt();
+      final saleQuantity = details['saleQuantity']!.toInt();
+      final cost = details['cost']!;
+      await DBHelper.recordPurchase(
+        productId: (product['id'] as num).toInt(),
+        quantity: quantity,
+        unitCost: cost,
+      );
+      final salePrice = (product['price'] as num?)?.toDouble() ?? cost;
+      final effectiveSalePrice = salePrice < cost ? cost : salePrice;
+      setState(() {
+        final index = cart.indexWhere((item) => item['barcode']?.toString() == barcode);
+        if (index >= 0) {
+          cart[index]['quantity'] = ((cart[index]['quantity'] as num).toInt()) + saleQuantity;
+          cart[index]['purchasePrice'] = cost;
+          if ((cart[index]['salePrice'] as num).toDouble() < cost) {
+            cart[index]['salePrice'] = cost;
+          }
+        } else {
+          cart.add({
+            'barcode': barcode,
+            'name': product['name']?.toString() ?? 'Product',
+            'purchasePrice': cost,
+            'salePrice': effectiveSalePrice,
+            'quantity': saleQuantity,
+          });
+        }
+      });
+      await _persistActiveBill();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stock purchase record ho gaya aur item bill mein add ho gaya.')),
+      );
+      _usbBarcodeFocusNode.requestFocus();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restock nahi ho saka: $error')),
+      );
+    } finally {
+      quantityController.dispose();
+      saleQuantityController.dispose();
+      costController.dispose();
     }
   }
 
@@ -1094,9 +1269,36 @@ class _SalesScreenState extends State<SalesScreen> {
       body: Platform.isWindows
           ? Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SizedBox(
+                      height: 48,
+                      child: TextField(
+                        controller: _usbBarcodeController,
+                        focusNode: _usbBarcodeFocusNode,
+                        autofocus: true,
+                        onSubmitted: _addUsbBarcode,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.qr_code_scanner, color: Colors.teal),
+                          labelText: 'Scan / Enter Barcode',
+                          hintText: 'USB barcode scanner yahan scan karein',
+                          suffixIcon: IconButton(
+                            tooltip: 'Clear barcode',
+                            onPressed: _usbBarcodeController.clear,
+                            icon: const Icon(Icons.clear),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                   Expanded(
                     flex: 7,
                     child: Column(
@@ -1110,6 +1312,9 @@ class _SalesScreenState extends State<SalesScreen> {
                   ),
                   const SizedBox(width: 14),
                   Expanded(flex: 3, child: _buildCheckoutPanel()),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             )

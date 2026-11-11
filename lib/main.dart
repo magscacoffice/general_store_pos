@@ -202,6 +202,15 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
           nativeWindow.minimumSize = const Size(980, 650).toNative();
           nativeWindow.setSize(const Size(1240, 740).toNative(), false);
           nativeWindow.center();
+          if (!isDashboard) {
+            nativeWindow.addListener((event) {
+              if (event is WindowCloseRequestedEvent) {
+                // Keep the cashier window resident in the Windows taskbar.
+                event.request.cancel();
+                nativeWindow.minimize();
+              }
+            });
+          }
           nativeWindow.show();
         }
       } catch (error, stackTrace) {
