@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -497,6 +499,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopReturnButton(),
         title: const Text('Live Barcode Scanner'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

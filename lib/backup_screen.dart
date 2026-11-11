@@ -1,3 +1,4 @@
+import 'windows/desktop_app_bar.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -184,6 +185,8 @@ class _BackupScreenState extends State<BackupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('Backup & Restore'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

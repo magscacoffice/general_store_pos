@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -168,6 +170,8 @@ class _PartyScreenState extends State<PartyScreen> {
     bool isCustomer = widget.type == 'customer';
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: Text(
           isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)',
         ),

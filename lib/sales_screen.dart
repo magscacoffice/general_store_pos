@@ -9,9 +9,12 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'db_helper.dart';
 import 'scanner_screen.dart';
 import 'printer_screen.dart';
+import 'windows/pos_windows.dart';
 
 class SalesScreen extends StatefulWidget {
-  const SalesScreen({super.key});
+  final String? billId;
+
+  const SalesScreen({super.key, this.billId});
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
@@ -36,7 +39,7 @@ class _SalesScreenState extends State<SalesScreen> {
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
   bool isCheckingOut = false;
-  String _activeBillId = DateTime.now().microsecondsSinceEpoch.toString();
+  late String _activeBillId;
   List<Map<String, dynamic>> _openBills = [];
   Future<void> _pendingSaveQueue = Future<void>.value();
   bool _restoringBills = false;
@@ -44,6 +47,7 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   void initState() {
     super.initState();
+    _activeBillId = widget.billId ?? PosWindows.newBillId();
     _loadCustomers();
     if (Platform.isWindows) unawaited(_restorePendingBills());
   }
@@ -64,11 +68,25 @@ class _SalesScreenState extends State<SalesScreen> {
     for (final bill in _openBills) {
       if (bill['bill_id'] == billId) return bill['label']?.toString() ?? 'Pending Bill';
     }
-    return 'Bill ${_openBills.length + 1}';
+    final suffix = billId.length > 4
+        ? billId.substring(billId.length - 4)
+        : billId;
+    return 'Bill #$suffix';
   }
 
   Future<void> _persistActiveBill() async {
     if (!Platform.isWindows || _restoringBills || _activeBillId.isEmpty) return;
+    if (cart.isEmpty) {
+      final billId = _activeBillId;
+      _openBills.removeWhere((bill) => bill['bill_id'] == billId);
+      _pendingSaveQueue = _pendingSaveQueue.then((_) async {
+        await DBHelper.deletePendingBill(billId);
+      }).catchError((Object error) {
+        debugPrint('Empty pending bill cleanup failed: $error');
+      });
+      await _pendingSaveQueue;
+      return;
+    }
     final snapshot = _snapshotCurrentBill();
     final index = _openBills.indexWhere((bill) => bill['bill_id'] == _activeBillId);
     if (index >= 0) {
@@ -89,12 +107,15 @@ class _SalesScreenState extends State<SalesScreen> {
     try {
       final saved = await DBHelper.getPendingBills();
       if (!mounted) return;
-      if (saved.isEmpty) {
+      final matching = saved.where(
+        (bill) => bill['bill_id']?.toString() == _activeBillId,
+      ).toList();
+      if (matching.isNotEmpty) {
+        _openBills = [matching.first];
+        _applyBillSnapshot(matching.first);
+      } else {
         _openBills = [_snapshotCurrentBill()];
-        return;
       }
-      _openBills = saved;
-      _applyBillSnapshot(saved.first);
     } catch (error) {
       debugPrint('Pending bills restore failed: $error');
       if (mounted) _openBills = [_snapshotCurrentBill()];
@@ -123,8 +144,13 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _createNewBill() async {
+    if (Platform.isWindows) {
+      await _persistActiveBill();
+      await PosWindows.openSale();
+      return;
+    }
     await _persistActiveBill();
-    final nextId = DateTime.now().microsecondsSinceEpoch.toString();
+    final nextId = PosWindows.newBillId();
     final nextLabel = 'Bill ${_openBills.length + 1}';
     setState(() {
       _activeBillId = nextId;
@@ -162,6 +188,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _completeActiveBill() async {
+    await _pendingSaveQueue;
     await DBHelper.deletePendingBill(_activeBillId);
     _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
     if (_openBills.isNotEmpty) {
@@ -182,45 +209,6 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
-  Widget _buildBillSwitcher() {
-    if (!Platform.isWindows) return const SizedBox.shrink();
-    final bills = _openBills.isEmpty ? [_snapshotCurrentBill()] : _openBills;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: Colors.blueGrey.shade50,
-      child: Row(
-        children: [
-          const Icon(Icons.receipt_long, color: Colors.teal),
-          const SizedBox(width: 8),
-          Expanded(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: _activeBillId,
-              underline: const SizedBox.shrink(),
-              items: bills.map((bill) {
-                final id = bill['bill_id'].toString();
-                final label = bill['label']?.toString() ?? 'Pending Bill';
-                final count = (bill['cart'] as List? ?? []).length;
-                return DropdownMenuItem<String>(
-                  value: id,
-                  child: Text('$label ($count items)'),
-                );
-              }).toList(),
-              onChanged: _openBills.length < 2
-                  ? null
-                  : (id) { if (id != null) unawaited(_switchBill(id)); },
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: () => unawaited(_createNewBill()),
-            icon: const Icon(Icons.add),
-            label: const Text('New Bill'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -612,6 +600,55 @@ class _SalesScreenState extends State<SalesScreen> {
     discountController.dispose();
   }
 
+  Future<void> _openPendingBills() async {
+    await _persistActiveBill();
+    final pending = await DBHelper.getPendingBills();
+    if (!mounted) return;
+    if (pending.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Koi held/pending bill mojood nahi hai.')),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Held / Pending Bills'),
+        content: SizedBox(
+          width: 520,
+          height: 380,
+          child: ListView.separated(
+            itemCount: pending.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final bill = pending[index];
+              final id = bill['bill_id'].toString();
+              final items = (bill['cart'] as List? ?? []).length;
+              final updated = bill['updated_at']?.toString() ?? '';
+              return ListTile(
+                leading: const Icon(Icons.receipt_long, color: Colors.teal),
+                title: Text(bill['label']?.toString() ?? 'Pending Bill'),
+                subtitle: Text('$items items  •  $updated'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  if (id == _activeBillId) return;
+                  unawaited(PosWindows.openSale(billId: id));
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _confirmLeaveBill() async {
     if (!Platform.isWindows) return true;
     if (cart.isEmpty) {
@@ -638,6 +675,7 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
     if (discard == true) {
+      await _pendingSaveQueue;
       await DBHelper.deletePendingBill(_activeBillId);
       _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
       return true;
@@ -784,6 +822,213 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+
+  Widget _buildCustomerPanel() => 
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                color: Colors.teal.shade50,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.person, color: Colors.teal),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedSaleType,
+                            decoration: const InputDecoration(
+                              labelText: 'Customer Type',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
+                              DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) _setSaleType(value);
+                            },
+                          ),
+                        ),
+                        if (selectedSaleType != 'Walk-in')
+                          IconButton(
+                            tooltip: 'Add ${selectedSaleType} Customer',
+                            onPressed: _addKhataCustomer,
+                            icon: const Icon(Icons.person_add_alt_1, color: Colors.teal),
+                          ),
+                      ],
+                    ),
+                    if (selectedSaleType != 'Walk-in') ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        value: selectedCustomerId,
+                        decoration: InputDecoration(
+                          labelText: 'Select Khata Customer',
+                          isDense: true,
+                          border: const OutlineInputBorder(),
+                        ),
+                        items: customers
+                            .map((c) => DropdownMenuItem<int>(
+                                  value: (c['id'] as num).toInt(),
+                                  child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
+                                ))
+                            .toList(),
+                        onChanged: (id) {
+                          setState(() => selectedCustomerId = id);
+                          unawaited(_persistActiveBill());
+                        },
+                      ),
+                    ] else
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
+                      ),
+                    if (selectedSaleType == 'Khata') ...[
+                      const SizedBox(height: 8),
+                      const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'Cash', label: Text('Cash')),
+                          ButtonSegment(value: 'Credit', label: Text('Credit')),
+                          ButtonSegment(value: 'Partial', label: Text('Partial')),
+                        ],
+                        selected: {customerPaymentMode},
+                        onSelectionChanged: (selection) {
+                          setState(() {
+                            customerPaymentMode = selection.first;
+                            receivedAmountController.clear();
+                          });
+                          unawaited(_persistActiveBill());
+                        },
+                      ),
+                      if (customerPaymentMode == 'Partial') ...[
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: receivedAmountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (_) => unawaited(_persistActiveBill()),
+                          decoration: const InputDecoration(
+                            labelText: 'Cash Received (Rs.)',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (selectedCustomer != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(
+                          '${selectedCustomer!['name']}  |  Outstanding: Rs. ${selectedCustomer!['balance']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+
+  Widget _buildBillReviewHeading() =>
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
+              );
+
+  Widget _buildCartList() =>
+              Expanded(
+                child: cart.isEmpty
+                    ? const Center(child: Text('Cart is empty. Scan items.'))
+                    : ListView.builder(
+                        itemCount: cart.length,
+                        itemBuilder: (context, index) {
+                          final item = cart[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            child: ListTile(
+                              title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                              trailing: Wrap(
+                                spacing: 0,
+                                children: [
+                                  IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                                  IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                                  IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                                    setState(() => cart.removeAt(index));
+                                    unawaited(_persistActiveBill());
+                                  }),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              );
+
+  Widget _buildCheckoutPanel() =>
+              SafeArea(
+                top: false,
+                child: Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.grey[200],
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('SubTotal: Rs. $subTotal'),
+                        TextButton.icon(
+                          onPressed: _showDiscountDialog,
+                          icon: const Icon(Icons.discount, color: Colors.teal),
+                          label: Text(
+                            'Discount: ${calculatedDiscount > 0 ? "Rs. $calculatedDiscount" : "Apply"}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Total Payable Bill:'),
+                            Text(
+                              'Rs. $finalTotal',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal,
+                              ),
+                            ),
+                          ],
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                          ),
+                          onPressed: cart.isEmpty || isCheckingOut ? null : _checkout,
+                          icon: isCheckingOut
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.print),
+                          label: Text(isCheckingOut ? 'Saving...' : 'Checkout / Print'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                ),
+              );
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -798,13 +1043,8 @@ class _SalesScreenState extends State<SalesScreen> {
               unawaited(_createNewBill());
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.f3 &&
-                _openBills.length > 1) {
-              final current = _openBills.indexWhere(
-                (bill) => bill['bill_id'] == _activeBillId,
-              );
-              final next = _openBills[(current + 1) % _openBills.length];
-              unawaited(_switchBill(next['bill_id'].toString()));
+            if (event.logicalKey == LogicalKeyboardKey.f5) {
+              unawaited(_openPendingBills());
               return KeyEventResult.handled;
             }
             if (event.logicalKey == LogicalKeyboardKey.f4) {
@@ -812,239 +1052,75 @@ class _SalesScreenState extends State<SalesScreen> {
               unawaited(_createNewBill());
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.f5 &&
-                _openBills.length > 1) {
-              // Resume the most recently saved bill.
-              final resume = _openBills.firstWhere(
-                (bill) => bill['bill_id'] != _activeBillId,
-              );
-              unawaited(_switchBill(resume['bill_id'].toString()));
-              return KeyEventResult.handled;
-            }
           }
           return KeyEventResult.ignored;
         },
         child: Scaffold(
       appBar: AppBar(
-        title: const Text('POS Billing (Quick & Khata)'),
-        backgroundColor: Colors.teal,
+        automaticallyImplyLeading: !Platform.isWindows,
+        title: Text(
+          Platform.isWindows ? 'KHAN BABA POS  |  NEW SALE' : 'POS Billing (Quick & Khata)',
+          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3),
+        ),
+        backgroundColor: Colors.teal.shade800,
         foregroundColor: Colors.white,
         actions: [
+          if (Platform.isWindows) ...[
+            IconButton(
+              tooltip: 'New Bill - Ctrl+N',
+              icon: const Icon(Icons.add_box_outlined),
+              onPressed: _createNewBill,
+            ),
+            IconButton(
+              tooltip: 'Open Held Bills - F5',
+              icon: const Icon(Icons.inventory_2_outlined),
+              onPressed: _openPendingBills,
+            ),
+            IconButton(
+              tooltip: 'Open Dashboard in a separate window',
+              icon: const Icon(Icons.dashboard_outlined),
+              onPressed: PosWindows.openDashboard,
+            ),
+            const SizedBox(width: 8),
+          ],
           IconButton(
+            tooltip: 'Scan barcode',
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: _scanAndAddToCart,
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          _buildBillSwitcher(),
-          // Customer category is independent from the payment method.
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-            color: Colors.teal.shade50,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.person, color: Colors.teal),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedSaleType,
-                        decoration: const InputDecoration(
-                          labelText: 'Customer Type',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
-                          DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) _setSaleType(value);
-                        },
-                      ),
-                    ),
-                    if (selectedSaleType != 'Walk-in')
-                      IconButton(
-                        tooltip: 'Add ${selectedSaleType} Customer',
-                        onPressed: _addKhataCustomer,
-                        icon: const Icon(Icons.person_add_alt_1, color: Colors.teal),
-                      ),
-                  ],
-                ),
-                if (selectedSaleType != 'Walk-in') ...[
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<int>(
-                    value: selectedCustomerId,
-                    decoration: InputDecoration(
-                      labelText: 'Select Khata Customer',
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: customers
-                        .map((c) => DropdownMenuItem<int>(
-                              value: (c['id'] as num).toInt(),
-                              child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
-                            ))
-                        .toList(),
-                    onChanged: (id) {
-                      setState(() => selectedCustomerId = id);
-                      unawaited(_persistActiveBill());
-                    },
-                  ),
-                ] else
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
-                  ),
-                if (selectedSaleType == 'Khata') ...[
-                  const SizedBox(height: 8),
-                  const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'Cash', label: Text('Cash')),
-                      ButtonSegment(value: 'Credit', label: Text('Credit')),
-                      ButtonSegment(value: 'Partial', label: Text('Partial')),
-                    ],
-                    selected: {customerPaymentMode},
-                    onSelectionChanged: (selection) {
-                      setState(() {
-                        customerPaymentMode = selection.first;
-                        receivedAmountController.clear();
-                      });
-                      unawaited(_persistActiveBill());
-                    },
-                  ),
-                  if (customerPaymentMode == 'Partial') ...[
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: receivedAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (_) => unawaited(_persistActiveBill()),
-                      decoration: const InputDecoration(
-                        labelText: 'Cash Received (Rs.)',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                ],
-                if (selectedCustomer != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: Text(
-                      '${selectedCustomer!['name']}  |  Outstanding: Rs. ${selectedCustomer!['balance']}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Bill Review: final quantity/rate edits happen here before Save/Print.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
-          ),
-          // Live Bill Items Display
-          Expanded(
-            child: cart.isEmpty
-                ? const Center(child: Text('Cart is empty. Scan items.'))
-                : ListView.builder(
-                    itemCount: cart.length,
-                    itemBuilder: (context, index) {
-                      final item = cart[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        child: ListTile(
-                          title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
-                          trailing: Wrap(
-                            spacing: 0,
-                            children: [
-                              IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                              IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                              IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
-                                setState(() => cart.removeAt(index));
-                                unawaited(_persistActiveBill());
-                              }),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-
-          // Subtotal, Discount & Checkout Panel
-          SafeArea(
-            top: false,
-            child: Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey[200],
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('SubTotal: Rs. $subTotal'),
-                    TextButton.icon(
-                      onPressed: _showDiscountDialog,
-                      icon: const Icon(Icons.discount, color: Colors.teal),
-                      label: Text(
-                        'Discount: ${calculatedDiscount > 0 ? "Rs. $calculatedDiscount" : "Apply"}',
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      body: Platform.isWindows
+          ? Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: Column(
                       children: [
-                        const Text('Total Payable Bill:'),
-                        Text(
-                          'Rs. $finalTotal',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.teal,
-                          ),
-                        ),
+                        _buildCustomerPanel(),
+                        const SizedBox(height: 8),
+                        _buildBillReviewHeading(),
+                        _buildCartList(),
                       ],
                     ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 16,
-                        ),
-                      ),
-                      onPressed: cart.isEmpty || isCheckingOut ? null : _checkout,
-                      icon: isCheckingOut
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.print),
-                      label: Text(isCheckingOut ? 'Saving...' : 'Checkout / Print'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(flex: 3, child: _buildCheckoutPanel()),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                _buildCustomerPanel(),
+                _buildBillReviewHeading(),
+                _buildCartList(),
+                _buildCheckoutPanel(),
               ],
             ),
-            ),
-          ),
-        ],
-      ),
       ),
       ),
     );

@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -146,6 +148,8 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('Salesmen Management'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

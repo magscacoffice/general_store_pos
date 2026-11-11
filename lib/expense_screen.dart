@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -89,6 +91,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('Rozmarra Kharchay (Expenses)'),
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,

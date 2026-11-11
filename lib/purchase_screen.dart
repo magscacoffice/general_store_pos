@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -69,6 +71,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
       title: const Text('Purchase / Stock Entry'),
       backgroundColor: Colors.teal,
       foregroundColor: Colors.white,

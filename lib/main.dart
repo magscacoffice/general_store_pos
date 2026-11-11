@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -10,6 +11,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'auth_gate.dart';
 import 'dashboard_screen.dart';
+import 'sales_screen.dart';
+import 'windows/pos_windows.dart';
 import 'db_helper.dart';
 
 Future<void> _writeWindowsStartupLog(String message,
@@ -38,7 +41,7 @@ Future<void> _writeWindowsStartupLog(String message,
   }
 }
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isWindows) {
@@ -56,7 +59,26 @@ Future<void> main() async {
 
     // The portable Windows edition is local/offline-only.
     DBHelper.localOnlyMode = true;
-    runApp(const KhanBabaPOSApp(windowsLocalMode: true));
+    Map<String, dynamic> windowArguments = <String, dynamic>{};
+    try {
+      windowArguments = await PosWindows.currentArguments();
+    } catch (error, stackTrace) {
+      unawaited(_writeWindowsStartupLog(
+        'Could not read native window arguments; opening Dashboard with a New Sale window.',
+        error,
+        stackTrace,
+      ));
+    }
+    final windowType = windowArguments['type']?.toString() ?? PosWindows.dashboard;
+    // The primary native window is the Dashboard; open a separate cashier window on launch.
+    final openSaleOnStart = windowArguments.isEmpty && windowType == PosWindows.dashboard;
+    final billId = windowArguments['billId']?.toString();
+    runApp(KhanBabaPOSApp(
+      windowsLocalMode: true,
+      windowsWindowType: windowType,
+      windowsBillId: billId,
+      windowsOpenSaleOnStart: openSaleOnStart,
+    ));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_writeWindowsStartupLog('First Dart frame rendered.'));
     });
@@ -69,8 +91,17 @@ Future<void> main() async {
 
 class KhanBabaPOSApp extends StatelessWidget {
   final bool windowsLocalMode;
+  final String windowsWindowType;
+  final String? windowsBillId;
+  final bool windowsOpenSaleOnStart;
 
-  const KhanBabaPOSApp({super.key, this.windowsLocalMode = false});
+  const KhanBabaPOSApp({
+    super.key,
+    this.windowsLocalMode = false,
+    this.windowsWindowType = PosWindows.dashboard,
+    this.windowsBillId,
+    this.windowsOpenSaleOnStart = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -80,20 +111,51 @@ class KhanBabaPOSApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
+        visualDensity: windowsLocalMode ? VisualDensity.compact : VisualDensity.standard,
+        scaffoldBackgroundColor: windowsLocalMode ? const Color(0xFFF3F6F8) : null,
+        appBarTheme: windowsLocalMode
+            ? const AppBarTheme(
+                centerTitle: false,
+                elevation: 0,
+                toolbarHeight: 58,
+              )
+            : const AppBarTheme(),
+        inputDecorationTheme: windowsLocalMode
+            ? const InputDecorationTheme(
+                isDense: true,
+                border: OutlineInputBorder(),
+              )
+            : const InputDecorationTheme(),
       ),
-      home: windowsLocalMode ? const WindowsStartupGate() : const AuthGate(),
+      home: windowsLocalMode
+          ? WindowsStartupGate(
+              windowType: windowsWindowType,
+              billId: windowsBillId,
+              openSaleOnStart: windowsOpenSaleOnStart,
+            )
+          : const AuthGate(),
     );
   }
 }
 
 class WindowsStartupGate extends StatefulWidget {
-  const WindowsStartupGate({super.key});
+  final String windowType;
+  final String? billId;
+  final bool openSaleOnStart;
+
+  const WindowsStartupGate({
+    super.key,
+    required this.windowType,
+    this.billId,
+    this.openSaleOnStart = false,
+  });
 
   @override
   State<WindowsStartupGate> createState() => _WindowsStartupGateState();
 }
 
 class _WindowsStartupGateState extends State<WindowsStartupGate> {
+  String? _billId;
   bool _loading = true;
   bool _ready = false;
   Object? _error;
@@ -102,6 +164,7 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
   @override
   void initState() {
     super.initState();
+    _billId = widget.billId;
     unawaited(_initialize());
   }
 
@@ -122,12 +185,55 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
       await DBHelper.database;
       unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
 
+      if (widget.windowType == PosWindows.sale && (_billId == null || _billId!.isEmpty)) {
+        final pending = await DBHelper.getPendingBills();
+        _billId = pending.isNotEmpty
+            ? pending.first['bill_id']?.toString()
+            : PosWindows.newBillId();
+      }
+
+      try {
+        final nativeWindow = WindowManager.instance.getCurrent();
+        if (nativeWindow != null) {
+          final isDashboard = widget.windowType == PosWindows.dashboard;
+          nativeWindow.title = isDashboard
+              ? 'Khan Baba POS - Dashboard'
+              : 'Khan Baba POS - New Sale';
+          nativeWindow.minimumSize = const Size(980, 650).toNative();
+          nativeWindow.setSize(const Size(1240, 740).toNative(), false);
+          nativeWindow.center();
+          nativeWindow.show();
+        }
+      } catch (error, stackTrace) {
+        unawaited(_writeWindowsStartupLog(
+          'Native window styling could not be applied; continuing with default window.',
+          error,
+          stackTrace,
+        ));
+      }
+
       if (!mounted) return;
       setState(() {
         _ready = true;
         _loading = false;
         _error = null;
       });
+
+      if (widget.openSaleOnStart) {
+        try {
+          final pending = await DBHelper.getPendingBills();
+          final initialBillId = pending.isNotEmpty
+              ? pending.first['bill_id']?.toString()
+              : PosWindows.newBillId();
+          await PosWindows.openSale(billId: initialBillId);
+        } catch (error, stackTrace) {
+          unawaited(_writeWindowsStartupLog(
+            'Automatic New Sale window could not be opened.',
+            error,
+            stackTrace,
+          ));
+        }
+      }
     } catch (error, stackTrace) {
       final logPath = await _writeStartupLog(error, stackTrace);
       await _writeWindowsStartupLog(
@@ -172,7 +278,12 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_ready) return const DashboardScreen(role: 'admin');
+    if (_ready) {
+      if (widget.windowType == PosWindows.dashboard) {
+        return const DashboardScreen(role: 'admin');
+      }
+      return SalesScreen(billId: _billId);
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F8),

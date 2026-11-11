@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -205,6 +207,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('Inventory Management'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

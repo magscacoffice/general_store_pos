@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -79,6 +81,8 @@ class _RemindersScreenState extends State<RemindersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('وصولی اور ریمائنڈرز'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

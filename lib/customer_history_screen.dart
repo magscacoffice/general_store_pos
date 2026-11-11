@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -41,6 +43,8 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     final balance = (widget.customer['balance'] as num?)?.toDouble() ?? 0;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: Text('${widget.customer['name']} - History'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

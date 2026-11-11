@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'salesmen_management_screen.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 
@@ -13,6 +16,7 @@ import 'customer_khata_screen.dart';
 import 'profit_loss_screen.dart';
 import 'party_screen.dart';
 import 'reminders_screen.dart';
+import 'windows/pos_windows.dart';
 
 class DashboardScreen extends StatelessWidget {
   final String role;
@@ -23,11 +27,20 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('خان بابا جنرل سٹور'),
         centerTitle: false,
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
+          if (Platform.isWindows) ...[
+            FilledButton.icon(
+              onPressed: PosWindows.openSale,
+              icon: const Icon(Icons.add_shopping_cart),
+              label: const Text('New Sale'),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (!DBHelper.localOnlyMode) ...[
             IconButton(
               tooltip: 'Sync store data',
@@ -89,7 +102,7 @@ class DashboardScreen extends StatelessWidget {
                           child: ListView(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             children: [
-                              _desktopNavItem(context, 'New Sale / Billing', Icons.point_of_sale, const SalesScreen(), selected: true),
+                              _desktopNavItem(context, 'New Sale / Billing', Icons.point_of_sale, const SalesScreen()),
                               _desktopNavItem(context, 'Inventory / Stock', Icons.inventory_2, const InventoryScreen()),
                               _desktopNavItem(context, 'Sales History', Icons.receipt_long, const HistoryScreen()),
                               _desktopNavItem(context, 'Sales Reports', Icons.bar_chart, const SalesReportScreen()),
@@ -205,10 +218,16 @@ class DashboardScreen extends StatelessWidget {
           fontWeight: selected ? FontWeight.bold : FontWeight.w500,
           fontSize: 13,
         )),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => targetScreen),
-        ),
+        onTap: () {
+          if (Platform.isWindows && targetScreen is SalesScreen) {
+            unawaited(PosWindows.openSale());
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => targetScreen),
+            );
+          }
+        },
       ),
     );
   }
@@ -225,10 +244,14 @@ class DashboardScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => targetScreen),
-          );
+          if (Platform.isWindows && targetScreen is SalesScreen) {
+            unawaited(PosWindows.openSale());
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => targetScreen),
+            );
+          }
         },
         borderRadius: BorderRadius.circular(14),
         child: Padding(

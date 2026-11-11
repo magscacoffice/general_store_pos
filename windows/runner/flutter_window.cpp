@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "desktop_multi_window/desktop_multi_window_plugin.h"
 #include "startup_diagnostics.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -29,7 +30,14 @@ bool FlutterWindow::OnCreate() {
 
   LogWindowsStartup("Registering Windows plugins.");
   RegisterPlugins(flutter_controller_->engine());
-  LogWindowsStartup("Windows plugins registered.");
+  DesktopMultiWindowSetWindowCreatedCallback([](void* controller) {
+    auto* view_controller =
+        reinterpret_cast<flutter::FlutterViewController*>(controller);
+    if (view_controller && view_controller->engine()) {
+      RegisterPlugins(view_controller->engine());
+    }
+  });
+  LogWindowsStartup("Windows plugins registered for the main and secondary windows.");
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   LogWindowsStartup("Flutter child view attached to host window.");

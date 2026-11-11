@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -45,6 +47,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     final profit = data['profit'] ?? 0;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('Profit / Loss'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,

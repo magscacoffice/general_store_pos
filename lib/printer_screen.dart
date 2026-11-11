@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -644,7 +646,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('58mm Bill Preview')),
+            appBar: AppBar(
+              automaticallyImplyLeading: !Platform.isWindows,
+              leading: desktopReturnButton(),
+              title: const Text('58mm Bill Preview'),
+            ),
             body: PdfPreview(
               build: (_) async => bytes,
               canChangeOrientation: false,
@@ -671,6 +677,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopReturnButton(),
         title: const Text('Printer & Invoice'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
