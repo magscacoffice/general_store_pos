@@ -234,17 +234,29 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
 
+  bool _isPreparingForDatabaseRestore = false;
+
   Future<void> _flushBillBeforeDatabaseRestore() async {
     if (!Platform.isWindows) return;
-    await _pendingSaveQueue;
-    await _persistActiveBill();
-    await _pendingSaveQueue;
+    _isPreparingForDatabaseRestore = true;
+    try {
+      await _pendingSaveQueue;
+      await _persistActiveBill();
+      await _pendingSaveQueue;
+    } catch (_) {
+      _isPreparingForDatabaseRestore = false;
+      rethrow;
+    }
   }
 
   @override
   void dispose() {
     if (Platform.isWindows) windowsBeforeDatabaseRestore = null;
-    unawaited(_persistActiveBill());
+    // The restore handler has already flushed the bill and closed SQLite.
+    // Do not let dispose() reopen the database while the restore replaces it.
+    if (!_isPreparingForDatabaseRestore) {
+      unawaited(_persistActiveBill());
+    }
     receivedAmountController.dispose();
     _usbBarcodeController.dispose();
     _usbBarcodeFocusNode.dispose();

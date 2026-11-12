@@ -17,6 +17,7 @@ import 'sales_screen.dart';
 import 'windows/pos_windows.dart';
 import 'windows/desktop_theme.dart';
 import 'db_helper.dart';
+import 'update_manager.dart';
 
 Future<void> _writeWindowsStartupLog(String message,
     [Object? error, StackTrace? stackTrace]) async {
@@ -121,7 +122,7 @@ class KhanBabaPOSApp extends StatelessWidget {
               billId: windowsBillId,
               openSaleOnStart: windowsOpenSaleOnStart,
             )
-          : const AuthGate(),
+          : const UpdateAwareHome(child: AuthGate()),
     );
   }
 }
@@ -187,12 +188,19 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
           if (call.method != 'prepare_for_restore' || widget.windowType != PosWindows.sale) {
             throw MissingPluginException('Unsupported window command: ${call.method}');
           }
-          await windowsBeforeDatabaseRestore?.call();
-          await DBHelper.closeDatabase();
-          _allowCloseForRestore = true;
-          final restoreWindow = WindowManager.instance.getCurrent();
-          if (restoreWindow != null) restoreWindow.close();
-          return true;
+          try {
+            await windowsBeforeDatabaseRestore?.call();
+            await DBHelper.closeDatabase();
+            _allowCloseForRestore = true;
+            final restoreWindow = WindowManager.instance.getCurrent();
+            if (restoreWindow != null) {
+              await restoreWindow.close();
+            }
+            return true;
+          } catch (_) {
+            _allowCloseForRestore = false;
+            rethrow;
+          }
         });
         final nativeWindow = WindowManager.instance.getCurrent();
         if (nativeWindow != null) {

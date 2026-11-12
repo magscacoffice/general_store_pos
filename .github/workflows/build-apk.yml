@@ -51,21 +51,118 @@ jobs:
           grep -nE 'kotlin|com.android.application' android/settings.gradle.kts
           cat android/gradle/wrapper/gradle-wrapper.properties
 
+      - name: Configure persistent Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 secret is required for safe in-place app updates."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/khanbaba-release.jks
+          test -s android/app/khanbaba-release.jks
+
       - name: Get dependencies
         run: flutter pub get
 
       - name: Build universal release APK (maximum ABI compatibility)
-        run: flutter build apk --release
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PATH: android/app/khanbaba-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number="$BUILD_NUMBER" --dart-define=APP_BUILD_NUMBER="$BUILD_NUMBER"
 
       - name: Build lightweight ABI-specific release APKs
+        env:
+          ANDROID_KEYSTORE_PATH: android/app/khanbaba-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build apk --release --split-per-abi
 
+      - name: Create APK checksum
+        run: sha256sum build/app/outputs/flutter-apk/app-release.apk > build/app/outputs/flutter-apk/app-release.apk.sha256
+
       - name: Show APK sizes
-        run: ls -lh build/app/outputs/flutter-apk/*.apk
+        run: ls -lh build/app/outputs/flutter-apk/*
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: khan-baba-general-store-release-apks-universal-and-split
-          path: build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/*.apk*
           if-no-files-found: error
+
+  publish-release:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare release version
+        id: release
+        run: |
+          VERSION=$(awk '/^version:/{print $2}' pubspec.yaml)
+          VERSION_NAME="${VERSION%%+*}"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "build_number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION_NAME}-build${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: khan-baba-general-store-release-apks-universal-and-split
+          path: release-assets
+
+      - name: Publish permanent GitHub Release
+        id: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Khan Baba POS ${{ steps.release.outputs.version_name }} (Build ${{ steps.release.outputs.build_number }})
+          body: |
+            Khan Baba POS Android update.
+
+            Build: ${{ steps.release.outputs.build_number }}
+            Install the universal `app-release.apk` file.
+          files: |
+            release-assets/app-release.apk
+            release-assets/app-release.apk.sha256
+          make_latest: true
+
+      - name: Authenticate with Firebase for push notification
+        id: firebase-auth
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Notify Android devices about the new update
+        if: ${{ steps.firebase-auth.outputs.access_token != '' }}
+        env:
+          ACCESS_TOKEN: ${{ steps.firebase-auth.outputs.access_token }}
+          VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          BUILD_NUMBER: ${{ steps.release.outputs.build_number }}
+          RELEASE_URL: https://github.com/magscacoffice/general_store_pos/releases/tag/${{ steps.release.outputs.tag }}
+        run: |
+          payload=$(jq -n \
+            --arg version "$VERSION_NAME" \
+            --arg build "$BUILD_NUMBER" \
+            --arg url "$RELEASE_URL" \
+            '{message:{topic:"khan-baba-pos-updates",notification:{title:"Khan Baba POS update available",body:("Version "+$version+" build "+$build+" is ready to install.")},data:{type:"app_update",version:$version,build:$build,release_url:$url}}}')
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://fcm.googleapis.com/v1/projects/khan-baba-general-store/messages:send"
