@@ -17,6 +17,7 @@ import 'sales_screen.dart';
 import 'windows/pos_windows.dart';
 import 'windows/desktop_theme.dart';
 import 'db_helper.dart';
+import 'drive_sync_service.dart';
 import 'update_manager.dart';
 
 Future<void> _writeWindowsStartupLog(String message,
@@ -90,6 +91,11 @@ Future<void> main(List<String> args) async {
   }
 
   await Firebase.initializeApp();
+  try {
+    await DriveSyncService.initialize();
+  } catch (error) {
+    debugPrint('Cloud sync initialization deferred: $error');
+  }
   runApp(const KhanBabaPOSApp());
 }
 
@@ -173,6 +179,17 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
       DBHelper.localOnlyMode = true;
       unawaited(_writeWindowsStartupLog('Opening local database.'));
       await DBHelper.database;
+      try {
+        await DriveSyncService.initialize();
+        await DriveSyncService.restoreStatus();
+        DriveSyncService.startAutoSync();
+      } catch (error, stackTrace) {
+        unawaited(_writeWindowsStartupLog(
+          'Cloud sync initialization deferred; local POS will continue offline.',
+          error,
+          stackTrace,
+        ));
+      }
       unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
 
       if (widget.windowType == PosWindows.sale && (_billId == null || _billId!.isEmpty)) {

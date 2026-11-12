@@ -1,5 +1,5 @@
 name: khan_baba_general_store
-description: "A professional offline-first POS application with Firebase Sync."
+description: "A professional offline-first POS application with Windows-master Google Drive sync."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -25,6 +25,7 @@ dependencies:
   path: ^1.9.1
   connectivity_plus: ^7.3.2
   google_sign_in: ^7.2.0
+  flutter_secure_storage: ^11.2.0
   mobile_scanner: ^5.2.3
   permission_handler: ^11.3.1
   flutter_contacts: ^2.6.0

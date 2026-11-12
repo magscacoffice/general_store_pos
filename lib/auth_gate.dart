@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
 import 'login_screen.dart';
 import 'db_helper.dart';
+import 'drive_sync_service.dart';
 
 const String storeId = 'khan-baba-general-store';
 
@@ -46,6 +47,7 @@ class _AuthGateState extends State<AuthGate> {
       final cachedData = cached.data();
       if (_isAllowed(cachedData)) {
         DBHelper.startAutoSync();
+        DriveSyncService.startAutoSync();
         unawaited(DBHelper.syncAllData());
         unawaited(_verifyMembershipOnline(user));
         return cachedData;
@@ -60,6 +62,7 @@ class _AuthGateState extends State<AuthGate> {
     final serverData = serverSnapshot.data();
     if (_isAllowed(serverData)) {
       DBHelper.startAutoSync();
+      DriveSyncService.startAutoSync();
       unawaited(DBHelper.syncAllData());
       return serverData;
     }
@@ -73,6 +76,7 @@ class _AuthGateState extends State<AuthGate> {
           .timeout(const Duration(seconds: 8));
       if (!_isAllowed(snapshot.data())) {
         await DBHelper.stopAutoSync();
+        await DriveSyncService.stopAutoSync();
         if (mounted && _lastUser?.uid == user.uid) {
           setState(() => _membershipRevoked = true);
         }
@@ -105,6 +109,7 @@ class _AuthGateState extends State<AuthGate> {
           _membershipFuture = null;
           _membershipRevoked = false;
           DBHelper.stopAutoSync();
+          DriveSyncService.stopAutoSync();
           return const LoginScreen();
         }
 

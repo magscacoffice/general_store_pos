@@ -12,6 +12,8 @@ class DBHelper {
   static Database? _db;
   // Windows portable mode runs locally without Firebase/cloud synchronization.
   static bool localOnlyMode = false;
+  // Once Google Drive is paired, pause Android Firestore data sync so two cloud
+  // providers cannot overwrite each other's inventory or account balances.
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _storeId = 'khan-baba-general-store';
 
@@ -705,6 +707,824 @@ class DBHelper {
 
   static Future<void> syncProductsFromCloud() => syncAllData();
 
+
+  static Future<void> _recordDriveTombstone(
+    DatabaseExecutor txn,
+    String entityType,
+    String entityKey, {
+    String sourceDeviceId = 'local',
+  }) async {
+    await txn.insert(
+      'drive_sync_tombstones',
+      {
+        'entity_type': entityType,
+        'entity_key': entityKey,
+        'deleted_at': DateTime.now().toUtc().toIso8601String(),
+        'source_device_id': sourceDeviceId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await txn.delete(
+      'drive_sync_ignored_tombstones',
+      where: 'entity_type = ? AND entity_key = ?',
+      whereArgs: [entityType, entityKey],
+    );
+  }
+
+  /// Export relational data without SQLite row IDs. Cloud references use stable sync IDs.
+  static Future<Map<String, dynamic>> exportDriveSnapshot() async {
+    await _ensureLegacySyncIds();
+    final db = await database;
+    Future<List<Map<String, dynamic>>> rows(
+      String table, {
+      List<String> remove = const ['id'],
+    }) async {
+      final result = await db.query(table, orderBy: 'id ASC');
+      return result.map((row) {
+        final value = Map<String, dynamic>.from(row);
+        for (final key in remove) {
+          value.remove(key);
+        }
+        return value;
+      }).toList();
+    }
+
+    return {
+      'schemaVersion': 1,
+      'products': await rows('products'),
+      'parties': await rows('parties'),
+      'sales': await rows('sales', remove: const ['id', 'customer_id']),
+      'sale_items': await rows('sale_items', remove: const ['id', 'sale_id', 'product_id']),
+      'purchases': await rows('purchases', remove: const ['id', 'product_id', 'supplier_id']),
+      'khata_transactions': await rows('khata_transactions', remove: const ['id', 'party_id']),
+      'expenses': await rows('expenses'),
+      'reminders': await rows('reminders'),
+      'sale_returns': await rows('sale_returns', remove: const ['id', 'sale_id', 'customer_id']),
+      'sale_return_items': await rows('sale_return_items', remove: const ['id', 'return_id', 'sale_item_id', 'product_id']),
+      'tombstones': await rows('drive_sync_tombstones'),
+    };
+  }
+
+  static Future<List<Map<String, dynamic>>> getDriveSyncConflicts() async {
+    final db = await database;
+    return db.query(
+      'drive_sync_conflicts',
+      where: "status = 'pending'",
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  static Future<int> getDriveSyncConflictCount() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      "SELECT COUNT(*) AS total FROM drive_sync_conflicts WHERE status = 'pending'",
+    );
+    return (result.first['total'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<void> resolveDriveSyncConflict(
+    int conflictId, {
+    required bool useRemote,
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'drive_sync_conflicts',
+        where: "id = ? AND status = 'pending'",
+        whereArgs: [conflictId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final conflict = rows.first;
+      final remote = jsonDecode(conflict['remote_payload'].toString());
+      if (remote is! Map) throw const FormatException('Invalid cloud conflict payload.');
+      final payload = Map<String, dynamic>.from(remote);
+      final entityType = conflict['entity_type'].toString();
+      final sourceDeviceId = conflict['source_device_id'].toString();
+      if (entityType == 'product_readd' || entityType == 'party_readd') {
+        final baseType = entityType == 'product_readd' ? 'product_readd' : 'party_readd';
+        final remoteKey = entityType == 'product_readd'
+            ? (payload['barcode'] ?? conflict['entity_key']).toString()
+            : (payload['sync_id'] ?? conflict['entity_key']).toString();
+        if (!useRemote && payload['_has_related_records'] == true) {
+          throw Exception('Doosre device par is record se linked transactions mojood hain. History bachane ke liye record restore karna zaroori hai.');
+        }
+        if (useRemote) {
+          if (entityType == 'product_readd') {
+            final values = <String, dynamic>{
+              'name': payload['name']?.toString() ?? '',
+              'barcode': remoteKey,
+              'price': _numberAsDouble(payload['price']),
+              'purchasePrice': _numberAsDouble(payload['purchasePrice']),
+              'wholesalePrice': _numberAsDouble(payload['wholesalePrice']),
+              'quantity': _numberAsInt(payload['quantity']),
+              'damaged_quantity': _numberAsInt(payload['damaged_quantity']),
+              'is_active': _numberAsInt(payload['is_active'] ?? 1),
+            };
+            await txn.insert('products', values, conflictAlgorithm: ConflictAlgorithm.replace);
+            await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', remoteKey]);
+          } else {
+            final values = Map<String, dynamic>.from(payload)
+              ..remove('id')
+              ..remove('_has_related_records')
+              ..['sync_id'] = remoteKey
+              ..['balance'] = _numberAsDouble(payload['balance']);
+            await txn.insert('parties', values, conflictAlgorithm: ConflictAlgorithm.replace);
+            await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['party', remoteKey]);
+            final aliases = await txn.query(
+              'drive_sync_aliases',
+              columns: ['local_sync_id'],
+              where: 'source_device_id = ? AND remote_sync_id = ?',
+              whereArgs: [sourceDeviceId, remoteKey],
+            );
+            for (final alias in aliases) {
+              await txn.delete(
+                'drive_sync_tombstones',
+                where: 'entity_type = ? AND entity_key = ?',
+                whereArgs: ['party', alias['local_sync_id']],
+              );
+            }
+          }
+          await txn.delete(
+            'drive_sync_ignored_tombstones',
+            where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?',
+            whereArgs: [sourceDeviceId, baseType, remoteKey],
+          );
+        } else {
+          await txn.insert(
+            'drive_sync_ignored_tombstones',
+            {
+              'source_device_id': sourceDeviceId,
+              'entity_type': baseType,
+              'entity_key': remoteKey,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } else if (entityType == 'product_delete' || entityType == 'party_delete') {
+        final baseType = entityType == 'product_delete' ? 'product' : 'party';
+        final remoteKey = entityType == 'product_delete'
+            ? (payload['barcode'] ?? conflict['entity_key']).toString()
+            : (payload['sync_id'] ?? conflict['entity_key']).toString();
+        if (useRemote) {
+          if (entityType == 'product_delete') {
+            final barcode = remoteKey;
+            final productRows = await txn.query('products', where: 'barcode = ?', whereArgs: [barcode], limit: 1);
+            if (productRows.isNotEmpty) {
+              final product = productRows.first;
+              final stock = _numberAsInt(product['quantity']);
+              final damaged = _numberAsInt(product['damaged_quantity']);
+              final sales = await txn.rawQuery('SELECT COUNT(*) AS total FROM sale_items WHERE barcode = ?', [barcode]);
+              final purchases = await txn.rawQuery('SELECT COUNT(*) AS total FROM purchases WHERE barcode = ?', [barcode]);
+              if (stock != 0 || damaged != 0 ||
+                  (sales.first['total'] as num).toInt() > 0 ||
+                  (purchases.first['total'] as num).toInt() > 0) {
+                throw Exception('Is product par stock ya transaction history mojood hai. Pehle Windows master ko preserve karein.');
+              }
+              await txn.delete('products', where: 'barcode = ?', whereArgs: [barcode]);
+            }
+            await _recordDriveTombstone(txn, 'product', barcode, sourceDeviceId: sourceDeviceId);
+          } else {
+            final localSyncId = conflict['entity_key'].toString();
+            final partyRows = await txn.query('parties', where: 'sync_id = ?', whereArgs: [localSyncId], limit: 1);
+            if (partyRows.isNotEmpty) {
+              final partyId = (partyRows.first['id'] as num).toInt();
+              final refs = await txn.rawQuery(
+                '''SELECT (SELECT COUNT(*) FROM sales WHERE customer_id = ?) +
+                          (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) +
+                          (SELECT COUNT(*) FROM purchases WHERE supplier_id = ?) +
+                          (SELECT COUNT(*) FROM sale_returns WHERE customer_id = ?) AS total''',
+                [partyId, partyId, partyId, partyId],
+              );
+              final balance = _numberAsDouble(partyRows.first['balance']);
+              if ((refs.first['total'] as num).toInt() > 0 || balance.abs() > 0.000001) {
+                throw Exception('Is party ki transaction history ya outstanding balance mojood hai. Windows master record preserve karein.');
+              }
+              await txn.delete('parties', where: 'id = ?', whereArgs: [partyId]);
+            }
+            await _recordDriveTombstone(txn, 'party', localSyncId, sourceDeviceId: sourceDeviceId);
+            if (remoteKey != localSyncId) {
+              await _recordDriveTombstone(txn, 'party', remoteKey, sourceDeviceId: sourceDeviceId);
+            }
+          }
+        } else {
+          await txn.insert(
+            'drive_sync_ignored_tombstones',
+            {
+              'source_device_id': sourceDeviceId,
+              'entity_type': baseType,
+              'entity_key': remoteKey,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      } else if (useRemote) {
+        if (entityType == 'product') {
+          final barcode = conflict['entity_key'].toString();
+          final values = <String, dynamic>{
+            'name': payload['name'],
+            'price': _numberAsDouble(payload['price']),
+            'purchasePrice': _numberAsDouble(payload['purchasePrice']),
+            'wholesalePrice': _numberAsDouble(payload['wholesalePrice']),
+            'quantity': _numberAsInt(payload['quantity']),
+            'damaged_quantity': _numberAsInt(payload['damaged_quantity']),
+            'is_active': _numberAsInt(payload['is_active'] ?? 1),
+          };
+          await txn.update('products', values, where: 'barcode = ?', whereArgs: [barcode]);
+        } else if (entityType == 'party') {
+          final localSyncId = conflict['entity_key'].toString();
+          final values = Map<String, dynamic>.from(payload)
+            ..remove('sync_id')
+            ..remove('updated_at');
+          await txn.update('parties', values, where: 'sync_id = ?', whereArgs: [localSyncId]);
+        }
+      }
+      await txn.update(
+        'drive_sync_conflicts',
+        {
+          'status': 'resolved',
+          'resolution': useRemote ? 'use_remote' : 'keep_local',
+          'resolved_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [conflictId],
+      );
+    });
+  }
+
+  static Future<bool> mergeDriveSnapshot(
+    Map<String, dynamic> snapshot, {
+    required String sourceDeviceId,
+    required String snapshotHash,
+    bool applyMasterState = false,
+    bool detectConflicts = true,
+  }) async {
+    final data = snapshot['data'];
+    if (snapshot['schemaVersion'] != 1 || data is! Map) {
+      throw const FormatException('Cloud snapshot version or data is invalid.');
+    }
+    const requiredCollections = [
+      'products',
+      'parties',
+      'sales',
+      'sale_items',
+      'purchases',
+      'khata_transactions',
+      'expenses',
+      'reminders',
+      'sale_returns',
+      'sale_return_items',
+      'tombstones',
+    ];
+    for (final name in requiredCollections) {
+      if (data[name] is! List) {
+        throw FormatException('Cloud snapshot collection is missing: $name');
+      }
+    }
+    final db = await database;
+    Future<void> addConflict(
+      DatabaseExecutor txn, {
+      required String type,
+      required String key,
+      required Map<String, dynamic> local,
+      required Map<String, dynamic> remote,
+    }) async {
+      final existing = await txn.query(
+        'drive_sync_conflicts',
+        columns: ['status'],
+        where: 'source_device_id = ? AND snapshot_hash = ? AND entity_type = ? AND entity_key = ?',
+        whereArgs: [sourceDeviceId, snapshotHash, type, key],
+        limit: 1,
+      );
+      if (existing.isNotEmpty && existing.first['status'] == 'resolved') return;
+      final priorKeepLocal = await txn.query(
+        'drive_sync_conflicts',
+        columns: ['remote_payload'],
+        where: "source_device_id = ? AND entity_type = ? AND entity_key = ? AND status = 'resolved' AND resolution = 'keep_local'",
+        whereArgs: [sourceDeviceId, type, key],
+        orderBy: 'id DESC',
+        limit: 1,
+      );
+      if (priorKeepLocal.isNotEmpty &&
+          priorKeepLocal.first['remote_payload']?.toString() == jsonEncode(remote)) {
+        return;
+      }
+      await txn.insert(
+        'drive_sync_conflicts',
+        {
+          'source_device_id': sourceDeviceId,
+          'snapshot_hash': snapshotHash,
+          'entity_type': type,
+          'entity_key': key,
+          'local_payload': jsonEncode(local),
+          'remote_payload': jsonEncode(remote),
+          'status': 'pending',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+
+    List<Map<String, dynamic>> collection(String name) {
+      final value = data[name];
+      if (value is! List) return [];
+      return value.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList();
+    }
+
+    await db.transaction((txn) async {
+      await txn.update(
+        'drive_sync_conflicts',
+        {'status': 'superseded'},
+        where: "source_device_id = ? AND snapshot_hash != ? AND status = 'pending'",
+        whereArgs: [sourceDeviceId, snapshotHash],
+      );
+      // Products use barcode as their stable identity. The Windows master never
+      // silently replaces stock or pricing with a remote device's snapshot.
+      for (final remote in collection('products')) {
+        final barcode = remote['barcode']?.toString().trim() ?? '';
+        if (barcode.isEmpty) continue;
+        final deletedLocally = await txn.query(
+          'drive_sync_tombstones',
+          columns: ['entity_key'],
+          where: 'entity_type = ? AND entity_key = ?',
+          whereArgs: ['product', barcode],
+          limit: 1,
+        );
+        if (deletedLocally.isNotEmpty && !applyMasterState) {
+          final ignoredReadd = await txn.query(
+            'drive_sync_ignored_tombstones',
+            columns: ['entity_key'],
+            where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?',
+            whereArgs: [sourceDeviceId, 'product_readd', barcode],
+            limit: 1,
+          );
+          if (ignoredReadd.isEmpty && detectConflicts) {
+            await addConflict(
+              txn,
+              type: 'product_readd',
+              key: barcode,
+              local: {'_deleted': true, 'barcode': barcode},
+              remote: {
+                'name': remote['name']?.toString() ?? '',
+                'barcode': barcode,
+                'price': _numberAsDouble(remote['price']),
+                'purchasePrice': _numberAsDouble(remote['purchasePrice']),
+                'wholesalePrice': _numberAsDouble(remote['wholesalePrice']),
+                'damaged_quantity': _numberAsInt(remote['damaged_quantity']),
+                'quantity': _numberAsInt(remote['quantity']),
+                'is_active': _numberAsInt(remote['is_active'] ?? 1),
+                '_has_related_records': collection('sale_items').any((item) => item['barcode']?.toString() == barcode) ||
+                    collection('purchases').any((item) => item['barcode']?.toString() == barcode),
+              },
+            );
+          }
+          continue;
+        }
+        await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', barcode]);
+        await txn.delete('drive_sync_ignored_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', barcode]);
+        final existing = await txn.query('products', where: 'barcode = ?', whereArgs: [barcode], limit: 1);
+        final values = <String, dynamic>{
+          'name': remote['name']?.toString() ?? '',
+          'barcode': barcode,
+          'price': _numberAsDouble(remote['price']),
+          'purchasePrice': _numberAsDouble(remote['purchasePrice']),
+          'wholesalePrice': _numberAsDouble(remote['wholesalePrice']),
+          'damaged_quantity': _numberAsInt(remote['damaged_quantity']),
+          'quantity': _numberAsInt(remote['quantity']),
+          'is_active': _numberAsInt(remote['is_active'] ?? 1),
+        };
+        if (existing.isEmpty) {
+          await txn.insert('products', values);
+        } else if (applyMasterState) {
+          await txn.update('products', values, where: 'barcode = ?', whereArgs: [barcode]);
+        } else {
+          final local = existing.first;
+          final different = ['name', 'price', 'purchasePrice', 'wholesalePrice', 'damaged_quantity', 'quantity', 'is_active']
+              .any((key) => (local[key] ?? 0).toString() != (values[key] ?? 0).toString());
+          if (different && detectConflicts) {
+            await addConflict(
+              txn,
+              type: 'product',
+              key: barcode,
+              local: Map<String, dynamic>.from(local)..remove('id'),
+              remote: values,
+            );
+          }
+        }
+      }
+
+      final partyIds = <String, int>{};
+      for (final remote in collection('parties')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty) continue;
+        var deletedPartyKeys = <String>[syncId];
+        final previousAlias = await txn.query(
+          'drive_sync_aliases',
+          columns: ['local_sync_id'],
+          where: 'source_device_id = ? AND remote_sync_id = ?',
+          whereArgs: [sourceDeviceId, syncId],
+          limit: 1,
+        );
+        if (previousAlias.isNotEmpty) deletedPartyKeys.add(previousAlias.first['local_sync_id'].toString());
+        var deletedPartyRows = <Map<String, Object?>>[];
+        for (final deletedKey in deletedPartyKeys) {
+          deletedPartyRows = await txn.query(
+            'drive_sync_tombstones',
+            columns: ['entity_key'],
+            where: 'entity_type = ? AND entity_key = ?',
+            whereArgs: ['party', deletedKey],
+            limit: 1,
+          );
+          if (deletedPartyRows.isNotEmpty) break;
+        }
+        if (deletedPartyRows.isNotEmpty && !applyMasterState) {
+          final ignoredReadd = await txn.query(
+            'drive_sync_ignored_tombstones',
+            columns: ['entity_key'],
+            where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?',
+            whereArgs: [sourceDeviceId, 'party_readd', syncId],
+            limit: 1,
+          );
+          if (ignoredReadd.isEmpty && detectConflicts) {
+            final remotePartyPayload = Map<String, dynamic>.from(remote)..remove('id');
+            remotePartyPayload['_has_related_records'] =
+                collection('sales').any((sale) => sale['customer_sync_id']?.toString() == syncId) ||
+                collection('khata_transactions').any((entry) => entry['party_sync_id']?.toString() == syncId) ||
+                collection('purchases').any((purchase) => purchase['supplier_sync_id']?.toString() == syncId) ||
+                collection('sale_returns').any((saleReturn) => saleReturn['party_sync_id']?.toString() == syncId);
+            await addConflict(
+              txn,
+              type: 'party_readd',
+              key: syncId,
+              local: {'_deleted': true, 'sync_id': syncId},
+              remote: remotePartyPayload,
+            );
+          }
+          continue;
+        }
+        await txn.delete(
+          'drive_sync_tombstones',
+          where: 'entity_type = ? AND entity_key IN (?, ?)',
+          whereArgs: ['party', syncId, deletedPartyKeys.last],
+        );
+        var localRows = await txn.query('parties', where: 'sync_id = ?', whereArgs: [syncId], limit: 1);
+        if (localRows.isEmpty) {
+          final alias = await txn.query(
+            'drive_sync_aliases',
+            columns: ['local_sync_id'],
+            where: 'source_device_id = ? AND remote_sync_id = ?',
+            whereArgs: [sourceDeviceId, syncId],
+            limit: 1,
+          );
+          if (alias.isNotEmpty) {
+            localRows = await txn.query('parties', where: 'sync_id = ?', whereArgs: [alias.first['local_sync_id']], limit: 1);
+          }
+        }
+        if (localRows.isEmpty) {
+          final name = (remote['name'] ?? '').toString().trim().toLowerCase();
+          final phone = (remote['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+          final matches = await txn.query('parties');
+          final exact = phone.isEmpty ? <Map<String, Object?>>[] : matches.where((row) =>
+            (row['name'] ?? '').toString().trim().toLowerCase() == name &&
+            (row['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '') == phone &&
+            row['type'] == remote['type']).toList();
+          if (exact.length == 1) localRows = [exact.first];
+        }
+        if (localRows.isEmpty) {
+          final values = Map<String, dynamic>.from(remote)
+            ..remove('id')
+            ..['sync_id'] = syncId
+            ..['customer_type'] = remote['customer_type'] ?? 'Khata'
+            ..['balance'] = _numberAsDouble(remote['balance']);
+          final id = await txn.insert('parties', values);
+          partyIds[syncId] = id;
+          await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['party', syncId]);
+          await txn.delete('drive_sync_ignored_tombstones', where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?', whereArgs: [sourceDeviceId, 'party', syncId]);
+          continue;
+        }
+        final local = localRows.first;
+        final localId = (local['id'] as num).toInt();
+        final localSyncId = local['sync_id']?.toString() ?? syncId;
+        partyIds[syncId] = localId;
+        await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key IN (?, ?)', whereArgs: ['party', syncId, localSyncId]);
+        final oldAliases = await txn.query(
+          'drive_sync_aliases',
+          columns: ['remote_sync_id'],
+          where: 'source_device_id = ? AND local_sync_id = ?',
+          whereArgs: [sourceDeviceId, localSyncId],
+        );
+        for (final oldAlias in oldAliases) {
+          await txn.delete(
+            'drive_sync_tombstones',
+            where: 'entity_type = ? AND entity_key = ?',
+            whereArgs: ['party', oldAlias['remote_sync_id']],
+          );
+        }
+        await txn.delete('drive_sync_ignored_tombstones', where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?', whereArgs: [sourceDeviceId, 'party', syncId]);
+        if (localSyncId != syncId) {
+          await txn.insert(
+            'drive_sync_aliases',
+            {
+              'source_device_id': sourceDeviceId,
+              'remote_sync_id': syncId,
+              'local_sync_id': localSyncId,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        final remoteBalance = _numberAsDouble(remote['balance']);
+        final localBalance = _numberAsDouble(local['balance']);
+        final fieldsDiffer = local['name'] != remote['name'] ||
+            local['phone'] != remote['phone'] ||
+            local['type'] != remote['type'] ||
+            local['customer_type'] != (remote['customer_type'] ?? 'Khata') ||
+            localBalance != remoteBalance;
+        if (applyMasterState) {
+          await txn.update(
+            'parties',
+            {
+              'name': remote['name'],
+              'phone': remote['phone'],
+              'type': remote['type'],
+              'customer_type': remote['customer_type'] ?? 'Khata',
+              'balance': remoteBalance,
+            },
+            where: 'id = ?',
+            whereArgs: [localId],
+          );
+        } else if (fieldsDiffer && detectConflicts) {
+          await addConflict(
+            txn,
+            type: 'party',
+            key: localSyncId,
+            local: Map<String, dynamic>.from(local)..remove('id'),
+            remote: {
+              'name': remote['name'],
+              'phone': remote['phone'],
+              'type': remote['type'],
+              'customer_type': remote['customer_type'] ?? 'Khata',
+              'balance': remoteBalance,
+            },
+          );
+        }
+      }
+
+      Future<int?> partyIdFor(String? syncId) async {
+        if (syncId == null || syncId.isEmpty) return null;
+        if (partyIds.containsKey(syncId)) return partyIds[syncId];
+        final direct = await _localIdBySyncId(txn, 'parties', syncId);
+        if (direct != null) return direct;
+        final alias = await txn.query(
+          'drive_sync_aliases',
+          columns: ['local_sync_id'],
+          where: 'source_device_id = ? AND remote_sync_id = ?',
+          whereArgs: [sourceDeviceId, syncId],
+          limit: 1,
+        );
+        if (alias.isEmpty) return null;
+        return _localIdBySyncId(txn, 'parties', alias.first['local_sync_id'].toString());
+      }
+
+      Future<int?> localBySync(String table, String? syncId) async {
+        if (syncId == null || syncId.isEmpty) return null;
+        return _localIdBySyncId(txn, table, syncId);
+      }
+
+      Future<String?> canonicalPartySyncId(String? remoteSyncId) async {
+        final id = await partyIdFor(remoteSyncId);
+        if (id == null) return null;
+        final rows = await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [id], limit: 1);
+        return rows.isEmpty ? null : rows.first['sync_id']?.toString();
+      }
+
+      Future<int?> productIdFor(String? barcode) async {
+        if (barcode == null || barcode.isEmpty) return null;
+        final rows = await txn.query('products', columns: ['id'], where: 'barcode = ?', whereArgs: [barcode], limit: 1);
+        return rows.isEmpty ? null : (rows.first['id'] as num).toInt();
+      }
+
+      // Append-only business records are imported by stable sync ID and never
+      // replace an existing sale, purchase, receipt, or return.
+      for (final remote in collection('sales')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('sales', syncId) != null) continue;
+        final customerSyncId = remote['customer_sync_id']?.toString();
+        final customerId = await partyIdFor(customerSyncId);
+        if (customerSyncId != null && customerId == null) continue;
+        final canonicalCustomerSyncId = await canonicalPartySyncId(customerSyncId);
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('customer_id')
+          ..['sync_id'] = syncId
+          ..['customer_sync_id'] = canonicalCustomerSyncId
+          ..['customer_id'] = customerId;
+        await txn.insert('sales', values);
+      }
+
+      for (final remote in collection('sale_items')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('sale_items', syncId) != null) continue;
+        final saleId = await localBySync('sales', remote['sale_sync_id']?.toString());
+        if (saleId == null) continue;
+        final productId = await productIdFor(remote['barcode']?.toString());
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('sale_id')
+          ..remove('product_id')
+          ..['sale_id'] = saleId
+          ..['product_id'] = productId
+          ..['sync_id'] = syncId;
+        await txn.insert('sale_items', values);
+      }
+
+      for (final remote in collection('purchases')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('purchases', syncId) != null) continue;
+        final productId = await productIdFor(remote['barcode']?.toString());
+        if (productId == null) continue;
+        final remoteSupplierSyncId = remote['supplier_sync_id']?.toString();
+        final supplierId = await partyIdFor(remoteSupplierSyncId);
+        final canonicalSupplierSyncId = await canonicalPartySyncId(remoteSupplierSyncId);
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('product_id')
+          ..remove('supplier_id')
+          ..['product_id'] = productId
+          ..['supplier_id'] = supplierId
+          ..['supplier_sync_id'] = canonicalSupplierSyncId
+          ..['sync_id'] = syncId;
+        await txn.insert('purchases', values);
+      }
+
+      for (final remote in collection('khata_transactions')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('khata_transactions', syncId) != null) continue;
+        final remotePartySyncId = remote['party_sync_id']?.toString();
+        final partyId = await partyIdFor(remotePartySyncId);
+        if (partyId == null) continue;
+        final canonicalSyncId = await canonicalPartySyncId(remotePartySyncId);
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('party_id')
+          ..['party_id'] = partyId
+          ..['party_sync_id'] = canonicalSyncId
+          ..['sync_id'] = syncId;
+        await txn.insert('khata_transactions', values);
+      }
+
+      for (final table in ['expenses', 'reminders']) {
+        for (final remote in collection(table)) {
+          final syncId = remote['sync_id']?.toString() ?? '';
+          if (syncId.isEmpty || await localBySync(table, syncId) != null) continue;
+          final values = Map<String, dynamic>.from(remote)..remove('id')..['sync_id'] = syncId;
+          await txn.insert(table, values);
+        }
+      }
+
+      for (final remote in collection('sale_returns')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('sale_returns', syncId) != null) continue;
+        final saleId = await localBySync('sales', remote['sale_sync_id']?.toString());
+        if (saleId == null) continue;
+        final remotePartySyncId = remote['party_sync_id']?.toString();
+        final customerId = await partyIdFor(remotePartySyncId);
+        final canonicalSyncId = await canonicalPartySyncId(remotePartySyncId);
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('sale_id')
+          ..remove('customer_id')
+          ..['sale_id'] = saleId
+          ..['customer_id'] = customerId
+          ..['party_sync_id'] = canonicalSyncId
+          ..['sync_id'] = syncId;
+        await txn.insert('sale_returns', values);
+      }
+
+      for (final remote in collection('sale_return_items')) {
+        final syncId = remote['sync_id']?.toString() ?? '';
+        if (syncId.isEmpty || await localBySync('sale_return_items', syncId) != null) continue;
+        final returnId = await localBySync('sale_returns', remote['return_sync_id']?.toString());
+        final saleItemId = await localBySync('sale_items', remote['sale_item_sync_id']?.toString());
+        if (returnId == null || saleItemId == null) continue;
+        final productId = await productIdFor(remote['barcode']?.toString());
+        final values = Map<String, dynamic>.from(remote)
+          ..remove('id')
+          ..remove('return_id')
+          ..remove('sale_item_id')
+          ..remove('product_id')
+          ..['return_id'] = returnId
+          ..['sale_item_id'] = saleItemId
+          ..['product_id'] = productId
+          ..['sync_id'] = syncId;
+        await txn.insert('sale_return_items', values);
+      }
+
+      // Apply explicit deletion markers only when the other device has no
+      // local stock/history that would be lost. Otherwise require a decision.
+      for (final tombstone in collection('tombstones')) {
+        final type = tombstone['entity_type']?.toString() ?? '';
+        final key = tombstone['entity_key']?.toString() ?? '';
+        if (key.isEmpty || !['product', 'party'].contains(type)) continue;
+        if (type == 'product' &&
+            collection('products').any((product) => product['barcode']?.toString() == key)) {
+          continue;
+        }
+        if (type == 'party' &&
+            collection('parties').any((party) => party['sync_id']?.toString() == key)) {
+          continue;
+        }
+        final ignored = await txn.query(
+          'drive_sync_ignored_tombstones',
+          columns: ['entity_key'],
+          where: 'source_device_id = ? AND entity_type = ? AND entity_key = ?',
+          whereArgs: [sourceDeviceId, type, key],
+          limit: 1,
+        );
+        if (ignored.isNotEmpty) continue;
+
+        if (type == 'product') {
+          final productRows = await txn.query('products', where: 'barcode = ?', whereArgs: [key], limit: 1);
+          if (productRows.isEmpty) {
+            await _recordDriveTombstone(txn, 'product', key, sourceDeviceId: sourceDeviceId);
+            continue;
+          }
+          final product = productRows.first;
+          final stock = _numberAsInt(product['quantity']);
+          final damaged = _numberAsInt(product['damaged_quantity']);
+          final sales = await txn.rawQuery('SELECT COUNT(*) AS total FROM sale_items WHERE barcode = ?', [key]);
+          final purchases = await txn.rawQuery('SELECT COUNT(*) AS total FROM purchases WHERE barcode = ?', [key]);
+          final hasHistory = (sales.first['total'] as num).toInt() > 0 ||
+              (purchases.first['total'] as num).toInt() > 0;
+          if (sourceDeviceId == 'windows-master' &&
+              applyMasterState &&
+              stock == 0 &&
+              damaged == 0 &&
+              !hasHistory) {
+            await txn.delete('products', where: 'barcode = ?', whereArgs: [key]);
+            await _recordDriveTombstone(txn, 'product', key, sourceDeviceId: sourceDeviceId);
+          } else if (detectConflicts) {
+            // Android-originated deletion is never applied silently on the
+            // Windows master, even when the current stock appears to be zero.
+            await addConflict(
+              txn,
+              type: 'product_delete',
+              key: key,
+              local: Map<String, dynamic>.from(product)..remove('id'),
+              remote: {'_deleted': true, 'barcode': key, 'deleted_at': tombstone['deleted_at']},
+            );
+          }
+        } else {
+          final localPartyId = await partyIdFor(key);
+          if (localPartyId == null) {
+            await _recordDriveTombstone(txn, 'party', key, sourceDeviceId: sourceDeviceId);
+            continue;
+          }
+          final partyRows = await txn.query('parties', where: 'id = ?', whereArgs: [localPartyId], limit: 1);
+          if (partyRows.isEmpty) {
+            await _recordDriveTombstone(txn, 'party', key, sourceDeviceId: sourceDeviceId);
+            continue;
+          }
+          final party = partyRows.first;
+          final localSyncId = party['sync_id']?.toString() ?? key;
+          final refs = await txn.rawQuery(
+            '''SELECT (SELECT COUNT(*) FROM sales WHERE customer_id = ?) +
+                      (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) +
+                      (SELECT COUNT(*) FROM purchases WHERE supplier_id = ?) +
+                      (SELECT COUNT(*) FROM sale_returns WHERE customer_id = ?) AS total''',
+            [localPartyId, localPartyId, localPartyId, localPartyId],
+          );
+          final balance = _numberAsDouble(party['balance']);
+          if (sourceDeviceId == 'windows-master' &&
+              applyMasterState &&
+              (refs.first['total'] as num).toInt() == 0 &&
+              balance.abs() < 0.000001) {
+            await txn.delete('parties', where: 'id = ?', whereArgs: [localPartyId]);
+            await _recordDriveTombstone(txn, 'party', localSyncId, sourceDeviceId: sourceDeviceId);
+            if (key != localSyncId) {
+              await _recordDriveTombstone(txn, 'party', key, sourceDeviceId: sourceDeviceId);
+            }
+          } else if (detectConflicts) {
+            // Require explicit Windows approval before applying an Android
+            // party deletion; never silently remove a Khata/customer account.
+            await addConflict(
+              txn,
+              type: 'party_delete',
+              key: localSyncId,
+              local: Map<String, dynamic>.from(party)..remove('id'),
+              remote: {'_deleted': true, 'sync_id': key, 'deleted_at': tombstone['deleted_at']},
+            );
+          }
+        }
+      }
+    });
+
+    final pending = await db.rawQuery(
+      "SELECT COUNT(*) AS total FROM drive_sync_conflicts WHERE source_device_id = ? AND snapshot_hash = ? AND status = 'pending'",
+      [sourceDeviceId, snapshotHash],
+    );
+    return (pending.first['total'] as num?)?.toInt() == 0;
+  }
+
   static Future<Database> get database async {
     if (_db != null) return _db!;
     _db = await initDB();
@@ -817,7 +1637,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 12,
+      version: 14,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -975,6 +1795,40 @@ class DBHelper {
           payload TEXT NOT NULL,
           updated_at TEXT NOT NULL
         )''');
+        await db.execute('''CREATE TABLE drive_sync_conflicts(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          source_device_id TEXT NOT NULL,
+          snapshot_hash TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_key TEXT NOT NULL,
+          local_payload TEXT NOT NULL,
+          remote_payload TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          resolution TEXT,
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          UNIQUE(source_device_id, snapshot_hash, entity_type, entity_key)
+        )''');
+        await db.execute('''CREATE TABLE drive_sync_aliases(
+          source_device_id TEXT NOT NULL,
+          remote_sync_id TEXT NOT NULL,
+          local_sync_id TEXT NOT NULL,
+          PRIMARY KEY(source_device_id, remote_sync_id)
+        )''');
+        await db.execute('''CREATE TABLE drive_sync_tombstones(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          entity_type TEXT NOT NULL,
+          entity_key TEXT NOT NULL,
+          deleted_at TEXT NOT NULL,
+          source_device_id TEXT NOT NULL DEFAULT 'local',
+          UNIQUE(entity_type, entity_key)
+        )''');
+        await db.execute('''CREATE TABLE drive_sync_ignored_tombstones(
+          source_device_id TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_key TEXT NOT NULL,
+          PRIMARY KEY(source_device_id, entity_type, entity_key)
+        )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 10) {
@@ -995,6 +1849,44 @@ class DBHelper {
             label TEXT NOT NULL,
             payload TEXT NOT NULL,
             updated_at TEXT NOT NULL
+          )''');
+        }
+        if (oldVersion < 13) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS drive_sync_conflicts(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_device_id TEXT NOT NULL,
+            snapshot_hash TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_key TEXT NOT NULL,
+            local_payload TEXT NOT NULL,
+            remote_payload TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            resolution TEXT,
+            created_at TEXT NOT NULL,
+            resolved_at TEXT,
+            UNIQUE(source_device_id, snapshot_hash, entity_type, entity_key)
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS drive_sync_aliases(
+            source_device_id TEXT NOT NULL,
+            remote_sync_id TEXT NOT NULL,
+            local_sync_id TEXT NOT NULL,
+            PRIMARY KEY(source_device_id, remote_sync_id)
+          )''');
+        }
+        if (oldVersion < 14) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS drive_sync_tombstones(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            entity_key TEXT NOT NULL,
+            deleted_at TEXT NOT NULL,
+            source_device_id TEXT NOT NULL DEFAULT 'local',
+            UNIQUE(entity_type, entity_key)
+          )''');
+          await db.execute('''CREATE TABLE IF NOT EXISTS drive_sync_ignored_tombstones(
+            source_device_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_key TEXT NOT NULL,
+            PRIMARY KEY(source_device_id, entity_type, entity_key)
           )''');
         }
         if (oldVersion < 2) {
@@ -1276,6 +2168,8 @@ class DBHelper {
         data,
         conflictAlgorithm: ConflictAlgorithm.abort,
       );
+      await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', barcode]);
+      await txn.delete('drive_sync_ignored_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', barcode]);
       await _queueSync(
         txn,
         collection: 'products',
@@ -1302,6 +2196,7 @@ class DBHelper {
       final updated = await txn.update('products', product, where: 'id = ?', whereArgs: [id]);
       if (updated == 0) throw Exception('Product not found. Please refresh and try again.');
       if (oldBarcode != newBarcode) {
+        await _recordDriveTombstone(txn, 'product', oldBarcode);
         await _queueSync(txn, collection: 'products', documentId: oldBarcode,
             payload: {'barcode': oldBarcode, '_deleted': true});
       }
@@ -1335,6 +2230,7 @@ class DBHelper {
       if (salesCount > 0 || purchasesCount > 0) {
         throw Exception('Is product ki $salesCount sale aur $purchasesCount purchase history mojood hai. Purana record mehfooz rakhne ke liye delete nahi kar sakte; Edit se stock zero ya details update karein.');
       }
+      await _recordDriveTombstone(txn, 'product', barcode);
       await _queueSync(txn, collection: 'products', documentId: barcode, payload: {'barcode': barcode, '_deleted': true});
       return txn.delete('products', where: 'id = ?', whereArgs: [id]);
     });
@@ -1956,6 +2852,7 @@ class DBHelper {
       }
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {
+        await _recordDriveTombstone(txn, 'party', syncId);
         await _queueSync(txn, collection: 'parties', documentId: syncId, payload: {'sync_id': syncId, '_deleted': true});
       }
       return txn.delete('parties', where: 'id = ?', whereArgs: [id]);

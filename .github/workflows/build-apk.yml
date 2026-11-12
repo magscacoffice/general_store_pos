@@ -68,7 +68,7 @@ jobs:
       - name: Build universal release APK (maximum ABI compatibility)
         env:
           BUILD_NUMBER: ${{ github.run_number }}
-          ANDROID_KEYSTORE_PATH: android/app/khanbaba-release.jks
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/khanbaba-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -76,7 +76,7 @@ jobs:
 
       - name: Build lightweight ABI-specific release APKs
         env:
-          ANDROID_KEYSTORE_PATH: android/app/khanbaba-release.jks
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/khanbaba-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

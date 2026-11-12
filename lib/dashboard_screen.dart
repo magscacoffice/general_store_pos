@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
+import 'cloud_sync_screen.dart';
 
 import 'sales_screen.dart';
 import 'inventory_screen.dart';
@@ -36,6 +37,14 @@ class DashboardScreen extends StatelessWidget {
         elevation: 0,
         toolbarHeight: Platform.isWindows ? 48 : 56,
         actions: [
+          IconButton(
+            tooltip: 'Google Drive Cloud Sync',
+            icon: const Icon(Icons.cloud_sync_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CloudSyncScreen()),
+            ),
+          ),
           if (Platform.isWindows) ...[
             FilledButton.icon(
               onPressed: PosWindows.openSale,
@@ -118,6 +127,7 @@ class DashboardScreen extends StatelessWidget {
                               _desktopNavItem(context, 'Profit / Loss', Icons.trending_up, const ProfitLossScreen()),
                               if (role == 'admin' && !DBHelper.localOnlyMode)
                                 _desktopNavItem(context, 'Salesmen / Staff', Icons.manage_accounts, const SalesmenManagementScreen()),
+                              _desktopNavItem(context, 'Cloud Sync', Icons.cloud_sync_outlined, const CloudSyncScreen()),
                               _desktopNavItem(context, 'Settings / Backup', Icons.settings, const BackupScreen()),
                             ],
                           ),
@@ -204,6 +214,7 @@ class DashboardScreen extends StatelessWidget {
     _buildMenuCard(context, 'Profit / Loss', Icons.trending_up, Colors.deepPurple, const ProfitLossScreen()),
     if (role == 'admin' && !DBHelper.localOnlyMode)
       _buildMenuCard(context, 'Salesmen / Staff', Icons.manage_accounts, Colors.cyan, const SalesmenManagementScreen()),
+    _buildMenuCard(context, 'Cloud Sync', Icons.cloud_sync_outlined, Colors.lightBlue, const CloudSyncScreen()),
     _buildMenuCard(context, 'Settings / Backup', Icons.settings, Colors.teal, const BackupScreen()),
   ];
 

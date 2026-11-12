@@ -166,8 +166,9 @@ jobs:
           The app does not need administrator rights. If Windows or office security policy blocks the EXE,
           ask the IT administrator to allow this app rather than running it as Administrator.
 
-          IMPORTANT
-          Windows Firebase synchronization is currently disabled and must be enabled only after the Windows Firebase configuration and supported desktop plugins are verified.
+          CLOUD SYNC
+          Google Drive sync is available from the Cloud Sync screen. Connect the same Google account on Windows and Android. Windows is the master copy; review stock and Khata balance conflicts before approving Android changes. Both devices remain usable offline.
+
           USB scanner and printer behavior depends on device mode and installed Windows drivers.
           "@ | Set-Content -Path (Join-Path $releaseDir "README-PORTABLE.txt") -Encoding UTF8
 

@@ -579,7 +579,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               }
                             }
                           },
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: Platform.isWindows
                                 ? 'Product name search karein ya USB barcode scan karein...'
                                 : 'USB/Bluetooth scanner: scan barcode here...',
