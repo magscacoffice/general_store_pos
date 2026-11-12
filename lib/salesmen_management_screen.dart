@@ -151,8 +151,8 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: const Text('Salesmen Management'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

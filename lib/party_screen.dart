@@ -165,6 +165,109 @@ class _PartyScreenState extends State<PartyScreen> {
     );
   }
 
+  Widget _buildDesktopParties(bool isCustomer) {
+    if (_parties.isEmpty) {
+      return Center(child: Text(isCustomer ? 'No customers found.' : 'No suppliers found.'));
+    }
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(child: Text(isCustomer ? 'Customer Accounts' : 'Supplier Accounts', style: Theme.of(context).textTheme.titleLarge)),
+                  Text('${_parties.length} accounts', style: Theme.of(context).textTheme.bodySmall),
+                  IconButton(tooltip: 'Refresh', onPressed: _loadParties, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      headingRowHeight: 42,
+                      dataRowMinHeight: 42,
+                      dataRowMaxHeight: 54,
+                      columns: [
+                        const DataColumn(label: Text('Name')),
+                        const DataColumn(label: Text('Phone')),
+                        if (isCustomer) const DataColumn(label: Text('Account Status')),
+                        const DataColumn(label: Text('Outstanding'), numeric: true),
+                        const DataColumn(label: Text('Actions')),
+                      ],
+                      rows: _parties.map((party) {
+                        final id = (party['id'] as num).toInt();
+                        final overdue = _overdueByParty[id];
+                        final balance = (party['balance'] as num?)?.toDouble() ?? 0;
+                        return DataRow(cells: [
+                          DataCell(SizedBox(
+                            width: 220,
+                            child: Text(
+                              party['name']?.toString() ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          )),
+                          DataCell(Text(party['phone']?.toString() ?? '—')),
+                          if (isCustomer)
+                            DataCell(Text(
+                              overdue == null ? 'Regular' : 'OVERDUE ${overdue['overdue_days']} days',
+                              style: TextStyle(
+                                color: overdue == null ? null : Colors.red.shade700,
+                                fontWeight: overdue == null ? FontWeight.normal : FontWeight.w600,
+                              ),
+                            )),
+                          DataCell(Text('Rs. ${balance.toStringAsFixed(2)}')),
+                          DataCell(Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isCustomer && overdue != null)
+                                IconButton(
+                                  tooltip: 'WhatsApp overdue reminder',
+                                  icon: const Icon(Icons.message_outlined, color: Colors.green),
+                                  onPressed: () => _sendKhataReminder(party),
+                                ),
+                              IconButton(
+                                tooltip: 'Delete account',
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () async {
+                                  try {
+                                    await DBHelper.deleteParty(id);
+                                    await _loadParties();
+                                  } catch (error) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          )),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isCustomer = widget.type == 'customer';
@@ -175,10 +278,12 @@ class _PartyScreenState extends State<PartyScreen> {
         title: Text(
           isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)',
         ),
-        backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : (isCustomer ? Colors.orange : Colors.indigo),
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
-      body: _parties.isEmpty
+      body: Platform.isWindows
+          ? _buildDesktopParties(isCustomer)
+          : _parties.isEmpty
           ? Center(
               child: Text(
                 isCustomer ? 'No customers found.' : 'No suppliers found.',
@@ -258,7 +363,11 @@ class _PartyScreenState extends State<PartyScreen> {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
+        onPressed: _showAddPartyDialog,
+        icon: const Icon(Icons.person_add),
+        label: Text(isCustomer ? 'Add Customer' : 'Add Supplier'),
+      ) : FloatingActionButton(
         onPressed: _showAddPartyDialog,
         backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
         child: const Icon(Icons.person_add),

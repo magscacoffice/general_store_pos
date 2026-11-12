@@ -33,6 +33,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final TextEditingController receivedAmountController = TextEditingController();
   final TextEditingController _usbBarcodeController = TextEditingController();
   final FocusNode _usbBarcodeFocusNode = FocusNode();
+  final TextEditingController _productSearchController = TextEditingController();
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
@@ -259,6 +260,7 @@ class _SalesScreenState extends State<SalesScreen> {
     }
     receivedAmountController.dispose();
     _usbBarcodeController.dispose();
+    _productSearchController.dispose();
     _usbBarcodeFocusNode.dispose();
     super.dispose();
   }
@@ -393,6 +395,139 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> _searchAndAddProduct() async {
+    final products = await DBHelper.getProducts();
+    if (!mounted) return;
+    final searchController = TextEditingController(
+      text: _productSearchController.text.trim(),
+    );
+    var query = searchController.text;
+    try {
+      final selected = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final term = query.trim().toLowerCase();
+            final matches = products.where((product) {
+              final name = product['name']?.toString().toLowerCase() ?? '';
+              final barcode = product['barcode']?.toString().toLowerCase() ?? '';
+              return term.isEmpty || name.contains(term) || barcode.contains(term);
+            }).toList();
+            return AlertDialog(
+              title: const Text('Find product by name or barcode'),
+              content: SizedBox(
+                width: 560,
+                height: 460,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      autofocus: true,
+                      onChanged: (value) => setDialogState(() => query = value),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Type product name or barcode',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${matches.length} matching products',
+                        style: Theme.of(dialogContext).textTheme.bodySmall,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: matches.isEmpty
+                          ? const Center(child: Text('No matching products found.'))
+                          : ListView.separated(
+                              itemCount: matches.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final product = matches[index];
+                                final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    product['name']?.toString() ?? 'Unnamed product',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    'Barcode: ${product['barcode'] ?? '—'}  |  Stock: $stock  |  Rate: Rs. ${product['price'] ?? 0}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  enabled: stock > 0,
+                                  trailing: stock > 0
+                                      ? const Icon(Icons.add_circle_outline)
+                                      : const Text('Out of stock'),
+                                  onTap: stock > 0
+                                      ? () => Navigator.pop(dialogContext, product)
+                                      : null,
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (selected == null || !mounted) return;
+      final barcode = selected['barcode']?.toString() ?? '';
+      final stock = (selected['quantity'] as num?)?.toInt() ?? 0;
+      final existingIndex = cart.indexWhere(
+        (item) => item['barcode']?.toString() == barcode,
+      );
+      final alreadyInCart = existingIndex < 0
+          ? 0
+          : (cart[existingIndex]['quantity'] as num?)?.toInt() ?? 0;
+      if (stock <= alreadyInCart) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Available stock sirf $stock pieces hai.')),
+        );
+        return;
+      }
+      final purchasePrice = (selected['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+      final configuredSalePrice = (selected['price'] as num?)?.toDouble() ?? 0.0;
+      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+      setState(() {
+        if (existingIndex >= 0) {
+          cart[existingIndex]['quantity'] = alreadyInCart + 1;
+        } else {
+          cart.add({
+            'barcode': barcode,
+            'name': selected['name']?.toString() ?? 'Product',
+            'purchasePrice': purchasePrice,
+            'salePrice': safeSalePrice,
+            'quantity': 1,
+          });
+        }
+        _productSearchController.text = selected['name']?.toString() ?? '';
+      });
+      await _persistActiveBill();
+      if (Platform.isWindows) {
+        final window = WindowManager.instance.getCurrent();
+        window?.show();
+        window?.focus();
+      }
+    } finally {
+      searchController.dispose();
+      if (mounted && Platform.isWindows) _usbBarcodeFocusNode.requestFocus();
+    }
+  }
+
   Future<void> _addUsbBarcode(String rawBarcode) async {
     final barcode = rawBarcode.trim();
     if (barcode.isEmpty || !mounted) return;
@@ -411,6 +546,9 @@ class _SalesScreenState extends State<SalesScreen> {
       }
       final product = matches.first;
       final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+      final purchasePrice = (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+      final configuredSalePrice = (product['price'] as num?)?.toDouble() ?? 0.0;
+      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
       final existingIndex = cart.indexWhere(
         (item) => item['barcode']?.toString() == barcode,
       );
@@ -428,8 +566,8 @@ class _SalesScreenState extends State<SalesScreen> {
           cart.add({
             'barcode': barcode,
             'name': product['name']?.toString() ?? 'Product',
-            'purchasePrice': (product['purchasePrice'] as num?)?.toDouble() ?? 0.0,
-            'salePrice': (product['price'] as num?)?.toDouble() ?? 0.0,
+            'purchasePrice': purchasePrice,
+            'salePrice': safeSalePrice,
             'quantity': 1,
           });
         }
@@ -1153,38 +1291,103 @@ class _SalesScreenState extends State<SalesScreen> {
                 child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
               );
 
-  Widget _buildCartList() =>
-              Expanded(
-                child: cart.isEmpty
-                    ? const Center(child: Text('Cart is empty. Scan items.'))
-                    : ListView.builder(
-                        itemCount: cart.length,
-                        itemBuilder: (context, index) {
-                          final item = cart[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            child: ListTile(
-                              title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
-                              trailing: Wrap(
-                                spacing: 0,
-                                children: [
-                                  IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                                  IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                                  IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+  Widget _buildCartList() => Expanded(
+    child: cart.isEmpty
+        ? const Center(child: Text('Cart is empty. Scan or search for products.'))
+        : Platform.isWindows
+            ? Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border.all(color: const Color(0xFFD9E0E6)),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        headingRowHeight: 40,
+                        dataRowMinHeight: 42,
+                        dataRowMaxHeight: 50,
+                        columns: const [
+                          DataColumn(label: Text('Product')),
+                          DataColumn(label: Text('Barcode')),
+                          DataColumn(label: Text('Qty'), numeric: true),
+                          DataColumn(label: Text('Unit Rate'), numeric: true),
+                          DataColumn(label: Text('Line Total'), numeric: true),
+                          DataColumn(label: Text('Actions')),
+                        ],
+                        rows: cart.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final item = entry.value;
+                          final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+                          final rate = (item['salePrice'] as num?)?.toDouble() ?? 0;
+                          return DataRow(cells: [
+                            DataCell(SizedBox(
+                              width: 220,
+                              child: Text(
+                                item['name']?.toString() ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            )),
+                            DataCell(SizedBox(
+                              width: 120,
+                              child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            )),
+                            DataCell(Text('$quantity')),
+                            DataCell(Text('Rs. ${rate.toStringAsFixed(2)}')),
+                            DataCell(Text('Rs. ${(rate * quantity).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600))),
+                            DataCell(Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                                IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                                IconButton(
+                                  tooltip: 'Remove item',
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  onPressed: () {
                                     setState(() => cart.removeAt(index));
                                     unawaited(_persistActiveBill());
-                                  }),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                                  },
+                                ),
+                              ],
+                            )),
+                          ]);
+                        }).toList(),
                       ),
-              );
+                    ),
+                  ),
+                ),
+              )
+            : ListView.builder(
+                itemCount: cart.length,
+                itemBuilder: (context, index) {
+                  final item = cart[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: ListTile(
+                      title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                      trailing: Wrap(
+                        spacing: 0,
+                        children: [
+                          IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                          IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                          IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                            setState(() => cart.removeAt(index));
+                            unawaited(_persistActiveBill());
+                          }),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+  );
 
   Widget _buildCheckoutPanel() =>
               SafeArea(
@@ -1228,7 +1431,7 @@ class _SalesScreenState extends State<SalesScreen> {
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal,
-                            foregroundColor: Colors.white,
+                            foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
                             padding: const EdgeInsets.symmetric(
                               vertical: 12,
                               horizontal: 16,
@@ -1261,6 +1464,10 @@ class _SalesScreenState extends State<SalesScreen> {
               unawaited(_createNewBill());
               return KeyEventResult.handled;
             }
+            if (event.logicalKey == LogicalKeyboardKey.f2) {
+              unawaited(_searchAndAddProduct());
+              return KeyEventResult.handled;
+            }
             if (event.logicalKey == LogicalKeyboardKey.f5) {
               unawaited(_openPendingBills());
               return KeyEventResult.handled;
@@ -1280,8 +1487,8 @@ class _SalesScreenState extends State<SalesScreen> {
           Platform.isWindows ? 'KHAN BABA POS  |  NEW SALE' : 'POS Billing (Quick & Khata)',
           style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3),
         ),
-        backgroundColor: Colors.teal.shade800,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal.shade800,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: [
           if (Platform.isWindows) ...[
             IconButton(
@@ -1317,25 +1524,48 @@ class _SalesScreenState extends State<SalesScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: SizedBox(
-                      height: 48,
-                      child: TextField(
-                        controller: _usbBarcodeController,
-                        focusNode: _usbBarcodeFocusNode,
-                        autofocus: true,
-                        onSubmitted: _addUsbBarcode,
-                        textInputAction: TextInputAction.done,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.qr_code_scanner, color: Colors.teal),
-                          labelText: 'Scan / Enter Barcode',
-                          hintText: 'USB barcode scanner yahan scan karein',
-                          suffixIcon: IconButton(
-                            tooltip: 'Clear barcode',
-                            onPressed: _usbBarcodeController.clear,
-                            icon: const Icon(Icons.clear),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 42,
+                            child: TextField(
+                              controller: _usbBarcodeController,
+                              focusNode: _usbBarcodeFocusNode,
+                              autofocus: true,
+                              onSubmitted: _addUsbBarcode,
+                              textInputAction: TextInputAction.done,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.qr_code_scanner),
+                                labelText: 'Barcode scanner',
+                                hintText: 'Scan barcode and press Enter',
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 42,
+                            child: OutlinedButton.icon(
+                              onPressed: _searchAndAddProduct,
+                              icon: const Icon(Icons.search),
+                              label: const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Find product by name  (F2)',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
@@ -1354,7 +1584,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Expanded(flex: 3, child: _buildCheckoutPanel()),
+                  SizedBox(width: 340, child: _buildCheckoutPanel()),
                       ],
                     ),
                   ),

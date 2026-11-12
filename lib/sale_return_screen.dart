@@ -149,8 +149,8 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: Text('Return Bill #$_saleId'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -172,47 +172,55 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                 Expanded(
                   child: _items.isEmpty
                       ? const Center(child: Text('Is invoice mein returnable item details nahi milin.'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: _items.length,
-                          itemBuilder: (context, index) {
-                            final item = _items[index];
-                            final id = (item['id'] as num).toInt();
-                            final available = (item['returnable_quantity'] as num?)?.toInt() ?? 0;
-                            return Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item['product_name'].toString(),
-                                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('Sold: ${item['quantity']}  |  Already returned: ${item['returned_quantity']}  |  Available: $available'),
-                                    Text('Rate: Rs. ${(item['sale_price'] as num).toStringAsFixed(2)}'),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
+                      : Platform.isWindows
+                          ? Scrollbar(
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: SingleChildScrollView(
+                                  child: DataTable(
+                                    headingRowHeight: 42,
+                                    dataRowMinHeight: 58,
+                                    dataRowMaxHeight: 68,
+                                    columns: const [
+                                      DataColumn(label: Text('Product')),
+                                      DataColumn(label: Text('Sold'), numeric: true),
+                                      DataColumn(label: Text('Returned'), numeric: true),
+                                      DataColumn(label: Text('Available'), numeric: true),
+                                      DataColumn(label: Text('Return Qty')),
+                                      DataColumn(label: Text('Condition')),
+                                      DataColumn(label: Text('Unit Rate'), numeric: true),
+                                    ],
+                                    rows: _items.map((item) {
+                                      final id = (item['id'] as num).toInt();
+                                      final available = (item['returnable_quantity'] as num?)?.toInt() ?? 0;
+                                      return DataRow(cells: [
+                                        DataCell(SizedBox(width: 220, child: Text(item['product_name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                                        DataCell(Text('${item['quantity'] ?? 0}')),
+                                        DataCell(Text('${item['returned_quantity'] ?? 0}')),
+                                        DataCell(Text('$available')),
+                                        DataCell(SizedBox(
+                                          width: 100,
                                           child: TextField(
                                             controller: _quantities[id],
                                             enabled: available > 0,
                                             keyboardType: TextInputType.number,
                                             onChanged: (_) => setState(() {}),
                                             decoration: InputDecoration(
-                                              labelText: 'Return quantity (max $available)',
+                                              hintText: 'Max $available',
                                               isDense: true,
-                                              border: const OutlineInputBorder(),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
+                                        )),
+                                        DataCell(SizedBox(
+                                          width: 140,
                                           child: DropdownButtonFormField<String>(
                                             value: _conditions[id],
+                                            isDense: true,
                                             decoration: const InputDecoration(
-                                              labelText: 'Condition',
-                                              isDense: true,
                                               border: OutlineInputBorder(),
+                                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                             ),
                                             items: const [
                                               DropdownMenuItem(value: 'saleable', child: Text('Resalable')),
@@ -222,15 +230,64 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                                               if (value != null) setState(() => _conditions[id] = value);
                                             },
                                           ),
+                                        )),
+                                        DataCell(Text('Rs. ${(item['sale_price'] as num?)?.toStringAsFixed(2) ?? '0.00'}')),
+                                      ]);
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              itemCount: _items.length,
+                              itemBuilder: (context, index) {
+                                final item = _items[index];
+                                final id = (item['id'] as num).toInt();
+                                final available = (item['returnable_quantity'] as num?)?.toInt() ?? 0;
+                                return Card(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item['product_name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Text('Sold: ${item['quantity']}  |  Already returned: ${item['returned_quantity']}  |  Available: $available'),
+                                        Text('Rate: Rs. ${(item['sale_price'] as num).toStringAsFixed(2)}'),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: _quantities[id],
+                                                enabled: available > 0,
+                                                keyboardType: TextInputType.number,
+                                                onChanged: (_) => setState(() {}),
+                                                decoration: InputDecoration(labelText: 'Return quantity (max $available)', isDense: true, border: const OutlineInputBorder()),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: DropdownButtonFormField<String>(
+                                                value: _conditions[id],
+                                                decoration: const InputDecoration(labelText: 'Condition', isDense: true, border: OutlineInputBorder()),
+                                                items: const [
+                                                  DropdownMenuItem(value: 'saleable', child: Text('Resalable')),
+                                                  DropdownMenuItem(value: 'damaged', child: Text('Damaged')),
+                                                ],
+                                                onChanged: available == 0 ? null : (value) {
+                                                  if (value != null) setState(() => _conditions[id] = value);
+                                                },
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                                  ),
+                                );
+                              },
+                            ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),

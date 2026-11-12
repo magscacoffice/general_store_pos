@@ -143,135 +143,250 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
+      automaticallyImplyLeading: !Platform.isWindows,
+      leading: desktopWorkspaceButton(),
       title: const Text('Purchase / Stock Entry'),
-      backgroundColor: Colors.teal,
-      foregroundColor: Colors.white,
+      backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+      foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+      actions: [
+        if (Platform.isWindows)
+          IconButton(
+            tooltip: 'Refresh purchase data',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
+      ],
     ),
-    body: RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (products.isEmpty)
-            const Text('Pehle Inventory mein product add karein.')
-          else if (Platform.isWindows)
-            OutlinedButton(
-              onPressed: _chooseWindowsProduct,
-              style: OutlinedButton.styleFrom(alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
-              child: Row(children: [
-                const Icon(Icons.search, size: 17),
-                const SizedBox(width: 8),
-                Expanded(child: Text(
-                  productId == null ? 'Search and select product' :
-                    (products.firstWhere((item) => (item['id'] as num).toInt() == productId, orElse: () => <String, dynamic>{})['name']?.toString() ?? 'Select product'),
-                  style: const TextStyle(fontSize: 12),
-                )),
-                const Icon(Icons.arrow_drop_down, size: 18),
-              ]),
-            )
-          else ...[
-            Row(children: [
-              Expanded(child: TextField(
-                controller: productSearchController,
-                onSubmitted: (value) => setState(() {
-                  _productSearchQuery = value;
-                  if (!_filteredProducts.any((item) => (item['id'] as num).toInt() == productId)) productId = null;
-                }),
-                decoration: InputDecoration(
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  hintText: 'Product name ya barcode search karein',
-                  suffixIcon: IconButton(tooltip: 'Clear search', onPressed: () {
-                    productSearchController.clear();
-                    setState(() { _productSearchQuery = ''; });
-                  }, icon: const Icon(Icons.clear, size: 17)),
+    body: Platform.isWindows
+        ? Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 410,
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ListView(
+                        children: [
+                          Text('Stock Entry', style: Theme.of(context).textTheme.titleLarge),
+                          const SizedBox(height: 14),
+                          if (products.isEmpty)
+                            const Text('Pehle Inventory mein product add karein.')
+                          else
+                            OutlinedButton(
+                              onPressed: _chooseWindowsProduct,
+                              style: OutlinedButton.styleFrom(
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.search, size: 18),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      productId == null
+                                          ? 'Search and select product'
+                                          : (products.firstWhere(
+                                              (item) => (item['id'] as num).toInt() == productId,
+                                              orElse: () => <String, dynamic>{},
+                                            )['name']?.toString() ?? 'Select product'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: qty,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Purchase quantity'),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: cost,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'Unit purchase cost (Rs.)'),
+                          ),
+                          const SizedBox(height: 12),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            value: updateSalePrice,
+                            onChanged: busy ? null : (value) => setState(() => updateSalePrice = value ?? false),
+                            title: const Text('Update retail sale price too'),
+                            subtitle: Text(
+                              'Current: Rs. ${products.where((item) => (item['id'] as num).toInt() == productId).isEmpty ? '—' : products.firstWhere((item) => (item['id'] as num).toInt() == productId)['price']}',
+                            ),
+                          ),
+                          if (updateSalePrice) ...[
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: salePrice,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: 'New retail sale price (Rs.)'),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 40,
+                            child: FilledButton.icon(
+                              onPressed: busy || products.isEmpty ? null : _save,
+                              icon: busy
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.save_outlined),
+                              label: Text(busy ? 'Saving...' : 'Save Purchase'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              )),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () => setState(() {
-                  _productSearchQuery = productSearchController.text;
-                  if (!_filteredProducts.any((item) => (item['id'] as num).toInt() == productId)) productId = null;
-                }),
-                icon: const Icon(Icons.search, size: 17),
-                label: const Text('Search'),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
-              initialValue: _filteredProducts.any((item) => (item['id'] as num).toInt() == productId) ? productId : null,
-              decoration: InputDecoration(
-                labelText: 'Product',
-                helperText: '${_filteredProducts.length} matching products',
-                border: const OutlineInputBorder(),
-              ),
-              items: _filteredProducts.map((p) => DropdownMenuItem<int>(
-                value: (p['id'] as num).toInt(),
-                child: Text('${p['name']} (Stock: ${p['quantity']})'),
-              )).toList(),
-              onChanged: (v) {
-                final selected = products.where((item) => (item['id'] as num).toInt() == v).toList();
-                if (selected.isNotEmpty) _selectProduct(selected.first);
-              },
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: Text('Purchase History', style: Theme.of(context).textTheme.titleLarge)),
+                              Text('${purchases.length} records', style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: purchases.isEmpty
+                                ? const Center(child: Text('No purchase records found.'))
+                                : Scrollbar(
+                                    thumbVisibility: true,
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: SingleChildScrollView(
+                                        child: DataTable(
+                                          headingRowHeight: 40,
+                                          dataRowMinHeight: 38,
+                                          dataRowMaxHeight: 46,
+                                          columns: const [
+                                            DataColumn(label: Text('Product')),
+                                            DataColumn(label: Text('Date')),
+                                            DataColumn(label: Text('Quantity'), numeric: true),
+                                            DataColumn(label: Text('Unit Cost'), numeric: true),
+                                            DataColumn(label: Text('Total Cost'), numeric: true),
+                                          ],
+                                          rows: purchases.map((purchase) => DataRow(cells: [
+                                            DataCell(SizedBox(
+                                              width: 200,
+                                              child: Text(
+                                                '${purchase['product_name'] ?? 'Product'}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            )),
+                                            DataCell(Text('${purchase['date'] ?? ''}')),
+                                            DataCell(Text('${purchase['quantity'] ?? 0}')),
+                                            DataCell(Text('Rs. ${purchase['unit_cost'] ?? 0}')),
+                                            DataCell(Text('Rs. ${purchase['total_cost'] ?? 0}')),
+                                          ])).toList(),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: qty,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Purchase quantity',
-              border: OutlineInputBorder(),
+          )
+        : RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (products.isEmpty)
+                  const Text('Pehle Inventory mein product add karein.')
+                else ...[
+                  Row(children: [
+                    Expanded(child: TextField(
+                      controller: productSearchController,
+                      onChanged: (value) => setState(() => _productSearchQuery = value),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        hintText: 'Product name ya barcode search karein',
+                        suffixIcon: IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            productSearchController.clear();
+                            setState(() => _productSearchQuery = '');
+                          },
+                          icon: const Icon(Icons.clear, size: 17),
+                        ),
+                      ),
+                    )),
+                  ]),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    initialValue: _filteredProducts.any((item) => (item['id'] as num).toInt() == productId) ? productId : null,
+                    decoration: InputDecoration(
+                      labelText: 'Product',
+                      helperText: '${_filteredProducts.length} matching products',
+                    ),
+                    items: _filteredProducts.map((product) => DropdownMenuItem<int>(
+                      value: (product['id'] as num).toInt(),
+                      child: Text('${product['name']} (Stock: ${product['quantity']})'),
+                    )).toList(),
+                    onChanged: (value) {
+                      final selected = products.where((item) => (item['id'] as num).toInt() == value).toList();
+                      if (selected.isNotEmpty) _selectProduct(selected.first);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextField(controller: qty, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Purchase quantity')),
+                const SizedBox(height: 12),
+                TextField(controller: cost, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Unit purchase cost (Rs.)')),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  value: updateSalePrice,
+                  onChanged: busy ? null : (value) => setState(() => updateSalePrice = value ?? false),
+                  title: const Text('Is purchase ke sath retail sale price bhi update karein'),
+                ),
+                if (updateSalePrice) ...[
+                  TextField(controller: salePrice, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'New retail sale price (Rs.)')),
+                  const SizedBox(height: 12),
+                ],
+                FilledButton.icon(
+                  onPressed: busy || products.isEmpty ? null : _save,
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: Text(busy ? 'Saving...' : 'Save Purchase'),
+                ),
+                const Divider(height: 32),
+                const Text('Purchase history', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ...purchases.map((purchase) => ListTile(
+                  title: Text('${purchase['product_name']} × ${purchase['quantity']}'),
+                  subtitle: Text('${purchase['date']} • Rs. ${purchase['unit_cost']} each'),
+                  trailing: Text('Rs. ${purchase['total_cost']}'),
+                )),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: cost,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Unit purchase cost (Rs.)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            value: updateSalePrice,
-            onChanged: busy ? null : (value) => setState(() => updateSalePrice = value ?? false),
-            title: const Text('Is purchase ke sath retail sale price bhi update karein'),
-            subtitle: Text('Maujooda sale price: Rs. ${(products.where((item) => (item['id'] as num).toInt() == productId).isEmpty ? '—' : products.firstWhere((item) => (item['id'] as num).toInt() == productId)['price'])}'),
-          ),
-          if (updateSalePrice) ...[
-            TextField(
-              controller: salePrice,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'New retail sale price (Rs.)', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-          ],
-          FilledButton.icon(
-            onPressed: busy || products.isEmpty ? null : _save,
-            icon: const Icon(Icons.add_shopping_cart),
-            label: Text(busy ? 'Saving...' : 'Save Purchase'),
-          ),
-          const Divider(height: 32),
-          const Text(
-            'Purchase history',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          ...purchases.map(
-            (p) => ListTile(
-              title: Text('${p['product_name']} × ${p['quantity']}'),
-              subtitle: Text('${p['date']} • Rs. ${p['unit_cost']} each'),
-              trailing: Text('Rs. ${p['total_cost']}'),
-            ),
-          ),
-        ],
-      ),
-    ),
   );
   @override
   void dispose() {

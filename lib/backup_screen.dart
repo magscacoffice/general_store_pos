@@ -230,6 +230,93 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  Widget _buildWindowsBackupPanel() {
+    Widget actionCard({
+      required IconData icon,
+      required String title,
+      required String description,
+      required VoidCallback onPressed,
+      required bool restore,
+    }) {
+      return Expanded(
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(height: 14),
+                Text(title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                Expanded(child: Text(description, style: Theme.of(context).textTheme.bodyMedium)),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: restore
+                      ? OutlinedButton.icon(
+                          onPressed: _isWorking ? null : onPressed,
+                          icon: const Icon(Icons.restore),
+                          label: const Text('Restore from File'),
+                        )
+                      : FilledButton.icon(
+                          onPressed: _isWorking ? null : onPressed,
+                          icon: const Icon(Icons.save_alt),
+                          label: const Text('Save Backup'),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Data Protection & Recovery', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(
+            'Create a separate copy of your store database or restore a previously saved backup. The current database is preserved as a safety copy during restore.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                actionCard(
+                  icon: Icons.backup_outlined,
+                  title: 'Create Database Backup',
+                  description: 'Save products, stock, sales, purchases, customers, khata transactions and expenses into a .db backup file. Keep the file on a separate drive or secure location.',
+                  onPressed: _createBackup,
+                  restore: false,
+                ),
+                const SizedBox(width: 14),
+                actionCard(
+                  icon: Icons.settings_backup_restore,
+                  title: 'Restore Database Backup',
+                  description: 'Select a valid Khan Baba POS .db backup. The file is checked before use and the current database is retained as a safety copy.',
+                  onPressed: _restoreBackup,
+                  restore: true,
+                ),
+              ],
+            ),
+          ),
+          if (_isWorking) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+            const SizedBox(height: 6),
+            const Text('Please wait. Do not close the application while this operation is running.'),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -237,10 +324,12 @@ class _BackupScreenState extends State<BackupScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: const Text('Backup & Restore'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
-      body: Padding(
+      body: Platform.isWindows
+          ? _buildWindowsBackupPanel()
+          : Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

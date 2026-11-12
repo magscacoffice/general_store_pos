@@ -102,6 +102,122 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
+  Widget _buildDesktopReport(List<Map<String, dynamic>> sales) {
+    Widget metric(String label, String value, IconData icon) => Expanded(
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 3),
+                    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Sales Performance', style: Theme.of(context).textTheme.titleLarge)),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'Daily', label: Text('Daily')),
+                  ButtonSegment(value: 'Monthly', label: Text('Monthly')),
+                  ButtonSegment(value: 'Yearly', label: Text('Yearly')),
+                ],
+                selected: {_period},
+                onSelectionChanged: (selection) => setState(() => _period = selection.first),
+              ),
+              const SizedBox(width: 8),
+              IconButton(tooltip: 'Refresh', onPressed: _loadSales, icon: const Icon(Icons.refresh)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              metric('Net Sales', _money(_totalRevenue), Icons.payments_outlined),
+              const SizedBox(width: 10),
+              metric('Bills', '${sales.length}', Icons.receipt_long_outlined),
+              const SizedBox(width: 10),
+              metric('Discounts', _money(_totalDiscount), Icons.discount_outlined),
+              const SizedBox(width: 10),
+              metric('Returns', _money(_totalReturned), Icons.assignment_return_outlined),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text('$_period Transactions', style: Theme.of(context).textTheme.titleMedium)),
+                        Text('${_totalReturnsCount} return entries', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: sales.isEmpty
+                        ? const Center(child: Text('No sales recorded for this period.'))
+                        : Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SingleChildScrollView(
+                                child: DataTable(
+                                  headingRowHeight: 40,
+                                  dataRowMinHeight: 38,
+                                  dataRowMaxHeight: 48,
+                                  columns: const [
+                                    DataColumn(label: Text('Invoice')),
+                                    DataColumn(label: Text('Date / Time')),
+                                    DataColumn(label: Text('Payment')),
+                                    DataColumn(label: Text('Discount'), numeric: true),
+                                    DataColumn(label: Text('Returned'), numeric: true),
+                                    DataColumn(label: Text('Net Amount'), numeric: true),
+                                  ],
+                                  rows: sales.map((sale) => DataRow(cells: [
+                                    DataCell(Text('#${sale['id']}')),
+                                    DataCell(Text('${sale['date'] ?? ''}')),
+                                    DataCell(Text('${sale['payment_type'] ?? 'Cash'}')),
+                                    DataCell(Text(_money((sale['discount'] as num?)?.toDouble() ?? 0))),
+                                    DataCell(Text(_money((sale['returned_amount'] as num?)?.toDouble() ?? 0))),
+                                    DataCell(Text(_money(_amount(sale)), style: const TextStyle(fontWeight: FontWeight.w600))),
+                                  ])).toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sales = _filteredSales;
@@ -111,8 +227,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: const Text('Sales Reports / سیل رپورٹ'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -123,7 +239,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
+          : Platform.isWindows
+              ? _buildDesktopReport(sales)
+              : RefreshIndicator(
               onRefresh: _loadSales,
               child: ListView(
                 padding: const EdgeInsets.all(16),

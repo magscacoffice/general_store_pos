@@ -97,16 +97,100 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
     }
   }
 
+  Widget _buildDesktopKhata() {
+    if (customers.isEmpty) return const Center(child: Text('No customers found. Add customers in Party screen.'));
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Customer Khata Ledger', style: Theme.of(context).textTheme.titleLarge)),
+                  Text('${customers.length} accounts', style: Theme.of(context).textTheme.bodySmall),
+                  IconButton(tooltip: 'Refresh', onPressed: _load, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                child: DataTable(
+                  headingRowHeight: 42,
+                  dataRowMinHeight: 42,
+                  dataRowMaxHeight: 52,
+                  columns: const [
+                    DataColumn(label: Text('Customer')),
+                    DataColumn(label: Text('Phone')),
+                    DataColumn(label: Text('Outstanding Balance'), numeric: true),
+                    DataColumn(label: Text('Actions')),
+                  ],
+                  rows: customers.map((customer) {
+                    final balance = (customer['balance'] as num?)?.toDouble() ?? 0;
+                    return DataRow(
+                      onSelectChanged: (_) async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => CustomerHistoryScreen(customer: customer)),
+                        );
+                        await _load();
+                      },
+                      cells: [
+                        DataCell(SizedBox(
+                          width: 220,
+                          child: Text(customer['name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                        )),
+                        DataCell(Text(customer['phone']?.toString() ?? '—')),
+                        DataCell(Text('Rs. ${balance.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600))),
+                        DataCell(Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'View ledger',
+                              icon: const Icon(Icons.receipt_long_outlined),
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => CustomerHistoryScreen(customer: customer)),
+                                );
+                                await _load();
+                              },
+                            ),
+                            IconButton(
+                              tooltip: 'Record receipt',
+                              icon: const Icon(Icons.payments_outlined, color: Colors.green),
+                              onPressed: () => _receipt(customer),
+                            ),
+                          ],
+                        )),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
       title: const Text('Customer Khata'),
-      backgroundColor: Colors.teal,
-      foregroundColor: Colors.white,
+      backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+      foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
     ),
-    body: RefreshIndicator(
+    body: Platform.isWindows
+        ? _buildDesktopKhata()
+        : RefreshIndicator(
       onRefresh: _load,
       child: customers.isEmpty
           ? ListView(

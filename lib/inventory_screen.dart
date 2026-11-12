@@ -224,11 +224,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: const Text('Inventory Management'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
       floatingActionButton: Platform.isWindows ? null : FloatingActionButton(
-        backgroundColor: Colors.teal,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -273,21 +273,74 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Expanded(
                     child: _visibleProducts.isEmpty
                         ? const Center(child: Text('No matching products found.'))
-                        : ListView.separated(
-                            itemCount: _visibleProducts.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final item = _visibleProducts[index];
-                              return ListTile(
-                                dense: true,
-                                title: Text(item['name'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                subtitle: Text('Barcode: ${item['barcode']}  |  Stock: ${item['quantity']}  |  Damaged: ${item['damaged_quantity'] ?? 0}  |  Sale: Rs. ${item['price']}', style: const TextStyle(fontSize: 11)),
-                                trailing: Wrap(spacing: 0, children: [
-                                  IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit_outlined, size: 17), onPressed: () => _showAddOrEditProductDialog(product: item)),
-                                  IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),
-                                ]),
-                              );
-                            },
+                        : Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              border: Border.all(color: const Color(0xFFD9E0E6)),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Scrollbar(
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: SingleChildScrollView(
+                                  child: DataTable(
+                                    headingRowHeight: 40,
+                                    dataRowMinHeight: 40,
+                                    dataRowMaxHeight: 48,
+                                    columnSpacing: 22,
+                                    columns: const [
+                                      DataColumn(label: Text('Product')),
+                                      DataColumn(label: Text('Barcode')),
+                                      DataColumn(label: Text('In Stock'), numeric: true),
+                                      DataColumn(label: Text('Damaged'), numeric: true),
+                                      DataColumn(label: Text('Purchase Cost'), numeric: true),
+                                      DataColumn(label: Text('Sale Price'), numeric: true),
+                                      DataColumn(label: Text('Actions')),
+                                    ],
+                                    rows: _visibleProducts.map((item) {
+                                      return DataRow(cells: [
+                                        DataCell(
+                                          SizedBox(
+                                            width: 220,
+                                            child: Text(
+                                              item['name']?.toString() ?? '',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(SizedBox(
+                                          width: 130,
+                                          child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        )),
+                                        DataCell(Text('${item['quantity'] ?? 0}')),
+                                        DataCell(Text('${item['damaged_quantity'] ?? 0}')),
+                                        DataCell(Text('Rs. ${item['purchasePrice'] ?? 0}')),
+                                        DataCell(Text('Rs. ${item['price'] ?? 0}')),
+                                        DataCell(Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              tooltip: 'Modify product',
+                                              icon: const Icon(Icons.edit_outlined, size: 17),
+                                              onPressed: () => _showAddOrEditProductDialog(product: item),
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Delete product',
+                                              icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red),
+                                              onPressed: () => _confirmDeleteProduct(item),
+                                            ),
+                                          ],
+                                        )),
+                                      ]);
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                   ),
                   Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} of ${products.length} products', style: const TextStyle(fontSize: 11, color: Colors.black54))),

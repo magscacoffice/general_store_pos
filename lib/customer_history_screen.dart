@@ -38,6 +38,98 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     return '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}  ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
+  Widget _buildDesktopCustomerHistory(double balance) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_balance_wallet_outlined, size: 26),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.customer['name']?.toString() ?? 'Customer', style: Theme.of(context).textTheme.titleMedium),
+                        Text(widget.customer['phone']?.toString() ?? 'No phone number', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('Outstanding Balance', style: Theme.of(context).textTheme.bodySmall),
+                      Text('Rs. ${balance.toStringAsFixed(2)}', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.teal)),
+                    ],
+                  ),
+                  IconButton(tooltip: 'Refresh ledger', onPressed: _load, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Text('Account Transactions  •  ${entries.length} entries', style: Theme.of(context).textTheme.titleMedium),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : entries.isEmpty
+                            ? const Center(child: Text('Is customer ki abhi koi history nahi hai.'))
+                            : SingleChildScrollView(
+                                child: DataTable(
+                                  headingRowHeight: 42,
+                                  dataRowMinHeight: 40,
+                                  dataRowMaxHeight: 54,
+                                  columns: const [
+                                    DataColumn(label: Text('Date / Time')),
+                                    DataColumn(label: Text('Description')),
+                                    DataColumn(label: Text('Transaction Type')),
+                                    DataColumn(label: Text('Amount'), numeric: true),
+                                  ],
+                                  rows: entries.map((entry) {
+                                    final type = entry['entry_type']?.toString() ?? '';
+                                    final isReceipt = type == 'receipt' || type == 'return_adjustment';
+                                    final isSale = type == 'sale';
+                                    final amount = (entry['amount'] as num?)?.toDouble() ?? 0;
+                                    final label = type == 'return_adjustment'
+                                        ? 'Return Adjustment'
+                                        : isReceipt ? 'Receipt / Jama' : isSale ? 'Khata Sale' : type;
+                                    return DataRow(cells: [
+                                      DataCell(Text(_date(entry['date']))),
+                                      DataCell(SizedBox(width: 340, child: Text(entry['description']?.toString() ?? type, maxLines: 1, overflow: TextOverflow.ellipsis))),
+                                      DataCell(Text(label)),
+                                      DataCell(Text(
+                                        'Rs. ${amount.toStringAsFixed(2)}',
+                                        style: TextStyle(fontWeight: FontWeight.w600, color: isReceipt ? Colors.green : Colors.red),
+                                      )),
+                                    ]);
+                                  }).toList(),
+                                ),
+                              ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final balance = (widget.customer['balance'] as num?)?.toDouble() ?? 0;
@@ -46,10 +138,12 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: Text('${widget.customer['name']} - History'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
-      body: Column(
+      body: Platform.isWindows
+          ? _buildDesktopCustomerHistory(balance)
+          : Column(
         children: [
           Card(
             margin: const EdgeInsets.all(12),

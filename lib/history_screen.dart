@@ -95,6 +95,89 @@ class _HistoryScreenState extends State<HistoryScreen> {
     await _loadSales();
   }
 
+  Widget _buildDesktopSalesTable() {
+    if (_sales.isEmpty) return const Center(child: Text('No sales records found yet.'));
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Invoices', style: Theme.of(context).textTheme.titleLarge)),
+                  Text('${_sales.length} records', style: Theme.of(context).textTheme.bodySmall),
+                  IconButton(tooltip: 'Refresh', onPressed: _loadSales, icon: const Icon(Icons.refresh)),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      headingRowHeight: 42,
+                      dataRowMinHeight: 42,
+                      dataRowMaxHeight: 54,
+                      columns: const [
+                        DataColumn(label: Text('Invoice')),
+                        DataColumn(label: Text('Date / Time')),
+                        DataColumn(label: Text('Customer Type')),
+                        DataColumn(label: Text('Payment')),
+                        DataColumn(label: Text('Net Total'), numeric: true),
+                        DataColumn(label: Text('Received'), numeric: true),
+                        DataColumn(label: Text('Balance Due'), numeric: true),
+                        DataColumn(label: Text('Returned'), numeric: true),
+                        DataColumn(label: Text('Actions')),
+                      ],
+                      rows: _sales.map((sale) {
+                        final amount = (sale['effective_amount'] as num?)?.toDouble()
+                            ?? (sale['final_amount'] as num?)?.toDouble()
+                            ?? (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+                        final received = (sale['effective_received_amount'] as num?)?.toDouble()
+                            ?? (sale['received_amount'] as num?)?.toDouble() ?? 0.0;
+                        final due = (sale['effective_balance_due'] as num?)?.toDouble()
+                            ?? (sale['balance_due'] as num?)?.toDouble() ?? 0.0;
+                        final returned = (sale['returned_amount'] as num?)?.toDouble() ?? 0.0;
+                        return DataRow(cells: [
+                          DataCell(Text('#${sale['id']}', style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${sale['date'] ?? ''}')),
+                          DataCell(Text('${sale['customer_type'] ?? 'Walk-in'}')),
+                          DataCell(Text('${sale['payment_type'] ?? 'Cash'}')),
+                          DataCell(Text('Rs. ${amount.toStringAsFixed(2)}')),
+                          DataCell(Text('Rs. ${received.toStringAsFixed(2)}')),
+                          DataCell(Text('Rs. ${due.toStringAsFixed(2)}')),
+                          DataCell(Text('Rs. ${returned.toStringAsFixed(2)}')),
+                          DataCell(PopupMenuButton<String>(
+                            tooltip: 'Invoice actions',
+                            onSelected: (value) {
+                              if (value == 'reprint') _reprintSale(sale);
+                              if (value == 'return') _openReturn(sale);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'reprint', child: Text('Reprint Bill')),
+                              PopupMenuItem(value: 'return', child: Text('Return Items')),
+                            ],
+                          )),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,8 +185,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopWorkspaceButton(),
         title: const Text('Sale History'),
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.purple,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: [
           IconButton(
             tooltip: 'Return History',
@@ -114,9 +197,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ),
-      body: _sales.isEmpty
-          ? const Center(child: Text('No sales records found yet.'))
-          : ListView.builder(
+      body: Platform.isWindows
+          ? _buildDesktopSalesTable()
+          : _sales.isEmpty
+              ? const Center(child: Text('No sales records found yet.'))
+              : ListView.builder(
               itemCount: _sales.length,
               itemBuilder: (context, index) {
                 final sale = _sales[index];
