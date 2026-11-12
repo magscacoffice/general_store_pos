@@ -755,8 +755,62 @@ class DBHelper {
     return directory;
   }
 
-  static Future<String> getDatabaseFilePath() async =>
-      join(await getDatabaseDirectory(), 'khan_baba_pos.db');
+  // Resolve the active database without requiring Windows to delete or rename
+  // the live SQLite file. A restored database is staged under a new filename and
+  // this small pointer selects it for subsequent app starts.
+  static Future<String> getDatabaseFilePath() async {
+    final directory = await getDatabaseDirectory();
+    final marker = File(join(directory, '.active_database'));
+    if (!await marker.exists()) {
+      return join(directory, 'khan_baba_pos.db');
+    }
+
+    final fileName = (await marker.readAsString()).trim();
+    if (fileName.isEmpty ||
+        basename(fileName) != fileName ||
+        !fileName.startsWith('khan_baba_pos_') ||
+        !fileName.toLowerCase().endsWith('.db')) {
+      throw FileSystemException(
+        'The active database pointer is invalid. Your existing database has not been changed.',
+        marker.path,
+      );
+    }
+
+    final activePath = join(directory, fileName);
+    if (!await File(activePath).exists()) {
+      throw FileSystemException(
+        'The selected active database file is missing. Your original database has been preserved.',
+        activePath,
+      );
+    }
+    return activePath;
+  }
+
+  // Switch databases by updating a tiny metadata file, never by deleting the
+  // active SQLite file (which Windows may still have open in another process).
+  static Future<void> setActiveDatabaseFilePath(String filePath) async {
+    final directory = await getDatabaseDirectory();
+    final normalizedDirectory = normalize(absolute(directory));
+    final normalizedPath = normalize(absolute(filePath));
+    if (dirname(normalizedPath).toLowerCase() !=
+        normalizedDirectory.toLowerCase()) {
+      throw ArgumentError('Restore database must remain inside the POS data folder.');
+    }
+
+    final fileName = basename(normalizedPath);
+    if (!fileName.startsWith('khan_baba_pos_') ||
+        !fileName.toLowerCase().endsWith('.db')) {
+      throw ArgumentError('Restore database filename is not valid.');
+    }
+
+    final marker = File(join(directory, '.active_database'));
+    if (fileName == 'khan_baba_pos.db') {
+      if (await marker.exists()) await marker.delete();
+      return;
+    }
+
+    await marker.writeAsString(fileName, flush: true);
+  }
 
   static Future<Database> initDB() async {
     final path = await getDatabaseFilePath();

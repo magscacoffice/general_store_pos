@@ -147,38 +147,33 @@ class _BackupScreenState extends State<BackupScreen> {
         await currentDb.copy(safetyPath);
       }
 
-      // A stale WAL/SHM file must never be applied to the restored database.
-      for (final suffix in ['-wal', '-shm', '-journal']) {
-        final sidecar = File('$dbPath$suffix');
-        if (await sidecar.exists()) await sidecar.delete();
+      // Never delete or rename the live database on Windows. Even after
+      // closing our own SQLite handle, another process can retain a file lock.
+      // Copy the verified backup to a fresh filename and atomically switch the
+      // app's small active-database pointer instead.
+      final restoredPath =
+          p.join(dbDirectory, 'khan_baba_pos_restored_$restoreId.db');
+      final restoredFile = File(restoredPath);
+      if (await restoredFile.exists()) {
+        throw FileSystemException('Restore destination already exists.', restoredPath);
       }
+      await tempDb.copy(restoredPath);
 
       try {
-        // Rename the validated staging file into place instead of copying
-        // over an existing destination (which can fail with Windows errno 183).
-        if (await currentDb.exists()) await currentDb.delete();
-        await tempDb.rename(dbPath);
-        tempPath = null;
-      } catch (_) {
-        // Restore the safety copy if the replacement did not complete.
-        final safetyFile = File(safetyPath);
-        if (await safetyFile.exists()) {
-          if (await currentDb.exists()) await currentDb.delete();
-          await safetyFile.copy(dbPath);
-        }
-        rethrow;
-      }
-
-      // Re-open and verify the restored database through the normal helper.
-      try {
+        await DBHelper.setActiveDatabaseFilePath(restoredPath);
         await DBHelper.database;
         databaseClosed = false;
       } catch (_) {
+        // Roll back to the original database pointer before surfacing the error.
         await DBHelper.closeDatabase();
-        final safetyFile = File(safetyPath);
-        if (await safetyFile.exists()) {
-          if (await currentDb.exists()) await currentDb.delete();
-          await safetyFile.copy(dbPath);
+        await DBHelper.setActiveDatabaseFilePath(dbPath);
+        await DBHelper.database;
+        databaseClosed = false;
+        try {
+          if (await restoredFile.exists()) await restoredFile.delete();
+        } catch (_) {
+          // A leftover, inactive restore candidate is harmless and can be
+          // removed later; never risk the original database to clean it up.
         }
         rethrow;
       }
