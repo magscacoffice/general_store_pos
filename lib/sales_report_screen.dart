@@ -146,7 +146,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       padding: const EdgeInsets.all(18),
                       child: Column(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.payments,
                             size: Platform.isWindows ? 20 : 38,
                             color: Colors.teal,
@@ -154,7 +154,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                           const SizedBox(height: 8),
                           Text(
                             _money(_totalRevenue),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: Platform.isWindows ? 16 : 25,
                               fontWeight: FontWeight.bold,
                               color: Colors.teal,

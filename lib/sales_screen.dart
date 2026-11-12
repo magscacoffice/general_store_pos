@@ -64,8 +64,8 @@ class _SalesScreenState extends State<SalesScreen> {
     if (!Platform.isWindows || !mounted) return;
     try {
       final window = WindowManager.instance.getCurrent();
-      await window?.show();
-      await window?.focus();
+      window?.show();
+      window?.focus();
     } catch (_) {
       // The scanner field can still receive focus if native focus is unavailable.
     }
@@ -1193,7 +1193,7 @@ class _SalesScreenState extends State<SalesScreen> {
                             const Text('Total Payable Bill:'),
                             Text(
                               'Rs. $finalTotal',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: Platform.isWindows ? 16 : 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.teal,

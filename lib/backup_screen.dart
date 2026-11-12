@@ -231,7 +231,7 @@ class _BackupScreenState extends State<BackupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Card(
+            Card(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
