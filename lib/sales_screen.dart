@@ -52,7 +52,24 @@ class _SalesScreenState extends State<SalesScreen> {
     super.initState();
     _activeBillId = widget.billId ?? PosWindows.newBillId();
     _loadCustomers();
-    if (Platform.isWindows) unawaited(_restorePendingBills());
+    if (Platform.isWindows) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_focusUsbScanner());
+      });
+      unawaited(_restorePendingBills().whenComplete(_focusUsbScanner));
+    }
+  }
+
+  Future<void> _focusUsbScanner() async {
+    if (!Platform.isWindows || !mounted) return;
+    try {
+      final window = WindowManager.instance.getCurrent();
+      await window?.show();
+      await window?.focus();
+    } catch (_) {
+      // The scanner field can still receive focus if native focus is unavailable.
+    }
+    if (mounted) _usbBarcodeFocusNode.requestFocus();
   }
 
   Map<String, dynamic> _snapshotCurrentBill() => {
@@ -405,6 +422,8 @@ class _SalesScreenState extends State<SalesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Barcode add nahi ho saka: $error')),
       );
+    } finally {
+      if (mounted && Platform.isWindows) _usbBarcodeFocusNode.requestFocus();
     }
   }
 
@@ -1175,7 +1194,7 @@ class _SalesScreenState extends State<SalesScreen> {
                             Text(
                               'Rs. $finalTotal',
                               style: const TextStyle(
-                                fontSize: 22,
+                                fontSize: Platform.isWindows ? 16 : 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.teal,
                               ),

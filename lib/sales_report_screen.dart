@@ -148,14 +148,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         children: [
                           const Icon(
                             Icons.payments,
-                            size: 38,
+                            size: Platform.isWindows ? 20 : 38,
                             color: Colors.teal,
                           ),
                           const SizedBox(height: 8),
                           Text(
                             _money(_totalRevenue),
                             style: const TextStyle(
-                              fontSize: 25,
+                              fontSize: Platform.isWindows ? 16 : 25,
                               fontWeight: FontWeight.bold,
                               color: Colors.teal,
                             ),

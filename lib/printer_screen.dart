@@ -144,15 +144,12 @@ class _PrinterScreenState extends State<PrinterScreen> {
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final due = widget.balanceDue ?? (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
     final buffer = StringBuffer()
-      ..writeln('     🛒 KHAN BABA 🛒')
-      ..writeln(_wrapReceiptText('General Store G.T Road Sanawan', width).join(String.fromCharCode(10)))
-      ..writeln('Phone: 0345-1444325')
+      ..writeln('🛒 KHAN BABA 🛒')
+      ..writeln('GENERAL STORE')
+      ..writeln('G.T ROAD SANAWAN')
+      ..writeln('PH#03451444325')
       ..writeln(separator)
-      ..writeln(_line('Bill No', widget.invoiceId.toString().padLeft(6, '0'), width: width))
-      ..writeln(_line('Date', DateFormat('dd-MM-yyyy').format(parsedDate), width: width))
-      ..writeln(_line('Time', DateFormat('hh:mm a').format(parsedDate), width: width))
-      ..writeln(_line('Cashier', widget.cashierName, width: width))
-      ..writeln(_line('Type', widget.salesType, width: width))
+      ..writeln('Bill# ${widget.invoiceId.toString().padLeft(6, '0')}  Date: ${DateFormat('dd-MM-yyyy').format(parsedDate)}  Time: ${DateFormat('hh:mm a').format(parsedDate)}  Cashier: ${widget.cashierName}  Type: ${widget.salesType}')
       ..writeln(separator)
       ..writeln('Customer: ${widget.customerName}');
     if (widget.customerPhone.trim().isNotEmpty) {
@@ -160,21 +157,19 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
     buffer
       ..writeln(separator)
-      ..writeln('ITEM')
-      ..writeln(_line('QTY x RATE', 'AMOUNT', width: width))
+      ..writeln(_line('Sr# Item', 'Qty Amount', width: width))
       ..writeln(separator);
 
     for (var i = 0; i < widget.cartItems.length; i++) {
       final item = widget.cartItems[i];
-      final nameLines = _wrapReceiptText('${i + 1}. ${_itemName(item)}', width - 2);
-      for (final line in nameLines) {
-        buffer.writeln(line);
-      }
-      buffer.writeln(_line(
-        '${_itemQuantity(item).toStringAsFixed(0)} x ${_money(_itemRate(item))}',
-        _money(_itemTotal(item)),
-        width: width,
-      ));
+      final qty = _itemQuantity(item).toStringAsFixed(0);
+      final amount = _money(_itemTotal(item));
+      final leftWidth = (width - qty.length - amount.length - 2).clamp(4, width - 1);
+      final itemLabel = '${i + 1} ${_itemName(item)}';
+      final compactItem = itemLabel.length > leftWidth
+          ? itemLabel.substring(0, leftWidth)
+          : itemLabel;
+      buffer.writeln(_line(compactItem, '$qty $amount', width: width));
     }
 
     buffer
@@ -351,11 +346,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               align: usb_print.PrintAlign.center,
             );
-          } else if (line.startsWith('General Store') || line.trim() == 'Sanawan') {
+          } else if (line.trim() == 'GENERAL STORE' || line.trim() == 'G.T ROAD SANAWAN' || line.trim() == 'PH#03451444325') {
             ticket.text(
               line.trim(),
               align: usb_print.PrintAlign.center,
-              style: const usb_print.PrintTextStyle(bold: true),
+              style: usb_print.PrintTextStyle(bold: line.trim() == 'GENERAL STORE'),
             );
           } else if (line.startsWith('TOTAL')) {
             final totalValue = line.trim().split(RegExp(r'\s+')).last;
@@ -428,7 +423,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
         (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
 
     // Compact 58mm receipt: short header, aligned Qty/Rate/Amount and tight spacing.
-    final pageHeight = (112 + widget.cartItems.length * 11).toDouble();
+    final pageHeight = (116 + widget.cartItems.length * 8).toDouble();
     final pageFormat = PdfPageFormat(
       _usbPaperWidth * PdfPageFormat.mm,
       pageHeight * PdfPageFormat.mm,
@@ -444,32 +439,17 @@ class _PrinterScreenState extends State<PrinterScreen> {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Center(
-              child: pw.Text(
-                'KHAN BABA',
-                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-              ),
-            ),
-            pw.Center(
-              child: pw.Text(
-                'General Store G.T Road Sanawan',
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
-              ),
-            ),
-            pw.Center(
-              child: pw.Text(
-                'Phone: 0345-1444325',
-                textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(fontSize: 6.5),
-              ),
-            ),
+            pw.Center(child: pw.Text('🛒 KHAN BABA 🛒',
+              style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('GENERAL STORE',
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('G.T ROAD SANAWAN', style: const pw.TextStyle(fontSize: 7.5))),
+            pw.Center(child: pw.Text('PH#03451444325', style: const pw.TextStyle(fontSize: 7))),
             pw.Divider(height: 5, thickness: 0.6),
-            _pdfInfoRow('Bill No', invoiceNumber),
-            _pdfInfoRow('Date', DateFormat('dd-MM-yyyy').format(parsedDate)),
-            _pdfInfoRow('Time', DateFormat('hh:mm a').format(parsedDate)),
-            _pdfInfoRow('Cashier', widget.cashierName),
-            _pdfInfoRow('Type', widget.salesType),
+            pw.Text(
+              'Bill# $invoiceNumber  Date: ${DateFormat('dd-MM-yyyy').format(parsedDate)}  Time: ${DateFormat('hh:mm a').format(parsedDate)}  Cashier: ${widget.cashierName}  Type: ${widget.salesType}',
+              style: const pw.TextStyle(fontSize: 5.5),
+            ),
             pw.Divider(height: 5, thickness: 0.6),
             pw.Text(
               'Customer: ${widget.customerName}',
@@ -481,54 +461,24 @@ class _PrinterScreenState extends State<PrinterScreen> {
                 style: const pw.TextStyle(fontSize: 6.5),
               ),
             pw.Divider(height: 5, thickness: 0.6),
-            pw.Row(
-              children: [
-                pw.Expanded(
-                  flex: 2,
-                  child: pw.Text('QTY', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Text('RATE', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
-                ),
-                pw.Expanded(
-                  flex: 3,
-                  child: pw.Text('AMOUNT', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold)),
-                ),
-              ],
-            ),
+            pw.Row(children: [
+              pw.Expanded(flex: 1, child: pw.Text('Sr#', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+              pw.Expanded(flex: 5, child: pw.Text('Item', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+              pw.Expanded(flex: 2, child: pw.Text('Qty', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+              pw.Expanded(flex: 3, child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+            ]),
             pw.SizedBox(height: 2),
-            ...widget.cartItems.map((item) {
-              final name = _itemName(item);
-              final qty = _itemQuantity(item);
-              final rate = _itemRate(item);
+            ...widget.cartItems.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
               return pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 2),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: [
-                    pw.Text(
-                      name,
-                      style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold),
-                    ),
-                    pw.Row(
-                      children: [
-                        pw.Expanded(
-                          flex: 2,
-                          child: pw.Text(qty.toStringAsFixed(0), style: const pw.TextStyle(fontSize: 6.5)),
-                        ),
-                        pw.Expanded(
-                          flex: 3,
-                          child: pw.Text(_money(rate), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5)),
-                        ),
-                        pw.Expanded(
-                          flex: 3,
-                          child: pw.Text(_money(_itemTotal(item)), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                child: pw.Row(children: [
+                  pw.Expanded(flex: 1, child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 6.5))),
+                  pw.Expanded(flex: 5, child: pw.Text(_itemName(item), style: const pw.TextStyle(fontSize: 6.5))),
+                  pw.Expanded(flex: 2, child: pw.Text(_itemQuantity(item).toStringAsFixed(0), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5))),
+                  pw.Expanded(flex: 3, child: pw.Text(_money(_itemTotal(item)), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5))),
+                ]),
               );
             }),
             pw.Divider(height: 5, thickness: 0.6),

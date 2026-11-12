@@ -69,14 +69,11 @@ class _BackupScreenState extends State<BackupScreen> {
   // Restore only a verified database, keeping a safety copy of current data.
   Future<void> _restoreBackup() async {
     setState(() => _isWorking = true);
+    String? tempPath;
+    String? safetyPath;
+    var databaseClosed = false;
     try {
-      // Android document providers may reject custom filters for .db files.
-      // Let the user choose any file, then validate the extension and SQLite
-      // database contents below before touching the live database.
-      final pickedFile = await FilePicker.pickFile(
-        type: FileType.any,
-      );
-
+      final pickedFile = await FilePicker.pickFile(type: FileType.any);
       if (pickedFile == null) return;
       final selectedPath = pickedFile.path;
       if (selectedPath == null) {
@@ -92,14 +89,16 @@ class _BackupScreenState extends State<BackupScreen> {
       final dbDirectory = await DBHelper.getDatabaseDirectory();
       final dbPath = await DBHelper.getDatabaseFilePath();
       final currentDb = File(dbPath);
-      final tempPath = p.join(
-        dbDirectory,
-        'restore_validation_${DateTime.now().microsecondsSinceEpoch}.db',
-      );
+      final restoreId = '${DateTime.now().microsecondsSinceEpoch}_$pid';
+      tempPath = p.join(dbDirectory, 'restore_validation_$restoreId.db');
+      safetyPath = p.join(dbDirectory, 'before_restore_$restoreId.db');
       final tempDb = File(tempPath);
 
-      // Copy first and validate the selected file without touching live data.
+      // Always start with a new staging file; Windows rejects some copies
+      // when the destination already exists.
+      if (await tempDb.exists()) await tempDb.delete();
       await selectedFile.copy(tempPath);
+
       Database? validationDb;
       try {
         validationDb = await openDatabase(tempPath, readOnly: true);
@@ -131,34 +130,53 @@ class _BackupScreenState extends State<BackupScreen> {
         await validationDb?.close();
       }
 
-      // Preserve the current database before replacing it.
-      final now = DateTime.now();
-      final safetyPath = p.join(
-        dbDirectory,
-        'before_restore_${now.millisecondsSinceEpoch}.db',
-      );
+      // Close SQLite before touching the live database or its sidecar files.
+      await DBHelper.closeDatabase();
+      databaseClosed = true;
+
+      // Keep a uniquely named safety copy before replacing the live database.
       if (await currentDb.exists()) {
-        await DBHelper.closeDatabase();
+        final safetyFile = File(safetyPath);
+        if (await safetyFile.exists()) await safetyFile.delete();
         await currentDb.copy(safetyPath);
-      } else {
-        await DBHelper.closeDatabase();
+      }
+
+      // A stale WAL/SHM file must never be applied to the restored database.
+      for (final suffix in ['-wal', '-shm', '-journal']) {
+        final sidecar = File('$dbPath$suffix');
+        if (await sidecar.exists()) await sidecar.delete();
       }
 
       try {
-        await tempDb.copy(dbPath);
+        // Rename the validated staging file into place instead of copying
+        // over an existing destination (which can fail with Windows errno 183).
+        if (await currentDb.exists()) await currentDb.delete();
+        await tempDb.rename(dbPath);
+        tempPath = null;
       } catch (_) {
-        // Roll back automatically if replacing the database fails.
+        // Restore the safety copy if the replacement did not complete.
         final safetyFile = File(safetyPath);
         if (await safetyFile.exists()) {
+          if (await currentDb.exists()) await currentDb.delete();
           await safetyFile.copy(dbPath);
         }
         rethrow;
-      } finally {
-        if (await tempDb.exists()) await tempDb.delete();
       }
 
-      // Re-open using the app's normal database helper and confirm it is readable.
-      await DBHelper.database;
+      // Re-open and verify the restored database through the normal helper.
+      try {
+        await DBHelper.database;
+        databaseClosed = false;
+      } catch (_) {
+        await DBHelper.closeDatabase();
+        final safetyFile = File(safetyPath);
+        if (await safetyFile.exists()) {
+          if (await currentDb.exists()) await currentDb.delete();
+          await safetyFile.copy(dbPath);
+        }
+        rethrow;
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -171,12 +189,29 @@ class _BackupScreenState extends State<BackupScreen> {
         );
       }
     } catch (e) {
+      // If validation or replacement failed after closing SQLite, make sure
+      // the existing database is available again when possible.
+      if (databaseClosed) {
+        try {
+          await DBHelper.database;
+          databaseClosed = false;
+        } catch (_) {
+          // Preserve the original restore error for the user.
+        }
+      }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restore Error: $e')));
       }
     } finally {
+      if (tempPath != null) {
+        final tempFile = File(tempPath);
+        if (await tempFile.exists()) {
+          try {
+            await tempFile.delete();
+          } catch (_) {}
+        }
+      }
       if (mounted) setState(() => _isWorking = false);
     }
   }
@@ -201,7 +236,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    Icon(Icons.backup, size: 60, color: Colors.teal),
+                    Icon(Icons.backup, size: Platform.isWindows ? 24 : 60, color: Colors.teal),
                     SizedBox(height: 15),
                     Text(
                       'Database Backup & Restore',

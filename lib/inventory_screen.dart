@@ -14,6 +14,17 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen> {
   List<Map<String, dynamic>> products = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _visibleProducts {
+    final term = _searchQuery.trim().toLowerCase();
+    if (term.isEmpty) return products;
+    return products.where((item) =>
+      (item['name']?.toString().toLowerCase() ?? '').contains(term) ||
+      (item['barcode']?.toString().toLowerCase() ?? '').contains(term)
+    ).toList();
+  }
 
   @override
   void initState() {
@@ -27,6 +38,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
       products = data;
     });
   }
+
+  @override
+  void dispose() { _searchController.dispose(); super.dispose(); }
 
   void _showAddOrEditProductDialog({Map<String, dynamic>? product}) {
     final barcodeController = TextEditingController(
@@ -213,41 +227,92 @@ class _InventoryScreenState extends State<InventoryScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: Platform.isWindows ? null : FloatingActionButton(
         backgroundColor: Colors.teal,
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: products.isEmpty
-          ? const Center(child: Text('No products found. Add some!'))
-          : ListView.builder(
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                final item = products[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+      body: Platform.isWindows
+          ? Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Row(children: [
+                    Expanded(child: SizedBox(
+                      height: 38,
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) => setState(() => _searchQuery = value),
+                        onSubmitted: (value) => setState(() => _searchQuery = value),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.search, size: 18),
+                          hintText: 'Search product name or barcode',
+                          suffixIcon: IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); },
+                            icon: const Icon(Icons.clear, size: 17),
+                          ),
+                        ),
+                      ),
+                    )),
+                    const SizedBox(width: 8),
+                    SizedBox(height: 38, child: FilledButton.icon(
+                      onPressed: () => setState(() => _searchQuery = _searchController.text),
+                      icon: const Icon(Icons.search, size: 16),
+                      label: const Text('Search'),
+                    )),
+                    const SizedBox(width: 8),
+                    SizedBox(height: 38, child: OutlinedButton.icon(
+                      onPressed: () => _showAddOrEditProductDialog(),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Product'),
+                    )),
+                  ]),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: _visibleProducts.isEmpty
+                        ? const Center(child: Text('No matching products found.'))
+                        : ListView.separated(
+                            itemCount: _visibleProducts.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final item = _visibleProducts[index];
+                              return ListTile(
+                                dense: true,
+                                title: Text(item['name'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                subtitle: Text('Barcode: ${item['barcode']}  |  Stock: ${item['quantity']}  |  Damaged: ${item['damaged_quantity'] ?? 0}  |  Sale: Rs. ${item['price']}', style: const TextStyle(fontSize: 11)),
+                                trailing: Wrap(spacing: 0, children: [
+                                  IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit_outlined, size: 17), onPressed: () => _showAddOrEditProductDialog(product: item)),
+                                  IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),
+                                ]),
+                              );
+                            },
+                          ),
                   ),
-                  child: ListTile(
-                    title: Text(
-                      item['name'],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      'Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']}',
-                    ),
-                    trailing: Wrap(
-                      spacing: 0,
-                      children: [
-                        IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _showAddOrEditProductDialog(product: item)),
-                        IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                  Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} of ${products.length} products', style: const TextStyle(fontSize: 11, color: Colors.black54))),
+                ],
+              ),
+            )
+          : products.isEmpty
+              ? const Center(child: Text('No products found. Add some!'))
+              : ListView.builder(
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    final item = products[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      child: ListTile(
+                        title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']}'),
+                        trailing: Wrap(spacing: 0, children: [
+                          IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _showAddOrEditProductDialog(product: item)),
+                          IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }

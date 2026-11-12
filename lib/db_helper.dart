@@ -1948,9 +1948,10 @@ class DBHelper {
     required int productId,
     required int quantity,
     required double unitCost,
+    double? salePrice,
     int? supplierId,
   }) async {
-    if (quantity <= 0 || unitCost < 0) {
+    if (quantity <= 0 || unitCost < 0 || (salePrice != null && (!salePrice.isFinite || salePrice < 0))) {
       throw Exception('Quantity and cost must be valid.');
     }
     final db = await database;
@@ -1965,10 +1966,17 @@ class DBHelper {
       final p = rows.first;
       final name = p['name'].toString();
       final barcode = p['barcode'].toString();
-      await txn.rawUpdate(
-        'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
-        [quantity, unitCost, productId],
-      );
+      if (salePrice == null) {
+        await txn.rawUpdate(
+          'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
+          [quantity, unitCost, productId],
+        );
+      } else {
+        await txn.rawUpdate(
+          'UPDATE products SET quantity = quantity + ?, purchasePrice = ?, price = ? WHERE id = ?',
+          [quantity, unitCost, salePrice, productId],
+        );
+      }
       final updatedRows = await txn.query(
         'products',
         where: 'id = ?',

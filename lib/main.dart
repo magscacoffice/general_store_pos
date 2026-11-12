@@ -13,6 +13,7 @@ import 'auth_gate.dart';
 import 'dashboard_screen.dart';
 import 'sales_screen.dart';
 import 'windows/pos_windows.dart';
+import 'windows/desktop_theme.dart';
 import 'db_helper.dart';
 
 Future<void> _writeWindowsStartupLog(String message,
@@ -108,24 +109,9 @@ class KhanBabaPOSApp extends StatelessWidget {
     return MaterialApp(
       title: 'Khan Baba General Store',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+      theme: windowsLocalMode ? buildWindowsTheme() : ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
-        visualDensity: windowsLocalMode ? VisualDensity.compact : VisualDensity.standard,
-        scaffoldBackgroundColor: windowsLocalMode ? const Color(0xFFF3F6F8) : null,
-        appBarTheme: windowsLocalMode
-            ? const AppBarTheme(
-                centerTitle: false,
-                elevation: 0,
-                toolbarHeight: 58,
-              )
-            : const AppBarTheme(),
-        inputDecorationTheme: windowsLocalMode
-            ? const InputDecorationTheme(
-                isDense: true,
-                border: OutlineInputBorder(),
-              )
-            : const InputDecorationTheme(),
       ),
       home: windowsLocalMode
           ? WindowsStartupGate(

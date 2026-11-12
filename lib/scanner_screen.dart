@@ -52,8 +52,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
         // contains() har position par match karta hai, sirf starting letters par nahi.
         searchResults = allProducts
             .where((product) =>
-                (product['name']?.toString().toLowerCase() ?? '')
-                    .contains(term))
+                (product['name']?.toString().toLowerCase() ?? '').contains(term) ||
+                (product['barcode']?.toString().toLowerCase() ?? '').contains(term))
             .take(30)
             .toList();
       }
@@ -622,7 +622,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   if (searchResults.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
-                      constraints: const BoxConstraints(maxHeight: 180),
+                      constraints: BoxConstraints(maxHeight: Platform.isWindows ? 300 : 180),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border.all(color: Colors.teal.shade100),
@@ -635,7 +635,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           final product = searchResults[index];
                           return ListTile(
                             dense: true,
-                            leading: const Icon(Icons.inventory_2, color: Colors.teal),
+                            minTileHeight: Platform.isWindows ? 42 : 48,
+                            leading: const Icon(Icons.inventory_2, color: Colors.teal, size: 18),
                             title: Text(product['name']?.toString() ?? ''),
                             subtitle: Text('Barcode: ${product['barcode']}  |  Rs. ${product['price']}'),
                             onTap: () async {

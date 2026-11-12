@@ -19,8 +19,8 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: beta
-          flutter-version: '3.50.0-0.4.pre'
+          channel: stable
+          flutter-version: '3.47.9'
           cache: true
 
       # Keep the committed native runner intact; regenerating it can discard
@@ -60,6 +60,22 @@ jobs:
       - name: Build release
         run: flutter build windows --release
 
+      - name: Download official Microsoft Visual C++ runtime
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+          $runtime = Join-Path $releaseDir "VC_redist.x64.exe"
+          Invoke-WebRequest -Uri "https://aka.ms/vc14/vc_redist.x64.exe" -OutFile $runtime
+          if (-not (Test-Path $runtime) -or (Get-Item $runtime).Length -lt 1000000) {
+            throw "Microsoft Visual C++ Redistributable download is missing or incomplete."
+          }
+          $signature = Get-AuthenticodeSignature $runtime
+          if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "Microsoft") {
+            throw "Downloaded Visual C++ installer does not have a valid Microsoft signature."
+          }
+          Write-Host "Verified Microsoft-signed Visual C++ Redistributable."
+
       - name: Verify portable runtime files
         shell: pwsh
         run: |
@@ -89,21 +105,39 @@ jobs:
           setlocal
           set "APP_DIR=%~dp0"
           set "APP_EXE=%APP_DIR%$($exe.Name)"
+          set "VC_INSTALLER=%APP_DIR%VC_redist.x64.exe"
           if not exist "%APP_EXE%" (
             echo Khan Baba POS executable was not found.
             echo Please extract the complete ZIP again and keep all files together.
             pause
             exit /b 1
           )
+          if not exist "%SystemRoot%\System32\vcruntime140_1.dll" (
+            if not exist "%VC_INSTALLER%" (
+              echo Microsoft Visual C++ Runtime installer is missing.
+              echo Please re-download the complete Khan Baba POS ZIP.
+              pause
+              exit /b 1
+            )
+            echo Installing the required Microsoft Visual C++ Runtime...
+            echo Windows may ask for administrator approval one time.
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%VC_INSTALLER%' -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait"
+            if errorlevel 1 (
+              echo Visual C++ Runtime installation was not completed.
+              echo Please approve the Windows administrator prompt and try again.
+              pause
+              exit /b 1
+            )
+          )
+          if not exist "%SystemRoot%\System32\vcruntime140_1.dll" (
+            echo Required Visual C++ Runtime is still unavailable.
+            echo Restart Windows if the installer requested it, then try again.
+            pause
+            exit /b 1
+          )
           pushd "%APP_DIR%"
           start "" "%APP_EXE%"
-          set "LAUNCH_RESULT=%ERRORLEVEL%"
           popd
-          if not "%LAUNCH_RESULT%"=="0" (
-            echo Windows could not launch Khan Baba POS. Check Windows Security or office application-control policy.
-            pause
-            exit /b %LAUNCH_RESULT%
-          )
           endlocal
           "@ | Set-Content -Path (Join-Path $releaseDir "Start-Khan-Baba-POS.bat") -Encoding ASCII
 
@@ -116,7 +150,7 @@ jobs:
           3. Keep all files together in the extracted folder.
 
           NO INSTALLER / ADMIN RIGHTS
-          This is a portable release. It does not require installation or administrator access.
+          The POS itself is portable and stores data in your Windows user profile. If the Microsoft Visual C++ Runtime is missing, Start-Khan-Baba-POS.bat installs the official Microsoft runtime and may request one-time administrator approval.
           The database is stored in your Windows user profile, not inside the extracted app folder.
 
           DATA LOCATION
@@ -133,7 +167,7 @@ jobs:
           ask the IT administrator to allow this app rather than running it as Administrator.
 
           IMPORTANT
-          This Windows edition is local/offline only and does not currently sync with Android/Firebase.
+          Windows Firebase synchronization is currently disabled and must be enabled only after the Windows Firebase configuration and supported desktop plugins are verified.
           USB scanner and printer behavior depends on device mode and installed Windows drivers.
           "@ | Set-Content -Path (Join-Path $releaseDir "README-PORTABLE.txt") -Encoding UTF8
 

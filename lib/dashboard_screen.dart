@@ -30,8 +30,10 @@ class DashboardScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
         title: const Text('خان بابا جنرل سٹور'),
         centerTitle: false,
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF202B36) : Colors.white,
+        elevation: 0,
+        toolbarHeight: Platform.isWindows ? 48 : 56,
         actions: [
           if (Platform.isWindows) ...[
             FilledButton.icon(
@@ -73,7 +75,7 @@ class DashboardScreen extends StatelessWidget {
           return Row(
             children: [
               SizedBox(
-                width: 250,
+                width: 218,
                 child: ColoredBox(
                   color: const Color(0xFFF0F5F4),
                   child: SafeArea(
@@ -81,15 +83,15 @@ class DashboardScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         const Padding(
-                          padding: EdgeInsets.fromLTRB(18, 28, 18, 22),
+                          padding: EdgeInsets.fromLTRB(14, 18, 14, 14),
                           child: Column(
                             children: [
-                              Icon(Icons.store, size: 54, color: Colors.teal),
+                              Icon(Icons.store_outlined, size: 30, color: Colors.teal),
                               SizedBox(height: 10),
                               Text(
                                 'KHAN BABA POS',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                               ),
                               Text('General Store G.T Road Sanawan',
                                 textAlign: TextAlign.center,
@@ -100,7 +102,7 @@ class DashboardScreen extends StatelessWidget {
                         const Divider(height: 1),
                         Expanded(
                           child: ListView(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 5),
                             children: [
                               _desktopNavItem(context, 'New Sale / Billing', Icons.point_of_sale, const SalesScreen()),
                               _desktopNavItem(context, 'Inventory / Stock', Icons.inventory_2, const InventoryScreen()),
@@ -130,22 +132,22 @@ class DashboardScreen extends StatelessWidget {
               const VerticalDivider(width: 1, thickness: 1),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Store Overview',
-                        style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 5),
                       const Text('Select a workspace to manage your store.',
                         style: TextStyle(color: Colors.black54)),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 14),
                       Expanded(
                         child: GridView.count(
                           crossAxisCount: constraints.maxWidth >= 1450 ? 4 : 3,
-                          crossAxisSpacing: 18,
-                          mainAxisSpacing: 18,
-                          childAspectRatio: 1.7,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 2.15,
                           children: _desktopCards(context),
                         ),
                       ),
@@ -208,15 +210,18 @@ class DashboardScreen extends StatelessWidget {
     bool selected = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       child: ListTile(
         selected: selected,
-        selectedTileColor: Colors.teal.withValues(alpha: 0.12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        leading: Icon(icon, color: selected ? Colors.teal : Colors.blueGrey),
+        selectedTileColor: Colors.teal.withValues(alpha: 0.09),
+        dense: Platform.isWindows,
+        minTileHeight: Platform.isWindows ? 38 : 48,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+        leading: Icon(icon, size: Platform.isWindows ? 18 : 24, color: selected ? Colors.teal : Colors.blueGrey),
         title: Text(title, style: TextStyle(
           fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-          fontSize: 13,
+          fontSize: Platform.isWindows ? 12 : 13,
         )),
         onTap: () {
           if (Platform.isWindows && targetScreen is SalesScreen) {
@@ -239,12 +244,19 @@ class DashboardScreen extends StatelessWidget {
     Color color,
     Widget targetScreen,
   ) {
+    final isWindows = Platform.isWindows;
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isWindows ? 5 : 10),
+        side: isWindows
+            ? const BorderSide(color: Color(0xFFDCE2E8))
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: () {
-          if (Platform.isWindows && targetScreen is SalesScreen) {
+          if (isWindows && targetScreen is SalesScreen) {
             unawaited(PosWindows.openSale());
           } else {
             Navigator.push(
@@ -253,21 +265,43 @@ class DashboardScreen extends StatelessWidget {
             );
           }
         },
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(isWindows ? 5 : 10),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 38, color: color),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ],
+          padding: EdgeInsets.symmetric(
+            horizontal: isWindows ? 12 : 16,
+            vertical: isWindows ? 9 : 16,
           ),
+          child: isWindows
+              ? Row(
+                  children: [
+                    Icon(icon, size: 20, color: color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, size: 16, color: Color(0xFF89939D)),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 38, color: color),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
