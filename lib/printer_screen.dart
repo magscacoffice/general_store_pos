@@ -629,9 +629,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopReturnButton(),
+        toolbarHeight: Platform.isWindows ? 48 : 56,
         title: const Text('Printer & Invoice'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

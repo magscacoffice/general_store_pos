@@ -12,6 +12,7 @@ import 'history_screen.dart';
 import 'sales_report_screen.dart';
 import 'backup_screen.dart';
 import 'purchase_screen.dart';
+import 'expense_screen.dart';
 import 'customer_khata_screen.dart';
 import 'profit_loss_screen.dart';
 import 'party_screen.dart';
@@ -109,7 +110,9 @@ class DashboardScreen extends StatelessWidget {
                               _desktopNavItem(context, 'Sales History', Icons.receipt_long, const HistoryScreen()),
                               _desktopNavItem(context, 'Sales Reports', Icons.bar_chart, const SalesReportScreen()),
                               _desktopNavItem(context, 'Purchases', Icons.add_shopping_cart, const PurchaseScreen()),
+                              _desktopNavItem(context, 'Expenses', Icons.money_off, const ExpenseScreen()),
                               _desktopNavItem(context, 'Customers / Parties', Icons.people, const PartyScreen(type: 'customer')),
+                              _desktopNavItem(context, 'Suppliers', Icons.local_shipping_outlined, const PartyScreen(type: 'supplier')),
                               _desktopNavItem(context, 'Customer Khata', Icons.menu_book, const CustomerKhataScreen()),
                               _desktopNavItem(context, 'Reminders / Due Alerts', Icons.notifications_active, const RemindersScreen()),
                               _desktopNavItem(context, 'Profit / Loss', Icons.trending_up, const ProfitLossScreen()),
@@ -193,7 +196,9 @@ class DashboardScreen extends StatelessWidget {
     _buildMenuCard(context, 'Sales History', Icons.receipt_long, Colors.purple, const HistoryScreen()),
     _buildMenuCard(context, 'Sales Reports', Icons.bar_chart, Colors.blue, const SalesReportScreen()),
     _buildMenuCard(context, 'Purchases / Stock Entry', Icons.add_shopping_cart, Colors.brown, const PurchaseScreen()),
+    _buildMenuCard(context, 'Expenses', Icons.money_off, Colors.red, const ExpenseScreen()),
     _buildMenuCard(context, 'Customers / Parties', Icons.people, Colors.deepOrange, const PartyScreen(type: 'customer')),
+    _buildMenuCard(context, 'Suppliers', Icons.local_shipping_outlined, Colors.blueGrey, const PartyScreen(type: 'supplier')),
     _buildMenuCard(context, 'Customer Khata', Icons.menu_book, Colors.indigo, const CustomerKhataScreen()),
     _buildMenuCard(context, 'Reminders / Due Alerts', Icons.notifications_active, Colors.red, const RemindersScreen()),
     _buildMenuCard(context, 'Profit / Loss', Icons.trending_up, Colors.deepPurple, const ProfitLossScreen()),

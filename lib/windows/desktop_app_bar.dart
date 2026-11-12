@@ -29,7 +29,7 @@ Widget? desktopReturnButton() {
       onPressed: () => Navigator.of(context).maybePop(),
       icon: const Icon(Icons.reply),
       label: const Text('Return'),
-      style: TextButton.styleFrom(foregroundColor: Colors.white),
+      style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.primary),
     ),
   );
 }

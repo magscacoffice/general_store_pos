@@ -504,9 +504,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopReturnButton(),
+        toolbarHeight: Platform.isWindows ? 48 : 56,
         title: const Text('Live Barcode Scanner'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: Platform.isWindows
             ? const []
             : [
@@ -579,8 +580,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             }
                           },
                           decoration: const InputDecoration(
-                            hintText: 'USB/Bluetooth scanner: scan barcode here...',
-                            helperText: 'Scanner Enter bheje to product auto search hoga',
+                            hintText: Platform.isWindows
+                                ? 'Product name search karein ya USB barcode scan karein...'
+                                : 'USB/Bluetooth scanner: scan barcode here...',
+                            helperText: Platform.isWindows
+                                ? 'Product name type karein aur matching result select karein; scanner Enter par item add hoga.'
+                                : 'Scanner Enter bheje to product auto search hoga',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -622,7 +627,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   if (searchResults.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
-                      constraints: BoxConstraints(maxHeight: Platform.isWindows ? 300 : 180),
+                      constraints: BoxConstraints(maxHeight: Platform.isWindows ? 180 : 180),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border.all(color: Colors.teal.shade100),
@@ -637,8 +642,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             dense: true,
                             minTileHeight: Platform.isWindows ? 42 : 48,
                             leading: const Icon(Icons.inventory_2, color: Colors.teal, size: 18),
-                            title: Text(product['name']?.toString() ?? ''),
-                            subtitle: Text('Barcode: ${product['barcode']}  |  Rs. ${product['price']}'),
+                            title: Text(product['name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('Barcode: ${product['barcode']}  |  Rs. ${product['price']}', maxLines: 1, overflow: TextOverflow.ellipsis),
                             onTap: () async {
                               FocusScope.of(context).unfocus();
                               await _processScannedBarcode(product['barcode'].toString());
