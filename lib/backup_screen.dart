@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:file_picker/file_picker.dart';
 import 'db_helper.dart';
+import 'windows/pos_windows.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -72,6 +73,7 @@ class _BackupScreenState extends State<BackupScreen> {
     String? tempPath;
     String? safetyPath;
     var databaseClosed = false;
+    var cashierBillIds = <String>[];
     try {
       final pickedFile = await FilePicker.pickFile(type: FileType.any);
       if (pickedFile == null) return;
@@ -130,7 +132,11 @@ class _BackupScreenState extends State<BackupScreen> {
         await validationDb?.close();
       }
 
-      // Close SQLite before touching the live database or its sidecar files.
+      // Ask every resident cashier window to close its SQLite connection first.
+      // The dashboard then closes its own connection before replacing the file.
+      if (Platform.isWindows) {
+        cashierBillIds = await PosWindows.closeSaleWindowsForRestore();
+      }
       await DBHelper.closeDatabase();
       databaseClosed = true;
 
@@ -210,6 +216,19 @@ class _BackupScreenState extends State<BackupScreen> {
           try {
             await tempFile.delete();
           } catch (_) {}
+        }
+      }
+      if (Platform.isWindows && cashierBillIds.isNotEmpty) {
+        try {
+          for (final billId in cashierBillIds) {
+            await PosWindows.openSale(billId: billId);
+          }
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Restore ke baad New Sale window dobara open nahi ho saki: $error')),
+            );
+          }
         }
       }
       if (mounted) setState(() => _isWorking = false);

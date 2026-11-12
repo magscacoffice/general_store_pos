@@ -12,6 +12,9 @@ import 'scanner_screen.dart';
 import 'printer_screen.dart';
 import 'windows/pos_windows.dart';
 
+// Dashboard restore uses this hook to flush the active cashier bill first.
+Future<void> Function()? windowsBeforeDatabaseRestore;
+
 class SalesScreen extends StatefulWidget {
   final String? billId;
 
@@ -50,6 +53,7 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isWindows) windowsBeforeDatabaseRestore = _flushBillBeforeDatabaseRestore;
     _activeBillId = widget.billId ?? PosWindows.newBillId();
     _loadCustomers();
     if (Platform.isWindows) {
@@ -230,8 +234,16 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
 
+  Future<void> _flushBillBeforeDatabaseRestore() async {
+    if (!Platform.isWindows) return;
+    await _pendingSaveQueue;
+    await _persistActiveBill();
+    await _pendingSaveQueue;
+  }
+
   @override
   void dispose() {
+    if (Platform.isWindows) windowsBeforeDatabaseRestore = null;
     unawaited(_persistActiveBill());
     receivedAmountController.dispose();
     _usbBarcodeController.dispose();

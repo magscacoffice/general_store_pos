@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -146,6 +148,7 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
   bool _ready = false;
   Object? _error;
   String? _logPath;
+  bool _allowCloseForRestore = false;
 
   @override
   void initState() {
@@ -179,6 +182,18 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
       }
 
       try {
+        final windowController = await WindowController.fromCurrentEngine();
+        await windowController.setWindowMethodHandler((call) async {
+          if (call.method != 'prepare_for_restore' || widget.windowType != PosWindows.sale) {
+            throw MissingPluginException('Unsupported window command: ${call.method}');
+          }
+          await windowsBeforeDatabaseRestore?.call();
+          await DBHelper.closeDatabase();
+          _allowCloseForRestore = true;
+          final restoreWindow = WindowManager.instance.getCurrent();
+          if (restoreWindow != null) restoreWindow.close();
+          return true;
+        });
         final nativeWindow = WindowManager.instance.getCurrent();
         if (nativeWindow != null) {
           final isDashboard = widget.windowType == PosWindows.dashboard;
@@ -190,8 +205,8 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
           nativeWindow.center();
           if (!isDashboard) {
             nativeWindow.addListener((event) {
-              if (event is WindowCloseRequestedEvent) {
-                // Keep the cashier window resident in the Windows taskbar.
+              if (event is WindowCloseRequestedEvent && !_allowCloseForRestore) {
+                // Keep the cashier window resident in the Windows taskbar during normal use.
                 event.request.cancel();
                 nativeWindow.minimize();
               }

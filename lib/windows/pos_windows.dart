@@ -46,6 +46,42 @@ class PosWindows {
     await controller.show();
   }
 
+  // Release resident cashier windows before replacing the shared SQLite file.
+  static Future<List<String>> closeSaleWindowsForRestore() async {
+    final billIds = <String>[];
+    final windows = await WindowController.getAll();
+    try {
+      for (final controller in windows) {
+        Map<String, dynamic> arguments;
+        try {
+          final decoded = jsonDecode(controller.arguments);
+          if (decoded is! Map) continue;
+          arguments = Map<String, dynamic>.from(decoded);
+        } catch (_) {
+          continue;
+        }
+        if (arguments['type'] != sale) continue;
+        final billId = arguments['billId']?.toString();
+        if (billId == null || billId.isEmpty) {
+          throw Exception('New Sale window ka bill ID nahi mil saka; restore rok diya gaya hai.');
+        }
+        final closed = await controller.invokeMethod<bool>('prepare_for_restore');
+        if (closed != true) {
+          throw Exception('New Sale window database release nahi kar saki. Restore cancel kar diya gaya hai.');
+        }
+        billIds.add(billId);
+      }
+      return billIds;
+    } catch (_) {
+      for (final billId in billIds) {
+        try {
+          await openSale(billId: billId);
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
   static Future<void> openDashboard() async {
     final windows = await WindowController.getAll();
     for (final controller in windows) {
