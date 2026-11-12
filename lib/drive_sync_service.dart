@@ -23,6 +23,10 @@ class DriveSyncService {
       '707319476515-a91qi9iv86kb825ttdv6oo4gp2nqe3vi.apps.googleusercontent.com';
   static const String _windowsClientId =
       '707319476515-viu9eqvkacootsu2eooa4eon2oeheab2.apps.googleusercontent.com';
+  // Desktop OAuth client secrets are embedded in installed-app binaries by
+  // design; they are not confidential. Supply through the Windows build secret.
+  static const String _windowsClientSecret =
+      String.fromEnvironment('GOOGLE_WINDOWS_CLIENT_SECRET');
   static const List<String> _scopes = [
     'https://www.googleapis.com/auth/drive.file',
   ];
@@ -111,12 +115,14 @@ class DriveSyncService {
 
     final refresh = await _secureStorage.read(key: 'drive_refresh_token');
     if (refresh != null && refresh.isNotEmpty) {
+      _requireWindowsClientSecret();
       final response = await http
           .post(
             Uri.https('oauth2.googleapis.com', '/token'),
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: {
               'client_id': _windowsClientId,
+              'client_secret': _windowsClientSecret,
               'refresh_token': refresh,
               'grant_type': 'refresh_token',
             },
@@ -161,7 +167,16 @@ class DriveSyncService {
     }
   }
 
+  static void _requireWindowsClientSecret() {
+    if (_windowsClientSecret.isEmpty) {
+      throw Exception(
+        'Windows Google OAuth client secret configure nahi hai. GitHub repository secret GOOGLE_WINDOWS_CLIENT_SECRET add karke Windows app dobara build karein.',
+      );
+    }
+  }
+
   static Future<String> _authorizeWindows() async {
+    _requireWindowsClientSecret();
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final redirectUri = 'http://127.0.0.1:${server.port}/';
     final random = Random.secure();
@@ -221,6 +236,7 @@ class DriveSyncService {
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: {
               'client_id': _windowsClientId,
+              'client_secret': _windowsClientSecret,
               'code': code,
               'code_verifier': verifier,
               'grant_type': 'authorization_code',

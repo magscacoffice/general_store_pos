@@ -57,8 +57,19 @@ jobs:
             Set-Content -Path $cmakeFile -Value $content -NoNewline
           }
 
+      - name: Verify Windows Google OAuth configuration
+        shell: pwsh
+        env:
+          GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_WINDOWS_CLIENT_SECRET)) {
+            throw "Add GOOGLE_WINDOWS_CLIENT_SECRET in GitHub repository Settings > Secrets and variables > Actions before building Windows Cloud Sync."
+          }
+
       - name: Build release
-        run: flutter build windows --release
+        env:
+          GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
+        run: flutter build windows --release --dart-define=GOOGLE_WINDOWS_CLIENT_SECRET=$env:GOOGLE_WINDOWS_CLIENT_SECRET
 
       - name: Download official Microsoft Visual C++ runtime
         shell: pwsh
