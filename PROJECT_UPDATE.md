@@ -53,6 +53,16 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 - [ ] **Sales History — open a selected invoice and show its complete contents.** When the user opens Sales History and taps/clicks an invoice, that invoice should open in a detail view. Show all items/products included in that sale and the relevant invoice details (such as quantities, rates, amounts, totals, date/time, bill number, customer/payment information where available). Review Android and Windows behaviour for consistency unless the existing platform design requires different layouts. The invoice detail must reflect the saved sale record and must not accidentally create or modify a sale.
 
+## Reports / custom date-wise business summary note from user (2026-11-13)
+
+- [ ] **Reports — add a user-selectable date or date-range report instead of only fixed Daily / Weekly / Monthly choices.** The user should be able to choose any specific date (and ideally a custom from–to date range) and see what happened during that period. Include, at minimum:
+  - Total sales for the selected date/period.
+  - Total purchases for the selected date/period.
+  - Total expenses for the selected date/period.
+  - A clear date-wise daily breakdown when a range contains multiple days, so sales, purchases, and expenses can be reviewed for each individual day, not only as one combined total.
+  - Relevant totals and a net summary where the underlying data supports it; clearly distinguish sales, purchases, and expenses rather than mixing them.
+  Review Android and Windows report screens and keep figures consistent with saved transactions and the selected date boundaries.
+
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
