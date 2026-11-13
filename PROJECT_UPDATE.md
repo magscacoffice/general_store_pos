@@ -45,6 +45,10 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] **Windows New Sale system-tray workflow — clarify and implement the intended behaviour.** User does NOT want a separate New Sale window to open automatically at startup. They want a New Sale entry/icon available in the Windows system tray (notification area near Wi-Fi, volume, and clock). When a barcode scanner reads an item, the tray workflow should be able to bring up/show the New Sale interface and add the scanned item automatically. Review Windows tray integration, app running/minimized state, scanner input/focus, and safe popup behaviour. Confirm the exact desired activation behaviour before implementing if technical details remain ambiguous; do not make the app steal focus unexpectedly.
 - [ ] **Windows New Sale — one combined scan/search input.** Keep barcode scanning and product search in one unified field, not two separate adjacent fields.
 
+## Cross-platform inventory duplicate-check note from user (2026-11-13)
+
+- [ ] **[Android + Windows] Detect an already-inventory barcode immediately during product entry.** When adding a product, if the scanned barcode already belongs to a product in inventory, the app should detect and notify the user immediately at scan time (before the user spends time entering the rest of the product details). Current reported behaviour: the duplicate barcode is accepted during entry and only reported when the user presses Save, wasting time and entered work. Review and fix the barcode lookup/duplicate validation flow on both Android and Windows. Keep legitimate editing/updating of an existing product possible; distinguish an intentional edit from accidentally adding a duplicate new product. Add appropriate feedback and verify both platforms.
+
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
