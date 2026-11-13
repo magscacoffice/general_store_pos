@@ -49,6 +49,10 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 - [ ] **[Android + Windows] Detect an already-inventory barcode immediately during product entry.** When adding a product, if the scanned barcode already belongs to a product in inventory, the app should detect and notify the user immediately at scan time (before the user spends time entering the rest of the product details). Current reported behaviour: the duplicate barcode is accepted during entry and only reported when the user presses Save, wasting time and entered work. Review and fix the barcode lookup/duplicate validation flow on both Android and Windows. Keep legitimate editing/updating of an existing product possible; distinguish an intentional edit from accidentally adding a duplicate new product. Add appropriate feedback and verify both platforms.
 
+## Sales history / invoice detail note from user (2026-11-13)
+
+- [ ] **Sales History — open a selected invoice and show its complete contents.** When the user opens Sales History and taps/clicks an invoice, that invoice should open in a detail view. Show all items/products included in that sale and the relevant invoice details (such as quantities, rates, amounts, totals, date/time, bill number, customer/payment information where available). Review Android and Windows behaviour for consistency unless the existing platform design requires different layouts. The invoice detail must reflect the saved sale record and must not accidentally create or modify a sale.
+
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
