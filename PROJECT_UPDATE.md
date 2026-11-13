@@ -3,6 +3,14 @@
 > **Purpose:** This file is the single place to write new requirements, bugs, and follow-up work for the Khan Baba General Store POS app.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 
+## Ongoing note-taking agreement
+
+- User will report Khan Baba POS bugs, requirements, ideas, and observations naturally in this ChatGPT conversation; no special template or GitHub editing is required.
+- Add each relevant new point to this file as it is reported, preserving its meaning and marking it as pending, bug, idea, or completed only when its status is clear.
+- If a point is ambiguous, record the wording as reported and ask one concise clarification when needed; do not silently guess.
+- Before starting a batch of implementation work, review this file and the relevant conversation context so earlier notes are not missed.
+- Keep this agreement limited to the Khan Baba General Store POS repository.
+
 ## How to add an update
 
 Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein apni requirement likhein. Har nayi request ko alag checkbox ke saath add karein.
