@@ -63,6 +63,12 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
   - Relevant totals and a net summary where the underlying data supports it; clearly distinguish sales, purchases, and expenses rather than mixing them.
   Review Android and Windows report screens and keep figures consistent with saved transactions and the selected date boundaries.
 
+
+## Khata customer ledger and shareable statements note from user (2026-11-13)
+
+- [ ] **Khata customer account — provide a complete overall ledger that can be shared.** When the user opens/taps a Khata customer and views that customer's record, provide the full account ledger/history (all relevant transactions, purchases/charges, payments/receipts, dates, and running/outstanding balance where the saved data supports it) in a clear statement that can be shared with the customer.
+- [ ] **Khata customer account — allow a selective date-range statement of items purchased.** Provide an option to choose a specific date or custom from–to dates and generate a shareable statement showing what items/products that customer took during the selected period, with transaction dates and available quantities/rates/amounts and totals. The full overall ledger and the selective date-wise item statement should be separate, clearly labelled sharing options. Ensure the statement is based on the customer's saved records, respects date boundaries, and does not alter the account. Review Android and Windows for consistent functionality.
+
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
