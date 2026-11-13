@@ -132,3 +132,9 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 |---|---|---|---|
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
 | 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
+
+## Scanner hardware and supplier-invoice capture clarification (2026-11-13)
+
+- [ ] **Barcode scanner model — Speed X SP9260.** User has confirmed that the physical barcode scanner used with the POS is the **Speed X SP9260**. Use this exact model when reviewing scanner compatibility, configuration, focus/input handling, and Windows system-tray/New Sale behaviour. Do not confuse it with previously mentioned SpeedX model numbers.
+- [ ] **Supplier inventory invoice capture — use the Android/mobile camera.** Supplier purchase/inventory invoices will be scanned or photographed using the **mobile phone camera**. The intended workflow is camera capture followed by OCR-assisted extraction and an editable review/confirmation step before posting purchase, stock, or supplier-account changes. This is separate from the Speed X SP9260 barcode scanner, which is for scanning product barcodes.
+
