@@ -31,6 +31,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] **[VALIDATION] Android Build #150 ki FCM notification workflow failure resolve/verify karein.** APK compile aur release hui thi, lekin final notification step par `iamcredentials.googleapis.com` disabled hone ka error report hua tha. APK build success aur notification workflow success ko alag track karein.
 - [ ] **[SAMPLE ONLY — user approval required]** New Sale screen par product search field ko sale start hote hi keyboard focus dena. Ye sirf update likhne ka demo hai; is line ko actual task tab samjha jaye jab user isay confirm kare.
 
+## New notes from user (2026-11-13)
+
+- [ ] **Windows New Sale — combine barcode scan and product search into one field.** Currently the New Sale screen shows a barcode-scan cell and a separate search cell beside it. User wants a single unified input cell that supports both barcode scanning and product search; do not show two separate adjacent fields. Preserve the existing scan/search behaviour while combining the UI.
+- [ ] **Windows app — redesign as a professional native desktop POS interface.** The current Windows version still looks like the Android/mobile UI. User wants a proper Windows desktop software experience, with a professional desktop layout and interaction patterns rather than simply reusing the Android screen design. Review the Windows-specific UI and implement a coherent desktop-oriented interface.
+
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
