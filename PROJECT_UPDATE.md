@@ -26,11 +26,6 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Add new tasks below this line. Keep each task specific. -->
 
-- [ ] **[VALIDATION] Windows Google Drive login aur token refresh test karein.** Windows OAuth code mein `GOOGLE_WINDOWS_CLIENT_SECRET` support add karke commit kiya gaya tha (commit `1c9fe93`). GitHub Actions Windows Build #48 ka rerun pehle queued report hua tha; final result aur app ke andar successful login/refresh abhi verify karna baqi hai.
-- [ ] **[INVESTIGATION] Windows black-screen issue dobara reproduce aur root cause identify karein.** Build #17 pehle kaam kar rahi thi, Build #20 par black screen report hui thi, aur Build #14 baad mein dashboard tak open hui. Current status ko fresh build par verify karein; purane test ko current result na samjhein.
-- [ ] **[VALIDATION] Android Build #150 ki FCM notification workflow failure resolve/verify karein.** APK compile aur release hui thi, lekin final notification step par `iamcredentials.googleapis.com` disabled hone ka error report hua tha. APK build success aur notification workflow success ko alag track karein.
-- [ ] **[SAMPLE ONLY — user approval required]** New Sale screen par product search field ko sale start hote hi keyboard focus dena. Ye sirf update likhne ka demo hai; is line ko actual task tab samjha jaye jab user isay confirm kare.
-
 ## New notes from user (2026-11-13)
 
 - [ ] **Windows New Sale — combine barcode scan and product search into one field.** Currently the New Sale screen shows a barcode-scan cell and a separate search cell beside it. User wants a single unified input cell that supports both barcode scanning and product search; do not show two separate adjacent fields. Preserve the existing scan/search behaviour while combining the UI.
