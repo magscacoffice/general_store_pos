@@ -18,18 +18,28 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Add new tasks below this line. Keep each task specific. -->
 
-- [ ] Yahan apni nayi requirement likhein.
+- [ ] **[VALIDATION] Windows Google Drive login aur token refresh test karein.** Windows OAuth code mein `GOOGLE_WINDOWS_CLIENT_SECRET` support add karke commit kiya gaya tha (commit `1c9fe93`). GitHub Actions Windows Build #48 ka rerun pehle queued report hua tha; final result aur app ke andar successful login/refresh abhi verify karna baqi hai.
+- [ ] **[INVESTIGATION] Windows black-screen issue dobara reproduce aur root cause identify karein.** Build #17 pehle kaam kar rahi thi, Build #20 par black screen report hui thi, aur Build #14 baad mein dashboard tak open hui. Current status ko fresh build par verify karein; purane test ko current result na samjhein.
+- [ ] **[VALIDATION] Android Build #150 ki FCM notification workflow failure resolve/verify karein.** APK compile aur release hui thi, lekin final notification step par `iamcredentials.googleapis.com` disabled hone ka error report hua tha. APK build success aur notification workflow success ko alag track karein.
+- [ ] **[SAMPLE ONLY — user approval required]** New Sale screen par product search field ko sale start hote hi keyboard focus dena. Ye sirf update likhne ka demo hai; is line ko actual task tab samjha jaye jab user isay confirm kare.
 
 ## Bugs
 
 <!-- Copy this template for each new bug. -->
 
-### Bug: [short title]
-- **Screen / feature:**
-- **Steps to reproduce:**
-- **Expected result:**
-- **Actual result:**
-- **Screenshot / video (optional):**
+### Bug: Windows POS black screen (previously reported; needs fresh reproduction)
+- **Screen / feature:** Windows portable app startup / dashboard.
+- **Steps to reproduce:** Windows portable build ko launch karein. Historical report mein Build #20 par app window black rahi aur process background mein chalti rahi.
+- **Expected result:** POS window par login/dashboard normal display ho.
+- **Actual result:** Black screen report hui. Historical diagnostics mein Flutter engine/first Dart frame aur SQLite initialization ke logs aaye; ek diagnostic probe par `MissingPluginException` for `mobile_scanner` bhi report hua. Is exception ko root cause tab tak na samjhein jab tak reproduce aur isolate na ho.
+- **Screenshot / video (optional):** Is bug ke liye current screenshot/video abhi record nahi.
+
+**Bug report karne ka demo template (nayi report ke liye copy karein):**
+- **Screen / feature:** [screen ka naam]
+- **Steps to reproduce:** [1, 2, 3]
+- **Expected result:** [kya hona chahiye]
+- **Actual result:** [asal mein kya hua]
+- **Screenshot / video:** [agar ho]
 
 ## Ideas / Future Improvements
 
@@ -37,9 +47,12 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Completed Updates
 
-<!-- Completed work is recorded here with date and commit/build reference where available. -->
+<!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. -->
 
-- None recorded yet.
+- [x] **Backup restore database-lock fix** — restore process ko alternate restored database file aur `.active_database` marker use karne ke liye update kiya gaya. User ne restore successful hone ki tasdeeq ki. Commit: `ad235ff873cd620a775f8a3fe3a51e8359b61878`.
+- [x] **Windows Google OAuth client-secret handling code** — Windows auth-code exchange aur refresh-token requests mein `GOOGLE_WINDOWS_CLIENT_SECRET` support add ki gayi aur Windows workflow mein Dart define wire kiya gaya. Commit: `1c9fe93cb66e7367666227db63545721901cf4e2`. **Note:** Code change complete hai; Windows app mein real sign-in/token-refresh validation abhi pending hai (upar Pending Updates dekhein).
+- [x] **Android Build #150 APK compilation/release** — APK successfully compile aur GitHub release par publish hui. Commit: `16187c3`; release: `v1.0.0-build150`. **Note:** Is build ki final FCM notification step fail hui thi; notification workflow ko complete na samjhein.
+- [x] **PROJECT_UPDATE.md tracking file created** — Khan Baba POS repo ke `main` branch par project update log create kiya gaya. Commit: `2c2409275da6a2518a1ca6b676605867e130a25d`.
 
 ## Important Project Rules
 
@@ -60,4 +73,5 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 | Date | Work summary | Commit / Build | Status |
 |---|---|---|---|
-| YYYY-MM-DD | Add completed work here | SHA / build number | Done |
+| 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
+| 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
