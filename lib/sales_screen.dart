@@ -528,6 +528,23 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> _handleUnifiedProductInput(String rawInput) async {
+    final value = rawInput.trim();
+    if (value.isEmpty || !mounted) return;
+    _usbBarcodeController.clear();
+    final products = await DBHelper.getProducts();
+    if (!mounted) return;
+    final exactBarcode = products.any(
+      (product) => product['barcode']?.toString().trim() == value,
+    );
+    if (exactBarcode) {
+      await _addUsbBarcode(value);
+      return;
+    }
+    _productSearchController.text = value;
+    await _searchAndAddProduct();
+  }
+
   Future<void> _addUsbBarcode(String rawBarcode) async {
     final barcode = rawBarcode.trim();
     if (barcode.isEmpty || !mounted) return;
@@ -1524,48 +1541,21 @@ class _SalesScreenState extends State<SalesScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 42,
-                            child: TextField(
-                              controller: _usbBarcodeController,
-                              focusNode: _usbBarcodeFocusNode,
-                              autofocus: true,
-                              onSubmitted: _addUsbBarcode,
-                              textInputAction: TextInputAction.done,
-                              decoration: const InputDecoration(
-                                prefixIcon: Icon(Icons.qr_code_scanner),
-                                labelText: 'Barcode scanner',
-                                hintText: 'Scan barcode and press Enter',
-                              ),
-                            ),
-                          ),
+                    child: SizedBox(
+                      height: 42,
+                      child: TextField(
+                        controller: _usbBarcodeController,
+                        focusNode: _usbBarcodeFocusNode,
+                        autofocus: true,
+                        onSubmitted: _handleUnifiedProductInput,
+                        textInputAction: TextInputAction.done,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.qr_code_scanner),
+                          labelText: 'Scan / Search Product',
+                          hintText: 'Scan barcode or type product name, then press Enter',
+                          suffixIcon: Icon(Icons.search),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SizedBox(
-                            height: 42,
-                            child: OutlinedButton.icon(
-                              onPressed: _searchAndAddProduct,
-                              icon: const Icon(Icons.search),
-                              label: const Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Find product by name  (F2)',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                alignment: Alignment.centerLeft,
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   Expanded(

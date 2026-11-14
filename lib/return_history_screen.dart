@@ -92,8 +92,10 @@ class _ReturnHistoryScreenState extends State<ReturnHistoryScreen> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: SingleChildScrollView(
-                child: DataTable(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  child: DataTable(
                   headingRowHeight: 42,
                   dataRowMinHeight: 42,
                   dataRowMaxHeight: 54,
@@ -120,6 +122,7 @@ class _ReturnHistoryScreenState extends State<ReturnHistoryScreen> {
                       DataCell(TextButton(onPressed: () => _showReturnDetails(row), child: const Text('View items'))),
                     ]);
                   }).toList(),
+                  ),
                 ),
               ),
             ),

@@ -2,15 +2,6 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feature/stock-profit-khata-backup
-      - feature/wholesale-customer-billing
-      - codex/khan-baba-pos-final-test-2
-  pull_request:
-    branches:
-      - feature/wholesale-customer-billing
 
 jobs:
   build:
@@ -124,7 +115,7 @@ jobs:
 
       - name: Publish permanent GitHub Release
         id: publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: Khan Baba POS ${{ steps.release.outputs.version_name }} (Build ${{ steps.release.outputs.build_number }})

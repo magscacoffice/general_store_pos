@@ -75,6 +75,31 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     Expanded(
                       child: TextField(
                         controller: barcodeController,
+                        onSubmitted: (value) async {
+                          final scannedBarcode = value.trim();
+                          if (scannedBarcode.isEmpty) return;
+                          final allProducts = await DBHelper.getProducts();
+                          final duplicate = allProducts.where((item) =>
+                            item['barcode']?.toString().trim() == scannedBarcode &&
+                            (product == null || (item['id'] as num).toInt() != (product['id'] as num).toInt())
+                          );
+                          if (duplicate.isNotEmpty && dialogContext.mounted) {
+                            final existingName = duplicate.first['name']?.toString() ?? 'another product';
+                            await showDialog<void>(
+                              context: dialogContext,
+                              builder: (alertContext) => AlertDialog(
+                                title: const Text('Duplicate barcode'),
+                                content: Text('Barcode $scannedBarcode pehle se "$existingName" ke saath registered hai.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(alertContext),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        },
                         decoration: const InputDecoration(
                           labelText: 'Barcode *',
                         ),
@@ -93,7 +118,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                         );
                         if (code != null) {
-                          barcodeController.text = code;
+                          final scannedBarcode = code.toString().trim();
+                          final allProducts = await DBHelper.getProducts();
+                          final duplicate = allProducts.where((item) =>
+                            item['barcode']?.toString().trim() == scannedBarcode &&
+                            (product == null || (item['id'] as num).toInt() != (product['id'] as num).toInt())
+                          );
+                          if (duplicate.isNotEmpty) {
+                            final existingName = duplicate.first['name']?.toString() ?? 'another product';
+                            if (dialogContext.mounted) {
+                              await showDialog<void>(
+                                context: dialogContext,
+                                builder: (alertContext) => AlertDialog(
+                                  title: const Text('Duplicate barcode'),
+                                  content: Text('Barcode $scannedBarcode pehle se "$existingName" ke saath registered hai.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(alertContext),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                          } else {
+                            barcodeController.text = scannedBarcode;
+                          }
                         }
                       },
                     ),
@@ -147,6 +197,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SnackBar(
                       content: Text('Bar code aur Name lazmi hain!'),
                     ),
+                  );
+                  return;
+                }
+
+                final allProducts = await DBHelper.getProducts();
+                final duplicate = allProducts.where((item) =>
+                  item['barcode']?.toString().trim() == barcode &&
+                  (product == null || (item['id'] as num).toInt() != (product['id'] as num).toInt())
+                );
+                if (duplicate.isNotEmpty) {
+                  final existingName = duplicate.first['name']?.toString() ?? 'another product';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Barcode pehle se "$existingName" ke naam par mojood hai.')),
                   );
                   return;
                 }
@@ -284,8 +347,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               thumbVisibility: true,
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
-                                child: SingleChildScrollView(
-                                  child: DataTable(
+                                child: Scrollbar(
+                                  thumbVisibility: true,
+                                  notificationPredicate: (notification) => notification.metrics.axis == Axis.vertical,
+                                  child: SingleChildScrollView(
+                                    child: DataTable(
                                     headingRowHeight: 40,
                                     dataRowMinHeight: 40,
                                     dataRowMaxHeight: 48,
@@ -337,6 +403,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                         )),
                                       ]);
                                     }).toList(),
+                                    ),
                                   ),
                                 ),
                               ),

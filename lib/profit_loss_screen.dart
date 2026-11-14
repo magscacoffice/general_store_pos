@@ -88,9 +88,12 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : Platform.isWindows
-              ? Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
+              ? Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('All-time financial summary', style: Theme.of(context).textTheme.titleLarge),
@@ -128,6 +131,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                         ),
                       ),
                     ],
+                      ),
+                    ),
                   ),
                 )
               : RefreshIndicator(

@@ -192,8 +192,11 @@ class _PartyScreenState extends State<PartyScreen> {
                 thumbVisibility: true,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    notificationPredicate: (notification) => notification.metrics.axis == Axis.vertical,
+                    child: SingleChildScrollView(
+                      child: DataTable(
                       headingRowHeight: 42,
                       dataRowMinHeight: 42,
                       dataRowMaxHeight: 54,
@@ -257,6 +260,7 @@ class _PartyScreenState extends State<PartyScreen> {
                           )),
                         ]);
                       }).toList(),
+                      ),
                     ),
                   ),
                 ),

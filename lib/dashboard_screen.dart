@@ -19,6 +19,8 @@ import 'profit_loss_screen.dart';
 import 'party_screen.dart';
 import 'reminders_screen.dart';
 import 'windows/pos_windows.dart';
+import 'windows/windows_update_service.dart';
+import 'update_manager.dart';
 
 class DashboardScreen extends StatelessWidget {
   final String role;
@@ -37,6 +39,24 @@ class DashboardScreen extends StatelessWidget {
         elevation: 0,
         toolbarHeight: Platform.isWindows ? 48 : 56,
         actions: [
+          if (Platform.isWindows)
+            IconButton(
+              tooltip: 'Check for Windows updates',
+              icon: const Icon(Icons.system_update_alt),
+              onPressed: () => WindowsPosUpdateService.checkAndPrompt(
+                context,
+                manual: true,
+              ),
+            ),
+          if (!Platform.isWindows)
+            IconButton(
+              tooltip: 'Check for Android updates',
+              icon: const Icon(Icons.system_update_alt),
+              onPressed: () => PosUpdateService.checkAndPrompt(
+                context,
+                manual: true,
+              ),
+            ),
           IconButton(
             tooltip: 'Google Drive Cloud Sync',
             icon: const Icon(Icons.cloud_sync_outlined),
@@ -111,8 +131,10 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         const Divider(height: 1),
                         Expanded(
-                          child: ListView(
-                            padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: ListView(
+                              padding: const EdgeInsets.symmetric(vertical: 5),
                             children: [
                               _desktopNavItem(context, 'New Sale / Billing', Icons.point_of_sale, const SalesScreen()),
                               _desktopNavItem(context, 'Inventory / Stock', Icons.inventory_2, const InventoryScreen()),
@@ -129,7 +151,8 @@ class DashboardScreen extends StatelessWidget {
                                 _desktopNavItem(context, 'Salesmen / Staff', Icons.manage_accounts, const SalesmenManagementScreen()),
                               _desktopNavItem(context, 'Cloud Sync', Icons.cloud_sync_outlined, const CloudSyncScreen()),
                               _desktopNavItem(context, 'Settings / Backup', Icons.settings, const BackupScreen()),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                         const Padding(

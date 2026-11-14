@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -18,6 +19,7 @@ class PosUpdate {
   final String notes;
   final Uri apkUri;
   final Uri checksumUri;
+  final int fileSizeBytes;
 
   const PosUpdate({
     required this.buildNumber,
@@ -26,6 +28,7 @@ class PosUpdate {
     required this.notes,
     required this.apkUri,
     required this.checksumUri,
+    required this.fileSizeBytes,
   });
 }
 
@@ -53,8 +56,9 @@ class PosUpdateService {
     }
 
     final release = jsonDecode(response.body) as Map<String, dynamic>;
+    if (release['draft'] == true || release['prerelease'] == true) return null;
     final tag = release['tag_name']?.toString() ?? '';
-    final match = RegExp(r'-build(\d+)$').firstMatch(tag);
+    final match = RegExp(r'-build(\d+).firstMatch(tag);
     if (match == null) return null;
 
     final buildNumber = int.tryParse(match.group(1)!) ?? 0;
@@ -64,26 +68,34 @@ class PosUpdateService {
         .whereType<Map<String, dynamic>>();
     Uri? apkUri;
     Uri? checksumUri;
+    var fileSizeBytes = 0;
     for (final asset in assets) {
       final name = asset['name']?.toString();
       final url = asset['browser_download_url']?.toString();
       if (url == null) continue;
-      if (name == 'app-release.apk') apkUri = Uri.tryParse(url);
+      if (name == 'app-release.apk') {
+        apkUri = Uri.tryParse(url);
+        fileSizeBytes = (asset['size'] as num?)?.toInt() ?? 0;
+      }
       if (name == 'app-release.apk.sha256') checksumUri = Uri.tryParse(url);
     }
     if (apkUri == null || checksumUri == null) return null;
 
     return PosUpdate(
       buildNumber: buildNumber,
-      version: release['name']?.toString() ?? tag,
+      version: tag,
       title: release['name']?.toString() ?? 'Khan Baba POS update',
       notes: release['body']?.toString() ?? '',
       apkUri: apkUri,
       checksumUri: checksumUri,
+      fileSizeBytes: fileSizeBytes,
     );
   }
 
-  static Future<File> downloadAndVerify(PosUpdate update) async {
+  static Future<File> downloadAndVerify(
+    PosUpdate update, {
+    void Function(int received, int total)? onProgress,
+  }) async {
     final checksumResponse = await http
         .get(update.checksumUri)
         .timeout(const Duration(seconds: 30));
@@ -99,7 +111,8 @@ class PosUpdateService {
 
     final directory = await getTemporaryDirectory();
     final apkFile = File(
-        '${directory.path}${Platform.pathSeparator}khan-baba-pos-update-${update.buildNumber}.apk');
+      '${directory.path}${Platform.pathSeparator}khan-baba-pos-update-${update.buildNumber}.apk',
+    );
     final client = HttpClient();
     final output = apkFile.openWrite();
     final digestSink = _Sha256DigestSink();
@@ -108,13 +121,20 @@ class PosUpdateService {
       final request = await client
           .getUrl(update.apkUri)
           .timeout(const Duration(seconds: 30));
-      final response = await request.close().timeout(const Duration(minutes: 5));
+      final response = await request.close().timeout(const Duration(minutes: 8));
       if (response.statusCode != HttpStatus.ok) {
         throw HttpException('APK download failed (${response.statusCode}).');
       }
+      final total = response.contentLength > 0
+          ? response.contentLength
+          : update.fileSizeBytes;
+      var received = 0;
+      onProgress?.call(received, total);
       await for (final chunk in response) {
         output.add(chunk);
         digestConverter.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, total);
       }
       digestConverter.close();
       await output.flush();
@@ -131,7 +151,8 @@ class PosUpdateService {
     if (actualChecksum != expectedChecksum) {
       if (await apkFile.exists()) await apkFile.delete();
       throw const FormatException(
-          'APK verification failed. The downloaded file was not installed.');
+        'APK verification failed. The downloaded file was not installed.',
+      );
     }
     return apkFile;
   }
@@ -145,6 +166,159 @@ class PosUpdateService {
       throw Exception(result.message.isEmpty
           ? 'Android installer could not open the APK.'
           : result.message);
+    }
+  }
+
+  static Future<File> _lastPromptFile() async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}last-android-update-prompted.txt');
+  }
+
+  static String _formatSize(int bytes) {
+    if (bytes <= 0) return 'Size unavailable';
+    final mb = bytes / (1024 * 1024);
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+
+  static Future<void> checkAndPrompt(
+    BuildContext context, {
+    bool manual = false,
+  }) async {
+    PosUpdate? update;
+    try {
+      update = await checkForUpdate();
+    } catch (error) {
+      if (manual && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Update check failed: $error')),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    if (update == null) {
+      if (manual) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Koi naya stable Android update available nahi hai.')),
+        );
+      }
+      return;
+    }
+
+    final availableUpdate = update;
+    final promptFile = await _lastPromptFile();
+    if (!manual && await promptFile.exists()) {
+      final last = int.tryParse((await promptFile.readAsString()).trim()) ?? 0;
+      if (last >= availableUpdate.buildNumber) return;
+    }
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.system_update_alt, color: Colors.teal, size: 36),
+        title: const Text('Khan Baba POS update available'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(availableUpdate.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('Build: ${availableUpdate.buildNumber}  •  Size: ${_formatSize(availableUpdate.fileSizeBytes)}'),
+              if (availableUpdate.notes.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(availableUpdate.notes.trim()),
+              ],
+              const SizedBox(height: 10),
+              const Text(
+                'Download verify hone ke baad Android package installer khulega. App data delete nahi kiya jayega.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Baad mein'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.download),
+            label: const Text('Update karein'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted != true || !context.mounted) {
+      if (accepted == false) {
+        await promptFile.writeAsString(availableUpdate.buildNumber.toString(), flush: true);
+      }
+      return;
+    }
+
+    final progress = ValueNotifier<double>(0);
+    final progressText = ValueNotifier<String>('Preparing secure download...');
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Downloading Android update'),
+        content: ValueListenableBuilder<String>(
+          valueListenable: progressText,
+          builder: (_, label, __) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(label),
+              const SizedBox(height: 12),
+              ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (_, value, __) => LinearProgressIndicator(
+                  value: value < 0 ? null : value,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ));
+
+    try {
+      final apkFile = await downloadAndVerify(
+        availableUpdate,
+        onProgress: (received, total) {
+          if (total > 0) {
+            progress.value = (received / total).clamp(0.0, 1.0).toDouble();
+            progressText.value =
+                'Downloaded ${_formatSize(received)} of ${_formatSize(total)}';
+          } else {
+            progress.value = -1;
+            progressText.value = 'Downloaded ${_formatSize(received)}';
+          }
+        },
+      );
+      if (!context.mounted) {
+        progress.dispose();
+        progressText.dispose();
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pop();
+      progress.dispose();
+      progressText.dispose();
+      // Do not suppress a later automatic prompt if the user cancels the
+      // Android package installer. An installed build will stop matching.
+      await install(apkFile);
+    } catch (error) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Update download/install nahi ho saki: $error')),
+        );
+      }
+      progress.dispose();
+      progressText.dispose();
     }
   }
 }
@@ -161,7 +335,7 @@ class UpdateAwareHome extends StatefulWidget {
 class _UpdateAwareHomeState extends State<UpdateAwareHome> {
   bool _checking = false;
   bool _dialogOpen = false;
-  final Set<int> _promptedBuilds = <int>{};
+  Timer? _periodicCheckTimer;
 
   @override
   void initState() {
@@ -169,6 +343,10 @@ class _UpdateAwareHomeState extends State<UpdateAwareHome> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeNotificationsAndCheck();
     });
+    _periodicCheckTimer = Timer.periodic(
+      const Duration(hours: 24),
+      (_) => _checkAndPrompt(),
+    );
   }
 
   Future<void> _initializeNotificationsAndCheck() async {
@@ -192,120 +370,29 @@ class _UpdateAwareHomeState extends State<UpdateAwareHome> {
       FirebaseMessaging.onMessageOpenedApp.listen((_) {
         _checkAndPrompt();
       });
-      final initialMessage = await messaging.getInitialMessage();
-      await _checkAndPrompt();
-      if (initialMessage != null) {
-        // The same update check handles a notification that launched the app.
-      }
+      await messaging.getInitialMessage();
     } catch (_) {
       // Push permission or connectivity must never block normal POS startup.
-      await _checkAndPrompt();
     }
+    await _checkAndPrompt();
   }
 
   Future<void> _checkAndPrompt() async {
     if (!mounted || _checking || _dialogOpen) return;
     _checking = true;
+    _dialogOpen = true;
     try {
-      final update = await PosUpdateService.checkForUpdate();
-      if (!mounted || update == null || _promptedBuilds.contains(update.buildNumber)) {
-        return;
-      }
-      _promptedBuilds.add(update.buildNumber);
-      _dialogOpen = true;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: true,
-        builder: (dialogContext) => AlertDialog(
-          icon: const Icon(Icons.system_update_alt, color: Colors.teal, size: 36),
-          title: const Text('Khan Baba POS update available'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(update.title,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (update.notes.trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(update.notes.trim()),
-                ],
-                const SizedBox(height: 10),
-                const Text(
-                  'Aapka data download aur update ke dauran delete nahi kiya jayega.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Baad mein'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                _downloadAndInstall(update);
-              },
-              icon: const Icon(Icons.download),
-              label: const Text('Update karein'),
-            ),
-          ],
-        ),
-      );
-      _dialogOpen = false;
-    } catch (_) {
-      // Update checks are best-effort and must not interrupt sales or login.
+      await PosUpdateService.checkAndPrompt(context);
     } finally {
       _checking = false;
       _dialogOpen = false;
     }
   }
 
-  Future<void> _downloadAndInstall(PosUpdate update) async {
-    if (!mounted) return;
-    _dialogOpen = true;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 18),
-            Expanded(child: Text('Update download aur verify ho rahi hai...')),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final apkFile = await PosUpdateService.downloadAndVerify(update);
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
-      _dialogOpen = false;
-      await PosUpdateService.install(apkFile);
-    } catch (error) {
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
-      _dialogOpen = false;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Update install nahi ho saki'),
-          content: Text(
-            '$error\n\nAgar Android unknown-app installation ki permission mange, Khan Baba POS ke liye Allow karein aur dobara Update karein.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Theek hai'),
-            ),
-          ],
-        ),
-      );
-    }
+  @override
+  void dispose() {
+    _periodicCheckTimer?.cancel();
+    super.dispose();
   }
 
   @override

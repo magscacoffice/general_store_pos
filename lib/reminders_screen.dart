@@ -119,8 +119,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         ),
                         const Divider(height: 1),
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: DataTable(
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              child: DataTable(
                               headingRowHeight: 42,
                               dataRowMinHeight: 40,
                               dataRowMaxHeight: 52,
@@ -136,6 +138,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                 DataCell(Text('${item['date'] ?? ''}')),
                                 DataCell(Text(item['is_done'] == 1 || item['is_done'] == true ? 'Completed' : 'Pending')),
                               ])).toList(),
+                              ),
                             ),
                           ),
                         ),

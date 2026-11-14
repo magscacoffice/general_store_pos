@@ -1637,7 +1637,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 14,
+      version: 16,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -1716,7 +1716,17 @@ class DBHelper {
           supplier_id INTEGER,
           sync_id TEXT,
           supplier_sync_id TEXT,
-          date TEXT NOT NULL
+          date TEXT NOT NULL,
+          invoice_group_id TEXT,
+          invoice_number TEXT,
+          invoice_date TEXT,
+          invoice_total REAL,
+          invoice_discount REAL,
+          invoice_tax REAL,
+          invoice_paid_amount REAL,
+          invoice_balance_due REAL,
+          invoice_image_path TEXT,
+          unit_label TEXT
         )''');
         await db.execute('''CREATE TABLE sale_items(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1831,6 +1841,33 @@ class DBHelper {
         )''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 15) {
+          await db.execute('''CREATE TABLE IF NOT EXISTS purchases(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            barcode TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_cost REAL NOT NULL,
+            total_cost REAL NOT NULL,
+            supplier_id INTEGER,
+            sync_id TEXT,
+            supplier_sync_id TEXT,
+            date TEXT NOT NULL
+          )''');
+          await _ensureColumn(db, 'purchases', 'invoice_group_id', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'invoice_number', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'invoice_date', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'invoice_total', 'REAL');
+          await _ensureColumn(db, 'purchases', 'invoice_discount', 'REAL');
+          await _ensureColumn(db, 'purchases', 'invoice_tax', 'REAL');
+          await _ensureColumn(db, 'purchases', 'invoice_paid_amount', 'REAL');
+          await _ensureColumn(db, 'purchases', 'invoice_balance_due', 'REAL');
+          await _ensureColumn(db, 'purchases', 'invoice_image_path', 'TEXT');
+        }
+        if (oldVersion < 16) {
+          await _ensureColumn(db, 'purchases', 'unit_label', 'TEXT');
+        }
         if (oldVersion < 10) {
           await _ensureColumn(db, 'products', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
         }
@@ -2965,6 +3002,198 @@ class DBHelper {
     });
     unawaited(syncPendingChanges());
     return purchaseId;
+  }
+
+  // Atomically post a supplier invoice: stock, purchase rows and supplier
+  // payable/payment ledger entries either all succeed or none are applied.
+  static Future<String> recordPurchaseInvoice({
+    required int supplierId,
+    required String invoiceNumber,
+    required String invoiceDate,
+    required double invoiceTotal,
+    double invoiceDiscount = 0,
+    double invoiceTax = 0,
+    required double paidAmount,
+    required List<Map<String, dynamic>> items,
+    String? invoiceImagePath,
+  }) async {
+    final normalizedInvoice = invoiceNumber.trim().toUpperCase();
+    if (normalizedInvoice.isEmpty) throw Exception('Supplier invoice number zaroori hai.');
+    if (!invoiceTotal.isFinite || invoiceTotal <= 0 ||
+        !invoiceDiscount.isFinite || invoiceDiscount < 0 ||
+        !invoiceTax.isFinite || invoiceTax < 0 ||
+        !paidAmount.isFinite || paidAmount < 0 || paidAmount > invoiceTotal) {
+      throw Exception('Invoice total aur paid amount valid enter karein.');
+    }
+    if (items.isEmpty) throw Exception('Invoice mein kam az kam aik item zaroori hai.');
+    for (final item in items) {
+      final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+      final unitCost = (item['unit_cost'] as num?)?.toDouble() ?? -1;
+      if (quantity <= 0 || !unitCost.isFinite || unitCost < 0) {
+        throw Exception('Har invoice item ki quantity aur purchase rate valid honi chahiye.');
+      }
+    }
+
+    final rawLineTotals = items.map((item) {
+      final quantity = (item['quantity'] as num?)?.toDouble() ?? 0;
+      final unitCost = (item['unit_cost'] as num?)?.toDouble() ?? 0;
+      return (item['line_total'] as num?)?.toDouble() ?? quantity * unitCost;
+    }).toList();
+    if (rawLineTotals.any((value) => !value.isFinite || value < 0)) {
+      throw Exception('Invoice item amount valid nahi.');
+    }
+    final rawItemsTotal = rawLineTotals.fold<double>(0, (sum, value) => sum + value);
+    final db = await database;
+    final invoiceGroupId = _newSyncId();
+    await db.transaction((txn) async {
+      final supplierRows = await txn.query(
+        'parties',
+        where: "id = ? AND type = 'supplier'",
+        whereArgs: [supplierId],
+        limit: 1,
+      );
+      if (supplierRows.isEmpty) throw Exception('Selected supplier nahi mila.');
+      final duplicate = await txn.query(
+        'purchases',
+        columns: ['id'],
+        where: 'supplier_id = ? AND invoice_number = ?',
+        whereArgs: [supplierId, normalizedInvoice],
+        limit: 1,
+      );
+      if (duplicate.isNotEmpty) {
+        throw Exception('Ye supplier invoice pehle hi stock mein post ho chuka hai.');
+      }
+
+      final supplierSyncId = supplierRows.first['sync_id']?.toString();
+      final now = DateTime.now().toIso8601String().substring(0, 19);
+      final payable = invoiceTotal - paidAmount;
+
+      for (var itemIndex = 0; itemIndex < items.length; itemIndex++) {
+        final item = items[itemIndex];
+        var productId = (item['product_id'] as num?)?.toInt();
+        final quantity = (item['quantity'] as num).toInt();
+        final unitCost = (item['unit_cost'] as num).toDouble();
+        final salePrice = (item['sale_price'] as num?)?.toDouble();
+        if (productId == null) {
+          final newName = item['new_product_name']?.toString().trim() ?? '';
+          final newBarcode = item['new_product_barcode']?.toString().trim() ?? '';
+          if (newName.isEmpty || newBarcode.isEmpty) {
+            throw Exception('Naye product ke liye name aur barcode dono zaroori hain.');
+          }
+          final duplicateBarcode = await txn.query(
+            'products', columns: ['id'], where: 'barcode = ?', whereArgs: [newBarcode], limit: 1,
+          );
+          if (duplicateBarcode.isNotEmpty) {
+            throw Exception('New product barcode $newBarcode pehle se inventory mein mojood hai.');
+          }
+          productId = await txn.insert('products', {
+            'name': newName,
+            'barcode': newBarcode,
+            'price': salePrice ?? 0,
+            'purchasePrice': unitCost,
+            'wholesalePrice': 0,
+            'damaged_quantity': 0,
+            'quantity': 0,
+            'is_active': 1,
+          });
+        }
+        final productRows = await txn.query(
+          'products', where: 'id = ?', whereArgs: [productId], limit: 1,
+        );
+        if (productRows.isEmpty) throw Exception('Invoice ka selected product inventory mein nahi mila.');
+        final product = productRows.first;
+        if (salePrice != null && (!salePrice.isFinite || salePrice < 0)) {
+          throw Exception('Retail sale price valid nahi.');
+        }
+        final barcode = product['barcode']?.toString() ?? '';
+        final rawLineTotal = rawLineTotals[itemIndex];
+        final adjustedLineTotal = rawItemsTotal > 0
+            ? rawLineTotal * invoiceTotal / rawItemsTotal
+            : invoiceTotal / items.length;
+        final effectiveUnitCost = adjustedLineTotal / quantity;
+        if (salePrice == null) {
+          await txn.rawUpdate(
+            'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
+            [quantity, effectiveUnitCost, productId],
+          );
+        } else {
+          await txn.rawUpdate(
+            'UPDATE products SET quantity = quantity + ?, purchasePrice = ?, price = ? WHERE id = ?',
+            [quantity, effectiveUnitCost, salePrice, productId],
+          );
+        }
+        final updated = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+        if (updated.isNotEmpty) {
+          final payload = Map<String, dynamic>.from(updated.first)..remove('id');
+          await _queueSync(txn, collection: 'products', documentId: barcode, payload: payload);
+        }
+
+        if (!adjustedLineTotal.isFinite || adjustedLineTotal < 0) {
+          throw Exception('Invoice item total valid nahi.');
+        }
+        final purchase = <String, dynamic>{
+          'product_id': productId,
+          'product_name': product['name']?.toString() ?? 'Product',
+          'barcode': barcode,
+          'quantity': quantity,
+          'unit_cost': unitCost,
+          'total_cost': adjustedLineTotal,
+          'supplier_id': supplierId,
+          'supplier_sync_id': supplierSyncId,
+          'sync_id': _newSyncId(),
+          'date': now,
+          'invoice_group_id': invoiceGroupId,
+          'invoice_number': normalizedInvoice,
+          'invoice_date': invoiceDate,
+          'invoice_total': invoiceTotal,
+          'invoice_discount': invoiceDiscount,
+          'invoice_tax': invoiceTax,
+          'invoice_paid_amount': paidAmount,
+          'invoice_balance_due': payable,
+          'invoice_image_path': invoiceImagePath,
+          'unit_label': item['unit_label']?.toString().trim(),
+        };
+        await txn.insert('purchases', purchase);
+        await _queueRow(txn, 'purchases', purchase,
+          remove: ['product_id', 'supplier_id', 'invoice_image_path']);
+      }
+
+      await txn.rawUpdate(
+        'UPDATE parties SET balance = COALESCE(balance, 0) + ? WHERE id = ?',
+        [payable, supplierId],
+      );
+      final purchaseEntry = <String, dynamic>{
+        'party_id': supplierId,
+        'party_sync_id': supplierSyncId,
+        'sync_id': _newSyncId(),
+        'type': 'supplier_purchase',
+        'amount': invoiceTotal,
+        'note': 'Supplier invoice $normalizedInvoice',
+        'date': now,
+      };
+      await txn.insert('khata_transactions', purchaseEntry);
+      await _queueRow(txn, 'khata_transactions', purchaseEntry, remove: ['party_id']);
+
+      if (paidAmount > 0) {
+        final paymentEntry = <String, dynamic>{
+          'party_id': supplierId,
+          'party_sync_id': supplierSyncId,
+          'sync_id': _newSyncId(),
+          'type': 'supplier_payment',
+          'amount': paidAmount,
+          'note': 'Payment against supplier invoice $normalizedInvoice',
+          'date': now,
+        };
+        await txn.insert('khata_transactions', paymentEntry);
+        await _queueRow(txn, 'khata_transactions', paymentEntry, remove: ['party_id']);
+      }
+      final updatedSupplier = await txn.query('parties', where: 'id = ?', whereArgs: [supplierId], limit: 1);
+      if (updatedSupplier.isNotEmpty) {
+        await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedSupplier.first));
+      }
+    });
+    unawaited(syncPendingChanges());
+    return invoiceGroupId;
   }
 
   static Future<List<Map<String, dynamic>>> getPurchases() async {

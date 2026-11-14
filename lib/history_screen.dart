@@ -87,6 +87,116 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Future<void> _showInvoiceDetails(Map<String, dynamic> sale) async {
+    final saleId = (sale['id'] as num).toInt();
+    final storedItems = await DBHelper.getSaleItems(saleId);
+    final customerId = (sale['customer_id'] as num?)?.toInt();
+    final customer = customerId == null ? null : await DBHelper.getPartyById(customerId);
+    if (!mounted) return;
+
+    final total = (sale['effective_amount'] as num?)?.toDouble() ??
+        (sale['final_amount'] as num?)?.toDouble() ??
+        (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final received = (sale['effective_received_amount'] as num?)?.toDouble() ??
+        (sale['received_amount'] as num?)?.toDouble() ?? 0.0;
+    final due = (sale['effective_balance_due'] as num?)?.toDouble() ??
+        (sale['balance_due'] as num?)?.toDouble() ??
+        (total - received).clamp(0.0, double.infinity).toDouble();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Invoice #$saleId Details'),
+        content: SizedBox(
+          width: MediaQuery.of(dialogContext).size.width * 0.8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Date / Time: ${sale['date'] ?? ''}\n'
+                  'Customer: ${customer?['name'] ?? 'Walk-in Customer'}  |  '
+                  'Type: ${sale['customer_type'] ?? 'Walk-in'}\n'
+                  'Payment: ${sale['payment_type'] ?? 'Cash'}',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: storedItems.isEmpty
+                    ? const Center(child: Text('Is invoice ki item details available nahi hain.'))
+                    : Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Product')),
+                              DataColumn(label: Text('Qty'), numeric: true),
+                              DataColumn(label: Text('Rate'), numeric: true),
+                              DataColumn(label: Text('Amount'), numeric: true),
+                            ],
+                            rows: storedItems.map((item) {
+                              final quantity = (item['quantity'] as num?)?.toDouble() ?? 0;
+                              final rate = (item['sale_price'] as num?)?.toDouble() ?? 0;
+                              final amount = (item['line_total'] as num?)?.toDouble() ?? quantity * rate;
+                              return DataRow(cells: [
+                                DataCell(SizedBox(
+                                  width: 260,
+                                  child: Text(
+                                    item['product_name']?.toString() ?? 'Product',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )),
+                                DataCell(Text(quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 2))),
+                                DataCell(Text('Rs. ${rate.toStringAsFixed(2)}')),
+                                DataCell(Text('Rs. ${amount.toStringAsFixed(2)}')),
+                              ]);
+                            }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+              const Divider(),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Subtotal: Rs. ${((sale['total_amount'] as num?)?.toDouble() ?? total).toStringAsFixed(2)}'),
+                    Text('Discount: Rs. ${((sale['discount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}'),
+                    Text('Grand Total: Rs. ${total.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('Received: Rs. ${received.toStringAsFixed(2)}'),
+                    Text('Balance Due: Rs. ${due.toStringAsFixed(2)}'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _reprintSale(sale);
+            },
+            icon: const Icon(Icons.print),
+            label: const Text('Reprint'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openReturn(Map<String, dynamic> sale) async {
     await Navigator.push(
       context,
@@ -120,8 +230,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 thumbVisibility: true,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      child: DataTable(
                       headingRowHeight: 42,
                       dataRowMinHeight: 42,
                       dataRowMaxHeight: 54,
@@ -146,7 +258,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ?? (sale['balance_due'] as num?)?.toDouble() ?? 0.0;
                         final returned = (sale['returned_amount'] as num?)?.toDouble() ?? 0.0;
                         return DataRow(cells: [
-                          DataCell(Text('#${sale['id']}', style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('#${sale['id']}', style: const TextStyle(fontWeight: FontWeight.w600)), onTap: () => _showInvoiceDetails(sale)),
                           DataCell(Text('${sale['date'] ?? ''}')),
                           DataCell(Text('${sale['customer_type'] ?? 'Walk-in'}')),
                           DataCell(Text('${sale['payment_type'] ?? 'Cash'}')),
@@ -167,6 +279,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           )),
                         ]);
                       }).toList(),
+                      ),
                     ),
                   ),
                 ),
@@ -211,6 +324,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     vertical: 5,
                   ),
                   child: ListTile(
+                    onTap: () => _showInvoiceDetails(sale),
                     leading: const CircleAvatar(
                       backgroundColor: Colors.purple,
                       child: Icon(Icons.receipt, color: Colors.white),

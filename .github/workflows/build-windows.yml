@@ -2,12 +2,9 @@ name: Build Windows POS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/khan-baba-pos-final-test-2
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -69,23 +66,29 @@ jobs:
       - name: Build release
         env:
           GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
-        run: flutter build windows --release --dart-define=GOOGLE_WINDOWS_CLIENT_SECRET=$env:GOOGLE_WINDOWS_CLIENT_SECRET
+          WINDOWS_BUILD_NUMBER: ${{ github.run_number }}
+        run: flutter build windows --release --dart-define=GOOGLE_WINDOWS_CLIENT_SECRET=$env:GOOGLE_WINDOWS_CLIENT_SECRET --dart-define=APP_BUILD_NUMBER=$env:WINDOWS_BUILD_NUMBER
 
-      - name: Download official Microsoft Visual C++ runtime
+      - name: Stage Microsoft Visual C++ runtime beside the portable app
         shell: pwsh
         run: |
           $releaseDir = "build/windows/x64/runner/Release"
-          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-          $runtime = Join-Path $releaseDir "VC_redist.x64.exe"
-          Invoke-WebRequest -Uri "https://aka.ms/vc14/vc_redist.x64.exe" -OutFile $runtime
-          if (-not (Test-Path $runtime) -or (Get-Item $runtime).Length -lt 1000000) {
-            throw "Microsoft Visual C++ Redistributable download is missing or incomplete."
+          $vswhere = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio/Installer/vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "Visual Studio locator was not found on the build runner." }
+          $vsPath = & $vswhere -latest -products "*" -property installationPath
+          if ([string]::IsNullOrWhiteSpace($vsPath)) { throw "Visual Studio installation path was not found." }
+          $crtRoot = Join-Path $vsPath "VC/Redist/MSVC"
+          $crt = Get-ChildItem -Path $crtRoot -Directory -Recurse -Filter "Microsoft.VC143.CRT" |
+            Where-Object { $_.FullName -like '*\x64\Microsoft.VC143.CRT' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw "App-local Microsoft VC runtime files were not found." }
+          Copy-Item -Path (Join-Path $crt.FullName "*") -Destination $releaseDir -Recurse -Force
+          foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            if (-not (Test-Path (Join-Path $releaseDir $dll))) {
+              throw "Required app-local runtime DLL is missing: $dll"
+            }
           }
-          $signature = Get-AuthenticodeSignature $runtime
-          if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "Microsoft") {
-            throw "Downloaded Visual C++ installer does not have a valid Microsoft signature."
-          }
-          Write-Host "Verified Microsoft-signed Visual C++ Redistributable."
+          Write-Host "Staged Microsoft VC runtime DLLs beside the POS executable; no runtime installer is required."
 
       - name: Verify portable runtime files
         shell: pwsh
@@ -102,8 +105,14 @@ jobs:
           if (-not $sqliteDll) {
             throw "SQLite native runtime (sqlite3.dll) is missing from the release package."
           }
+          foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            if (-not (Test-Path (Join-Path $releaseDir $dll))) {
+              throw "App-local Microsoft runtime DLL is missing: $dll"
+            }
+          }
           Write-Host "Verified executable: $($exe.Name)"
           Write-Host "Verified SQLite runtime: $($sqliteDll.FullName)"
+          Write-Host "Verified app-local Microsoft VC runtime."
 
       - name: Prepare portable package
         shell: pwsh
@@ -116,33 +125,15 @@ jobs:
           setlocal
           set "APP_DIR=%~dp0"
           set "APP_EXE=%APP_DIR%$($exe.Name)"
-          set "VC_INSTALLER=%APP_DIR%VC_redist.x64.exe"
           if not exist "%APP_EXE%" (
             echo Khan Baba POS executable was not found.
             echo Please extract the complete ZIP again and keep all files together.
             pause
             exit /b 1
           )
-          if not exist "%SystemRoot%\System32\vcruntime140_1.dll" (
-            if not exist "%VC_INSTALLER%" (
-              echo Microsoft Visual C++ Runtime installer is missing.
-              echo Please re-download the complete Khan Baba POS ZIP.
-              pause
-              exit /b 1
-            )
-            echo Installing the required Microsoft Visual C++ Runtime...
-            echo Windows may ask for administrator approval one time.
-            powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%VC_INSTALLER%' -ArgumentList '/install','/quiet','/norestart' -Verb RunAs -Wait"
-            if errorlevel 1 (
-              echo Visual C++ Runtime installation was not completed.
-              echo Please approve the Windows administrator prompt and try again.
-              pause
-              exit /b 1
-            )
-          )
-          if not exist "%SystemRoot%\System32\vcruntime140_1.dll" (
-            echo Required Visual C++ Runtime is still unavailable.
-            echo Restart Windows if the installer requested it, then try again.
+          if not exist "%APP_DIR%vcruntime140_1.dll" (
+            echo Required Microsoft runtime files are missing from this ZIP.
+            echo Please re-download and fully extract the complete Khan Baba POS package.
             pause
             exit /b 1
           )
@@ -161,7 +152,7 @@ jobs:
           3. Keep all files together in the extracted folder.
 
           NO INSTALLER / ADMIN RIGHTS
-          The POS itself is portable and stores data in your Windows user profile. If the Microsoft Visual C++ Runtime is missing, Start-Khan-Baba-POS.bat installs the official Microsoft runtime and may request one-time administrator approval.
+          The POS is portable. Its required Microsoft Visual C++ runtime files are included beside the app, so no installer or administrator approval is required.
           The database is stored in your Windows user profile, not inside the extracted app folder.
 
           DATA LOCATION
@@ -185,6 +176,164 @@ jobs:
 
           Compress-Archive -Path "$releaseDir/*" -DestinationPath build/khan-baba-pos-windows.zip -Force
 
+      - name: Prepare Windows update release
+        id: release
+        shell: pwsh
+        run: |
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:'
+          $version = ($versionLine.Line -split '\s+')[1].Split('+')[0]
+          $tag = "windows-v$version-build$env:GITHUB_RUN_NUMBER"
+          $zip = "build/khan-baba-pos-windows.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  khan-baba-pos-windows.zip" | Set-Content -Path "build/khan-baba-pos-windows.zip.sha256" -Encoding ASCII
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Publish Windows update release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Khan Baba POS Windows ${{ steps.release.outputs.tag }}
+          body: |
+            Stable Windows portable update package.
+
+            This release is separate from Android releases and is used by the Windows in-app updater.
+            The package replaces application files only. Local database and settings remain in the Windows user profile.
+          files: |
+            build/khan-baba-pos-windows.zip
+            build/khan-baba-pos-windows.zip.sha256
+          make_latest: false
+          overwrite_files: true
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: khan-baba-pos-windows
+          path: build/khan-baba-pos-windows.zip
+          if-no-files-found: error
+          retention-days: 3
+ } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw "App-local Microsoft VC runtime files were not found." }
+          Copy-Item -Path (Join-Path $crt.FullName "*") -Destination $releaseDir -Recurse -Force
+          foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            if (-not (Test-Path (Join-Path $releaseDir $dll))) {
+              throw "Required app-local runtime DLL is missing: $dll"
+            }
+          }
+          Write-Host "Staged Microsoft VC runtime DLLs beside the POS executable; no runtime installer is required."
+
+      - name: Verify portable runtime files
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Get-ChildItem $releaseDir -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "Windows POS executable was not found." }
+          foreach ($required in @("flutter_windows.dll", "data/flutter_assets")) {
+            if (-not (Test-Path (Join-Path $releaseDir $required))) {
+              throw "Required portable runtime item is missing: $required"
+            }
+          }
+          $sqliteDll = Get-ChildItem $releaseDir -Filter "sqlite3.dll" -Recurse | Select-Object -First 1
+          if (-not $sqliteDll) {
+            throw "SQLite native runtime (sqlite3.dll) is missing from the release package."
+          }
+          foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            if (-not (Test-Path (Join-Path $releaseDir $dll))) {
+              throw "App-local Microsoft runtime DLL is missing: $dll"
+            }
+          }
+          Write-Host "Verified executable: $($exe.Name)"
+          Write-Host "Verified SQLite runtime: $($sqliteDll.FullName)"
+          Write-Host "Verified app-local Microsoft VC runtime."
+
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Get-ChildItem $releaseDir -Filter *.exe | Select-Object -First 1
+
+          @"
+          @echo off
+          setlocal
+          set "APP_DIR=%~dp0"
+          set "APP_EXE=%APP_DIR%$($exe.Name)"
+          if not exist "%APP_EXE%" (
+            echo Khan Baba POS executable was not found.
+            echo Please extract the complete ZIP again and keep all files together.
+            pause
+            exit /b 1
+          )
+          if not exist "%APP_DIR%vcruntime140_1.dll" (
+            echo Required Microsoft runtime files are missing from this ZIP.
+            echo Please re-download and fully extract the complete Khan Baba POS package.
+            pause
+            exit /b 1
+          )
+          pushd "%APP_DIR%"
+          start "" "%APP_EXE%"
+          popd
+          endlocal
+          "@ | Set-Content -Path (Join-Path $releaseDir "Start-Khan-Baba-POS.bat") -Encoding ASCII
+
+          @"
+          KHAN BABA GENERAL STORE - WINDOWS PORTABLE POS
+
+          QUICK START
+          1. Extract the complete ZIP to a normal folder such as Documents or Desktop.
+          2. Double-click Start-Khan-Baba-POS.bat.
+          3. Keep all files together in the extracted folder.
+
+          NO INSTALLER / ADMIN RIGHTS
+          The POS is portable. Its required Microsoft Visual C++ runtime files are included beside the app, so no installer or administrator approval is required.
+          The database is stored in your Windows user profile, not inside the extracted app folder.
+
+          DATA LOCATION
+          %LOCALAPPDATA%\KhanBabaPOS\Data\khan_baba_pos.db
+          If Local AppData is unavailable, the app checks the roaming AppData and local user profile paths.
+          Updating the app ZIP does not replace the database. Continue to use Backup & Restore regularly.
+
+          STARTUP DIAGNOSTICS
+          Native startup stages are recorded in:
+          %LOCALAPPDATA%\KhanBabaPOS\Logs\native-startup.log
+          Dart/database startup errors are recorded in:
+          %LOCALAPPDATA%\KhanBabaPOS\Logs\startup.log
+          The app does not need administrator rights. If Windows or office security policy blocks the EXE,
+          ask the IT administrator to allow this app rather than running it as Administrator.
+
+          CLOUD SYNC
+          Google Drive sync is available from the Cloud Sync screen. Connect the same Google account on Windows and Android. Windows is the master copy; review stock and Khata balance conflicts before approving Android changes. Both devices remain usable offline.
+
+          USB scanner and printer behavior depends on device mode and installed Windows drivers.
+          "@ | Set-Content -Path (Join-Path $releaseDir "README-PORTABLE.txt") -Encoding UTF8
+
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath build/khan-baba-pos-windows.zip -Force
+
+      - name: Prepare Windows update release
+        id: release
+        shell: pwsh
+        run: |
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:'
+          $version = ($versionLine.Line -split '\s+')[1].Split('+')[0]
+          $tag = "windows-v$version-build$env:GITHUB_RUN_NUMBER"
+          $zip = "build/khan-baba-pos-windows.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  khan-baba-pos-windows.zip" | Set-Content -Path "build/khan-baba-pos-windows.zip.sha256" -Encoding ASCII
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Publish Windows update release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Khan Baba POS Windows ${{ steps.release.outputs.tag }}
+          body: |
+            Stable Windows portable update package.
+
+            This release is separate from Android releases and is used by the Windows in-app updater.
+            The package replaces application files only. Local database and settings remain in the Windows user profile.
+          files: |
+            build/khan-baba-pos-windows.zip
+            build/khan-baba-pos-windows.zip.sha256
+          make_latest: false
+          overwrite_files: true
       - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:

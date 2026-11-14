@@ -118,8 +118,12 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: SingleChildScrollView(
-                child: DataTable(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
                   headingRowHeight: 42,
                   dataRowMinHeight: 42,
                   dataRowMaxHeight: 52,
@@ -169,7 +173,10 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
                         )),
                       ],
                     );
-                  }).toList(),
+                    }).toList(),
+                    ),
+                  ),
+                  ),
                 ),
               ),
             ),

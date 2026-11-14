@@ -15,6 +15,8 @@ import 'auth_gate.dart';
 import 'dashboard_screen.dart';
 import 'sales_screen.dart';
 import 'windows/pos_windows.dart';
+import 'windows/system_tray_service.dart';
+import 'windows/windows_update_service.dart';
 import 'windows/desktop_theme.dart';
 import 'db_helper.dart';
 import 'drive_sync_service.dart';
@@ -76,7 +78,7 @@ Future<void> main(List<String> args) async {
     }
     final windowType = windowArguments['type']?.toString() ?? PosWindows.dashboard;
     // The primary native window is the Dashboard; open a separate cashier window on launch.
-    final openSaleOnStart = windowArguments.isEmpty && windowType == PosWindows.dashboard;
+    final openSaleOnStart = false;
     final billId = windowArguments['billId']?.toString();
     runApp(KhanBabaPOSApp(
       windowsLocalMode: true,
@@ -156,6 +158,7 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
   Object? _error;
   String? _logPath;
   bool _allowCloseForRestore = false;
+  Timer? _updateCheckTimer;
 
   @override
   void initState() {
@@ -191,6 +194,18 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
         ));
       }
       unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
+      if (widget.windowType == PosWindows.dashboard) {
+        try {
+          await PosSystemTrayService.initialize();
+          unawaited(_writeWindowsStartupLog('Windows system tray initialized.'));
+        } catch (error, stackTrace) {
+          unawaited(_writeWindowsStartupLog(
+            'Windows system tray could not be initialized; dashboard will continue.',
+            error,
+            stackTrace,
+          ));
+        }
+      }
 
       if (widget.windowType == PosWindows.sale && (_billId == null || _billId!.isEmpty)) {
         final pending = await DBHelper.getPendingBills();
@@ -228,15 +243,18 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
           nativeWindow.minimumSize = const Size(980, 650).toNative();
           nativeWindow.setSize(const Size(1240, 740).toNative(), false);
           nativeWindow.center();
-          if (!isDashboard) {
-            nativeWindow.addListener((event) {
-              if (event is WindowCloseRequestedEvent && !_allowCloseForRestore) {
-                // Keep the cashier window resident in the Windows taskbar during normal use.
-                event.request.cancel();
-                nativeWindow.minimize();
+          nativeWindow.addListener((event) {
+            if (event is WindowCloseRequestedEvent && !_allowCloseForRestore) {
+              if (widget.windowType == PosWindows.dashboard &&
+                  !PosSystemTrayService.isInitialized) {
+                return;
               }
-            });
-          }
+              // Keep the POS resident in the notification area; users can reopen
+              // Dashboard or start a new bill from the system tray.
+              event.request.cancel();
+              nativeWindow.minimize();
+            }
+          });
           nativeWindow.show();
         }
       } catch (error, stackTrace) {
@@ -253,6 +271,21 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
         _loading = false;
         _error = null;
       });
+      if (Platform.isWindows && widget.windowType == PosWindows.dashboard) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(WindowsPosUpdateService.checkAndPrompt(context));
+          _updateCheckTimer?.cancel();
+          _updateCheckTimer = Timer.periodic(
+            const Duration(hours: 24),
+            (_) {
+              if (mounted && _ready) {
+                unawaited(WindowsPosUpdateService.checkAndPrompt(context));
+              }
+            },
+          );
+        });
+      }
 
       if (widget.openSaleOnStart) {
         try {
@@ -281,6 +314,12 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
         _logPath = logPath;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _updateCheckTimer?.cancel();
+    super.dispose();
   }
 
   Future<String?> _writeStartupLog(Object error, StackTrace stackTrace) async {

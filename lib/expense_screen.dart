@@ -107,8 +107,10 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: SingleChildScrollView(
-                child: DataTable(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  child: DataTable(
                   headingRowHeight: 42,
                   dataRowMinHeight: 40,
                   dataRowMaxHeight: 48,
@@ -122,6 +124,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     DataCell(Text('${expense['date'] ?? ''}')),
                     DataCell(Text('Rs. ${((expense['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600))),
                   ])).toList(),
+                  ),
                 ),
               ),
             ),

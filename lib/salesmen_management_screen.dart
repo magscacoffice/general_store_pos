@@ -154,8 +154,10 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
         backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
         foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Scrollbar(
+        thumbVisibility: Platform.isWindows,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
         children: [
           Card(
             child: Padding(
@@ -275,6 +277,7 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
             },
           ),
         ],
+        ),
       ),
     );
   }

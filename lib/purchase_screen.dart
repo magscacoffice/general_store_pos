@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
+import 'supplier_invoice_capture_screen.dart';
 
 class PurchaseScreen extends StatefulWidget {
   const PurchaseScreen({super.key});
@@ -149,6 +150,20 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
       foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       actions: [
+        if (!Platform.isWindows)
+          IconButton(
+            tooltip: 'Capture supplier invoice with camera and OCR',
+            onPressed: () async {
+              final posted = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SupplierInvoiceCaptureScreen(),
+                ),
+              );
+              if (posted == true) await _load();
+            },
+            icon: const Icon(Icons.document_scanner_outlined),
+          ),
         if (Platform.isWindows)
           IconButton(
             tooltip: 'Refresh purchase data',
@@ -273,19 +288,25 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                                     thumbVisibility: true,
                                     child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
-                                      child: SingleChildScrollView(
-                                        child: DataTable(
+                                      child: Scrollbar(
+                                        thumbVisibility: true,
+                                        notificationPredicate: (notification) => notification.metrics.axis == Axis.vertical,
+                                        child: SingleChildScrollView(
+                                          child: DataTable(
                                           headingRowHeight: 40,
                                           dataRowMinHeight: 38,
                                           dataRowMaxHeight: 46,
                                           columns: const [
+                                            DataColumn(label: Text('Invoice')),
                                             DataColumn(label: Text('Product')),
                                             DataColumn(label: Text('Date')),
                                             DataColumn(label: Text('Quantity'), numeric: true),
+                                            DataColumn(label: Text('Unit / Pack')),
                                             DataColumn(label: Text('Unit Cost'), numeric: true),
                                             DataColumn(label: Text('Total Cost'), numeric: true),
                                           ],
                                           rows: purchases.map((purchase) => DataRow(cells: [
+                                            DataCell(Text(purchase['invoice_number']?.toString() ?? 'Manual')),
                                             DataCell(SizedBox(
                                               width: 200,
                                               child: Text(
@@ -294,11 +315,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             )),
-                                            DataCell(Text('${purchase['date'] ?? ''}')),
+                                            DataCell(Text('${purchase['invoice_date'] ?? purchase['date'] ?? ''}')),
                                             DataCell(Text('${purchase['quantity'] ?? 0}')),
+                                            DataCell(Text(purchase['unit_label']?.toString() ?? '—')),
                                             DataCell(Text('Rs. ${purchase['unit_cost'] ?? 0}')),
                                             DataCell(Text('Rs. ${purchase['total_cost'] ?? 0}')),
                                           ])).toList(),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -381,7 +404,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 const Text('Purchase history', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ...purchases.map((purchase) => ListTile(
                   title: Text('${purchase['product_name']} × ${purchase['quantity']}'),
-                  subtitle: Text('${purchase['date']} • Rs. ${purchase['unit_cost']} each'),
+                  subtitle: Text('${purchase['invoice_number'] == null ? purchase['date'] : 'Invoice ${purchase['invoice_number']} • ${purchase['invoice_date'] ?? purchase['date']}'} • Rs. ${purchase['unit_cost']} each'),
                   trailing: Text('Rs. ${purchase['total_cost']}'),
                 )),
               ],
