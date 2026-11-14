@@ -28,14 +28,13 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## New notes from user (2026-11-13)
 
-- [ ] **Windows app — complete professional desktop UI audit.** Desktop dashboard/theme and some Windows-specific layouts exist, but the full screen-by-screen desktop redesign and interaction audit is not yet verified. Review all screens, dialogs, lists and workflows; retain this item until the complete Windows UI is consistent.
 
 ## Additional Windows and sync notes from user (2026-11-13)
 
-- [x] **Google Drive periodic auto-sync — code implemented.** User currently experiences sync as manual and wants it to happen automatically at a practical interval, ideally every 1–5 minutes (or the safest/reliable interval supported by the app). Review upload/download direction, pending changes, conflict handling, retries, and status/error feedback so automatic sync does not silently overwrite newer data. Keep Windows local/offline behaviour and existing platform rules intact; do not claim sync is reliable until tested on real devices.
+- [x] **Google Drive periodic auto-sync — code implemented.** User currently experiences sync as manual and wants it to happen automatically at a practical interval, ideally every 1–5 minutes (or the safest/reliable interval supported by the app). Review upload/download direction, pending changes, conflict handling, retries, and status/error feedback so automatic sync does not silently overwrite newer data. The code now polls every 2 minutes and also reacts to connectivity changes; real-device two-way sync reliability and conflict/retry behaviour still require hands-on verification.
 - [ ] **Windows startup/status message — inspect the initial "Offline" message.** When the Windows app opens, an "Offline" (or similar) status/message appears initially. Inspect the actual screen and code path to determine why it appears, whether it is accurate/transient, and whether the wording/timing/behaviour should be corrected. Do not hide a genuine offline state.
 - [ ] **Windows lists — visible desktop scrollbars.** Audit customer/party, supplier and product lists and add conventional visible scrollbars plus mouse-wheel/trackpad support wherever missing.
-- [ ] **Full Windows UI audit — make every screen/window desktop-native.** Review every Windows screen, dialog, list, and workflow, not just New Sale. Replace Android/mobile-style layouts and interaction patterns where unsuitable with a consistent, professional Windows desktop POS experience. Preserve feature parity and existing business rules.
+- [ ] **Full Windows UI audit — make every screen/window desktop-native.** Desktop dashboard/theme and some Windows-specific layouts exist, but the full screen-by-screen desktop redesign and interaction audit is not yet verified. Review every Windows screen, dialog, list, and workflow, not just New Sale. Replace Android/mobile-style layouts and interaction patterns where unsuitable with a consistent, professional Windows desktop POS experience. Preserve feature parity and existing business rules.
 - [ ] **Windows system-tray barcode activation — remaining work.** A system-tray icon/menu and manual “New Sale” action are already implemented. Still implement and verify the requested scanner-triggered activation/add-item workflow from the tray while the app is minimized/backgrounded. Do not steal focus unexpectedly or open a separate New Sale window automatically at startup.
 - [ ] **Windows New Sale — one combined scan/search input.** The current code still has separate barcode and product-search controllers/fields. Combine them into one unified input while preserving scanner and search behaviour.
 
@@ -99,7 +98,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Ideas / Future Improvements
 
-- [ ] Yahan future improvement likhein.
+Future improvements: add new ideas here when the owner requests them.
 
 ## Completed Updates
 
@@ -131,7 +130,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 |---|---|---|---|
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
 | 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
-| 2026-11-14 | Consolidated Android/Windows build fixes; sync test workflow passed, Android and Windows workflows started | `215de3432d6884fbd4074c732c0c2c93c47ea915` | Build status to be confirmed |
+| 2026-11-14 | Consolidated Android/Windows build fixes; Windows POS #66 and sync tests #4 passed; Android APK #177 was still running at last check | `215de3432d6884fbd4074c732c0c2c93c47ea915` | Windows + sync passed; Android pending |
 
 ## Scanner hardware and supplier-invoice capture clarification (2026-11-13)
 
