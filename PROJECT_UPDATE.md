@@ -26,6 +26,14 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Add new tasks below this line. Keep each task specific. -->
 
+### Windows New Sale and Inventory responsiveness / keyboard navigation (2026-11-14)
+
+- [ ] **[Windows] New Sale window opens too slowly.** User reports a noticeable delay after clicking New Sale in the system tray/menu before the separate New Sale window appears. Profile the launch path and remove avoidable initialization or database work from each new cashier-window launch. Reuse already initialized app/database services where safe; preserve separate bill windows and data integrity. Measure/compare perceived launch time before and after.
+- [ ] **[Windows] New Sale scan/search suggestions and keyboard navigation are not working.** When typing in the combined scan/search field, matching inventory products do not appear below the field, and Up/Down arrow keys cannot navigate to the desired matching product. Restore live matching suggestions and predictable keyboard selection/navigation (including Enter to choose the highlighted match), while preserving exact barcode scan handling, repeated-scan quantity increment behaviour, and existing sale-price/discount rules.
+- [ ] **[Windows] Inventory stock screen opens slowly and its scrollbar does not work.** Investigate slow screen initialization/data loading and make the inventory list scrollbar reliably visible and interactive, including mouse-wheel/drag scrolling and long inventory lists. Check for nested-scroll or layout constraints overriding the shared desktop scrollbar theme.
+
+
+
 ## New notes from user (2026-11-13)
 
 
