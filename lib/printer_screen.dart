@@ -793,9 +793,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
                 ),
               )
             else
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text(Platform.isWindows ? 'USB printer ko PC se connect kar ke Find USB Printer dabayein.' : 'USB printer connect kar ke Find USB OTG Printer dabayein.', style: TextStyle(color: Colors.black54)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(Platform.isWindows ? 'USB printer ko PC se connect kar ke Find USB Printer dabayein.' : 'USB printer connect kar ke Find USB OTG Printer dabayein.', style: const TextStyle(color: Colors.black54)),
               ),
             const Divider(thickness: 2),
             isWindows
