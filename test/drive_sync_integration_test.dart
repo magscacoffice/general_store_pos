@@ -263,7 +263,8 @@ void main() {
       detectConflicts: false,
     );
     expect((await DBHelper.getPurchases()).length, 1);
-    expect((await DBHelper.getProducts()).single['quantity'], 11);
+    // Stock is 7 after three sales; the Windows purchase adds 3 units.
+    expect((await DBHelper.getProducts()).single['quantity'], 10);
 
     // Android purchase and customer receipt travel back to Windows.
     final androidProduct = (await DBHelper.getProducts()).single;

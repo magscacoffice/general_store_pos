@@ -90,8 +90,6 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    permissions:
-      contents: write
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
