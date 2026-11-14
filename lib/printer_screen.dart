@@ -64,7 +64,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   usb_print.UsbPrinterDevice? _selectedUsbDevice;
   bool _isUsbScanning = false;
   bool _isUsbConnected = false;
-  int _usbPaperWidth = 58;
+  int _usbPaperWidth = Platform.isWindows ? 80 : 58;
   int _receiptTextScale = 1;
   int _paperMarginMm = 2;
 
@@ -200,7 +200,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   @override
   void initState() {
     super.initState();
-    _getBluetoothDevices();
+    if (!Platform.isWindows) _getBluetoothDevices();
   }
 
   @override
@@ -229,7 +229,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       });
       if (devices.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('USB printer nahi mila. OTG cable aur printer connection check karein.')),
+          SnackBar(content: Text(Platform.isWindows ? 'USB printer nahi mila. PC USB connection aur printer driver check karein.' : 'USB printer nahi mila. OTG cable aur printer connection check karein.')),
         );
       }
     } catch (e) {
@@ -319,7 +319,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   Future<void> _printReceipt() async {
     if (!_isUsbConnected && !_isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pehle USB ya Bluetooth printer connect karein.')),
+        SnackBar(content: Text(Platform.isWindows ? 'Pehle USB printer connect karein.' : 'Pehle USB ya Bluetooth printer connect karein.')),
       );
       return;
     }
@@ -599,7 +599,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
             appBar: AppBar(
               automaticallyImplyLeading: !Platform.isWindows,
               leading: desktopReturnButton(),
-              title: const Text('58mm Bill Preview'),
+              title: const Text('Invoice Preview'),
             ),
             body: PdfPreview(
               build: (_) async => bytes,
@@ -625,20 +625,30 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopReturnButton(),
-        toolbarHeight: Platform.isWindows ? 48 : 56,
-        title: const Text('Printer & Invoice'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+
+    final isWindows = Platform.isWindows;
+    final cartItemsList = widget.cartItems.isEmpty
+        ? const Center(child: Text('No invoice items found.'))
+        : ListView.builder(
+            itemCount: widget.cartItems.length,
+            itemBuilder: (context, index) {
+              final item = widget.cartItems[index];
+              return ListTile(
+                title: Text(item['name']?.toString() ?? 'Product'),
+                subtitle: Text(
+                  '${item['quantity']} x ${_money(_number(item['salePrice']))}',
+                ),
+                trailing: Text(
+                  _money(_itemTotal(item)),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          );
+    final content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (!isWindows) ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
@@ -689,6 +699,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
                         },
                       ),
               ),
+            ],
             const SizedBox(height: 8),
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -756,7 +767,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
               icon: _isUsbScanning
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.usb),
-              label: Text(_isUsbScanning ? 'USB printer search ho raha hai...' : 'Find USB OTG Printer'),
+              label: Text(_isUsbScanning ? 'USB printer search ho raha hai...' : (Platform.isWindows ? 'Find USB Printer' : 'Find USB OTG Printer')),
             ),
             if (_usbDevices.isNotEmpty)
               SizedBox(
@@ -784,31 +795,12 @@ class _PrinterScreenState extends State<PrinterScreen> {
             else
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('USB printer connect kar ke Find USB OTG Printer dabayein.', style: TextStyle(color: Colors.black54)),
+                child: Text(Platform.isWindows ? 'USB printer ko PC se connect kar ke Find USB Printer dabayein.' : 'USB printer connect kar ke Find USB OTG Printer dabayein.', style: TextStyle(color: Colors.black54)),
               ),
             const Divider(thickness: 2),
-            Expanded(
-              child: widget.cartItems.isEmpty
-                  ? const Center(child: Text('No invoice items found.'))
-                  : ListView.builder(
-                      itemCount: widget.cartItems.length,
-                      itemBuilder: (context, index) {
-                        final item = widget.cartItems[index];
-
-                        return ListTile(
-                          title: Text(item['name']?.toString() ?? 'Product'),
-                          subtitle: Text(
-                            '${item['quantity']} x '
-                            '${_money(_number(item['salePrice']))}',
-                          ),
-                          trailing: Text(
-                            _money(_itemTotal(item)),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+            isWindows
+                ? SizedBox(height: 180, child: cartItemsList)
+                : Expanded(child: cartItemsList),
             const Divider(),
             _totalRow('Subtotal', _subtotal),
             _totalRow('Discount', widget.discountAmount),
@@ -867,7 +859,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _isGeneratingPdf ? null : _previewPdf,
                     icon: const Icon(Icons.preview),
-                    label: const Text('58mm Preview'),
+                    label: const Text('Invoice Preview'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -902,7 +894,24 @@ class _PrinterScreenState extends State<PrinterScreen> {
               label: const Text('Save PDF to Device'),
             ),
           ],
-        ),
+        );
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopReturnButton(),
+        toolbarHeight: Platform.isWindows ? 48 : 56,
+        title: const Text('Printer & Invoice'),
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: isWindows
+            ? Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(child: content),
+              )
+            : content,
       ),
     );
   }
