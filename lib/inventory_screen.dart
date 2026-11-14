@@ -15,6 +15,8 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen> {
   List<Map<String, dynamic>> products = [];
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _inventoryVerticalController = ScrollController();
+  bool _isLoading = true;
   String _searchQuery = '';
 
   List<Map<String, dynamic>> get _visibleProducts {
@@ -33,14 +35,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final data = await DBHelper.getProducts();
-    setState(() {
-      products = data;
-    });
+    try {
+      final data = await DBHelper.getProducts();
+      if (!mounted) return;
+      setState(() {
+        products = data;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Inventory load nahi ho saki: $error')),
+      );
+    }
   }
 
   @override
-  void dispose() { _searchController.dispose(); super.dispose(); }
+  void dispose() {
+    _searchController.dispose();
+    _inventoryVerticalController.dispose();
+    super.dispose();
+  }
 
   void _showAddOrEditProductDialog({Map<String, dynamic>? product}) {
     final barcodeController = TextEditingController(
@@ -154,8 +170,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
                 TextField(
                   controller: nameController,
+                  maxLength: DBHelper.maxReceiptProductNameLength,
                   decoration: const InputDecoration(
                     labelText: 'Product Name *',
+                    helperText: '80mm bill par aik row: maximum 17 characters.',
                   ),
                 ),
                 TextField(
@@ -346,89 +364,68 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ]),
                   const SizedBox(height: 10),
                   Expanded(
-                    child: _visibleProducts.isEmpty
-                        ? const Center(child: Text('No matching products found.'))
-                        : Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
-                              border: Border.all(color: const Color(0xFFD9E0E6)),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                            child: Scrollbar(
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Scrollbar(
-                                  thumbVisibility: true,
-                                  notificationPredicate: (notification) => notification.metrics.axis == Axis.vertical,
-                                  child: SingleChildScrollView(
-                                    child: DataTable(
-                                    headingRowHeight: 40,
-                                    dataRowMinHeight: 40,
-                                    dataRowMaxHeight: 48,
-                                    columnSpacing: 22,
-                                    columns: const [
-                                      DataColumn(label: Text('Product')),
-                                      DataColumn(label: Text('Barcode')),
-                                      DataColumn(label: Text('In Stock'), numeric: true),
-                                      DataColumn(label: Text('Damaged'), numeric: true),
-                                      DataColumn(label: Text('Purchase Cost'), numeric: true),
-                                      DataColumn(label: Text('Sale Price'), numeric: true),
-                                      DataColumn(label: Text('Actions')),
-                                    ],
-                                    rows: _visibleProducts.map((item) {
-                                      return DataRow(cells: [
-                                        DataCell(
-                                          SizedBox(
-                                            width: 220,
-                                            child: Text(
-                                              item['name']?.toString() ?? '',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                        ),
-                                        DataCell(SizedBox(
-                                          width: 130,
-                                          child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                        )),
-                                        DataCell(Text('${item['quantity'] ?? 0} ${item['stock_unit'] ?? 'pcs'}')),
-                                        DataCell(Text('${item['damaged_quantity'] ?? 0}')),
-                                        DataCell(Text('Rs. ${item['purchasePrice'] ?? 0}')),
-                                        DataCell(Text('Rs. ${item['price'] ?? 0}')),
-                                        DataCell(Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              tooltip: 'Modify product',
-                                              icon: const Icon(Icons.edit_outlined, size: 17),
-                                              onPressed: () => _showAddOrEditProductDialog(product: item),
-                                            ),
-                                            IconButton(
-                                              tooltip: 'Delete product',
-                                              icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red),
-                                              onPressed: () => _confirmDeleteProduct(item),
-                                            ),
-                                          ],
-                                        )),
-                                      ]);
-                                    }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
-                  Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} of ${products.length} products', style: const TextStyle(fontSize: 11, color: Colors.black54))),
+                     child: _isLoading
+                         ? const Center(child: CircularProgressIndicator())
+                         : _visibleProducts.isEmpty
+                             ? const Center(child: Text('No matching products found.'))
+                             : Container(
+                                 width: double.infinity,
+                                 decoration: BoxDecoration(
+                                   color: Theme.of(context).colorScheme.surface,
+                                   border: Border.all(color: const Color(0xFFD9E0E6)),
+                                   borderRadius: BorderRadius.circular(5),
+                                 ),
+                                 child: Scrollbar(
+                                   controller: _inventoryVerticalController,
+                                   thumbVisibility: true,
+                                   interactive: true,
+                                   child: ListView.builder(
+                                     controller: _inventoryVerticalController,
+                                     primary: false,
+                                     itemCount: _visibleProducts.length,
+                                     itemBuilder: (context, index) {
+                                       final item = _visibleProducts[index];
+                                       return Card(
+                                         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                         child: ListTile(
+                                           dense: true,
+                                           title: Text(item['name']?.toString() ?? '',
+                                             maxLines: 1, overflow: TextOverflow.ellipsis,
+                                             style: const TextStyle(fontWeight: FontWeight.w600)),
+                                           subtitle: Text(
+                                             'Barcode: ${item['barcode'] ?? '—'} | Stock: ${item['quantity'] ?? 0} ${item['stock_unit'] ?? 'pcs'} | Damaged: ${item['damaged_quantity'] ?? 0}\nPurchase: Rs. ${item['purchasePrice'] ?? 0} | Sale: Rs. ${item['price'] ?? 0}',
+                                             maxLines: 2, overflow: TextOverflow.ellipsis),
+                                           trailing: Wrap(
+                                             spacing: 0,
+                                             children: [
+                                               IconButton(
+                                                 tooltip: 'Modify product',
+                                                 icon: const Icon(Icons.edit_outlined, size: 17),
+                                                 onPressed: () => _showAddOrEditProductDialog(product: item),
+                                               ),
+                                               IconButton(
+                                                 tooltip: 'Delete product',
+                                                 icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red),
+                                                 onPressed: () => _confirmDeleteProduct(item),
+                                               ),
+                                             ],
+                                           ),
+                                         ),
+                                       );
+                                     },
+                                   ),
+                                 ),
+                               ),
+                   ),
+Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} of ${products.length} products', style: const TextStyle(fontSize: 11, color: Colors.black54))),
                 ],
               ),
             )
-          : products.isEmpty
-              ? const Center(child: Text('No products found. Add some!'))
-              : ListView.builder(
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : products.isEmpty
+                  ? const Center(child: Text('No products found. Add some!'))
+                  : ListView.builder(
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final item = products[index];

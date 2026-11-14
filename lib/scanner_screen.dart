@@ -377,8 +377,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 TextField(
                   controller: nameController,
                   autofocus: true,
+                  maxLength: DBHelper.maxReceiptProductNameLength,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Product ka Naam *'),
+                  decoration: const InputDecoration(
+                    labelText: 'Product ka Naam *',
+                    helperText: '80mm bill par aik row: maximum 17 characters.',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (!Platform.isWindows)

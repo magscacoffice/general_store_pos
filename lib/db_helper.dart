@@ -10,6 +10,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'invoice_unit_converter.dart';
 
 class DBHelper {
+  static const int maxReceiptProductNameLength = 17;
   static Database? _db;
   // Windows portable mode runs locally without Firebase/cloud synchronization.
   static bool localOnlyMode = false;
@@ -2238,6 +2239,12 @@ class DBHelper {
   static Future<int> insertProduct(Map<String, dynamic> product) async {
     final db = await database;
     final data = Map<String, dynamic>.from(product);
+    final productName = (data['name'] ?? '').toString().trim();
+    if (productName.isEmpty) throw Exception('Product name zaroori hai.');
+    if (productName.length > maxReceiptProductNameLength) {
+      throw Exception('Product name maximum $maxReceiptProductNameLength characters ka ho sakta hai (80mm bill ki single row ke liye).');
+    }
+    data['name'] = productName;
     final barcode = (data['barcode'] ?? '').toString().trim();
     if (barcode.isEmpty) throw Exception('Product barcode zaroori hai.');
     data['barcode'] = barcode;
@@ -2276,6 +2283,13 @@ class DBHelper {
     int id,
     Map<String, dynamic> product,
   ) async {
+    final productData = Map<String, dynamic>.from(product);
+    final productName = (productData['name'] ?? '').toString().trim();
+    if (productName.isEmpty) throw Exception('Product name zaroori hai.');
+    if (productName.length > maxReceiptProductNameLength) {
+      throw Exception('Product name maximum $maxReceiptProductNameLength characters ka ho sakta hai (80mm bill ki single row ke liye).');
+    }
+    productData['name'] = productName;
     final db = await database;
 
     final result = await db.transaction<int>((txn) async {
@@ -2283,14 +2297,14 @@ class DBHelper {
       if (oldRows.isEmpty) throw Exception('Product not found. Please refresh and try again.');
       final oldBarcode = oldRows.first['barcode'].toString();
       final newBarcode = product['barcode'].toString();
-      final updated = await txn.update('products', product, where: 'id = ?', whereArgs: [id]);
+      final updated = await txn.update('products', productData, where: 'id = ?', whereArgs: [id]);
       if (updated == 0) throw Exception('Product not found. Please refresh and try again.');
       if (oldBarcode != newBarcode) {
         await _recordDriveTombstone(txn, 'product', oldBarcode);
         await _queueSync(txn, collection: 'products', documentId: oldBarcode,
             payload: {'barcode': oldBarcode, '_deleted': true});
       }
-      await _queueSync(txn, collection: 'products', documentId: newBarcode, payload: product);
+      await _queueSync(txn, collection: 'products', documentId: newBarcode, payload: productData);
       return updated;
     });
     unawaited(syncPendingChanges());
