@@ -377,8 +377,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 TextField(
                   controller: nameController,
                   autofocus: true,
+                  maxLength: DBHelper.maxReceiptProductNameLength,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Product ka Naam *'),
+                  decoration: const InputDecoration(
+                    labelText: 'Product ka Naam *',
+                    helperText: '80mm bill par aik row: maximum 17 characters.',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (!Platform.isWindows)
@@ -422,6 +426,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 final price = double.tryParse(priceController.text.trim());
                 final purchasePrice = double.tryParse(purPriceController.text.trim());
                 final quantity = int.tryParse(qtyController.text.trim());
+
+                if (name.length > DBHelper.maxReceiptProductNameLength) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.')),
+                  );
+                  return;
+                }
 
                 if (name.isEmpty ||
                     price == null || !price.isFinite || price <= 0 ||

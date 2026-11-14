@@ -34,6 +34,7 @@ class _SalesScreenState extends State<SalesScreen> {
   final TextEditingController _usbBarcodeController = TextEditingController();
   final FocusNode _usbBarcodeFocusNode = FocusNode();
   final TextEditingController _productSearchController = TextEditingController();
+  List<Map<String, dynamic>> _productSearchCache = [];
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
@@ -58,6 +59,7 @@ class _SalesScreenState extends State<SalesScreen> {
     _activeBillId = widget.billId ?? PosWindows.newBillId();
     _loadCustomers();
     if (Platform.isWindows) {
+      unawaited(_loadProductSearchCache());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_focusUsbScanner());
       });
@@ -279,6 +281,15 @@ class _SalesScreenState extends State<SalesScreen> {
       receivedAmountController.clear();
     });
     unawaited(_persistActiveBill());
+  }
+
+  Future<void> _loadProductSearchCache() async {
+    try {
+      final data = await DBHelper.getProducts();
+      if (mounted) setState(() => _productSearchCache = data);
+    } catch (error) {
+      debugPrint('Product suggestion cache load failed: $error');
+    }
   }
 
   Future<void> _loadCustomers() async {
@@ -529,13 +540,75 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  Future<void> _addSelectedSearchProduct(Map<String, dynamic> selected) async {
+    if (!mounted) return;
+    final barcode = selected['barcode']?.toString() ?? '';
+    List<Map<String, dynamic>> latestProducts;
+    try {
+      latestProducts = await DBHelper.getProducts();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Product stock refresh nahi ho saka: $error')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _productSearchCache = latestProducts);
+    final matches = latestProducts.where(
+      (product) => product['barcode']?.toString() == barcode,
+    );
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ye product ab inventory mein mojood nahi hai.')),
+      );
+      return;
+    }
+    final currentProduct = matches.first;
+    final stock = (currentProduct['quantity'] as num?)?.toInt() ?? 0;
+    final existingIndex = cart.indexWhere((item) => item['barcode']?.toString() == barcode);
+    final alreadyInCart = existingIndex < 0
+        ? 0
+        : (cart[existingIndex]['quantity'] as num?)?.toInt() ?? 0;
+    if (stock <= alreadyInCart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Available stock sirf $stock ${currentProduct['stock_unit'] ?? 'pcs'} hai.')),
+      );
+      return;
+    }
+    final purchasePrice = (currentProduct['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+    final configuredSalePrice = (currentProduct['price'] as num?)?.toDouble() ?? 0.0;
+    final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+    setState(() {
+      if (existingIndex >= 0) {
+        cart[existingIndex]['quantity'] = alreadyInCart + 1;
+      } else {
+        cart.add({
+          'barcode': barcode,
+          'name': currentProduct['name']?.toString() ?? 'Product',
+          'purchasePrice': purchasePrice,
+          'salePrice': safeSalePrice,
+          'stockUnit': currentProduct['stock_unit']?.toString() ?? 'pcs',
+          'quantity': 1,
+        });
+      }
+      _usbBarcodeController.clear();
+    });
+    await _persistActiveBill();
+    if (Platform.isWindows) {
+      final window = WindowManager.instance.getCurrent();
+      window?.show();
+      window?.focus();
+      _usbBarcodeFocusNode.requestFocus();
+    }
+  }
+
   Future<void> _handleUnifiedProductInput(String rawInput) async {
     final value = rawInput.trim();
     if (value.isEmpty || !mounted) return;
     _usbBarcodeController.clear();
-    final products = await DBHelper.getProducts();
-    if (!mounted) return;
-    final exactBarcode = products.any(
+    final exactBarcode = _productSearchCache.any(
       (product) => product['barcode']?.toString().trim() == value,
     );
     if (exactBarcode) {
@@ -1547,18 +1620,82 @@ class _SalesScreenState extends State<SalesScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: SizedBox(
                       height: 42,
-                      child: TextField(
-                        controller: _usbBarcodeController,
+                      child: RawAutocomplete<Map<String, dynamic>>(
+                        textEditingController: _usbBarcodeController,
                         focusNode: _usbBarcodeFocusNode,
-                        autofocus: true,
-                        onSubmitted: _handleUnifiedProductInput,
-                        textInputAction: TextInputAction.done,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.qr_code_scanner),
-                          labelText: 'Scan / Search Product',
-                          hintText: 'Scan barcode or type product name, then press Enter',
-                          suffixIcon: Icon(Icons.search),
-                        ),
+                        displayStringForOption: (option) => option['name']?.toString() ?? '',
+                        optionsBuilder: (value) {
+                          final term = value.text.trim().toLowerCase();
+                          if (term.isEmpty) return const <Map<String, dynamic>>[];
+                          if (_productSearchCache.any((product) =>
+                              product['barcode']?.toString().trim() == value.text.trim())) {
+                            return const <Map<String, dynamic>>[];
+                          }
+                          return _productSearchCache.where((product) {
+                            final name = product['name']?.toString().toLowerCase() ?? '';
+                            final barcode = product['barcode']?.toString().toLowerCase() ?? '';
+                            return name.contains(term) || barcode.contains(term);
+                          }).take(12);
+                        },
+                        onSelected: (product) => unawaited(_addSelectedSearchProduct(product)),
+                        optionsViewBuilder: (context, onSelected, options) {
+                          final matches = options.toList();
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 8,
+                              borderRadius: BorderRadius.circular(8),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 620, maxHeight: 300),
+                                child: ListView.separated(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: matches.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final product = matches[index];
+                                    final stock = (product['quantity'] as num?)?.toInt() ?? 0;
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(product['name']?.toString() ?? 'Product',
+                                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(
+                                        'Barcode: ${product['barcode'] ?? '—'} | Stock: $stock | Rate: Rs. ${product['price'] ?? 0}',
+                                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      onTap: () => onSelected(product),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            autofocus: true,
+                            onSubmitted: (value) {
+                              final term = value.trim().toLowerCase();
+                              final exactBarcode = _productSearchCache.any((product) =>
+                                  product['barcode']?.toString().trim() == value.trim());
+                              final hasMatches = !exactBarcode && _productSearchCache.any((product) =>
+                                  (product['name']?.toString().toLowerCase() ?? '').contains(term) ||
+                                  (product['barcode']?.toString().toLowerCase() ?? '').contains(term));
+                              if (value.trim().isNotEmpty && !hasMatches) {
+                                unawaited(_handleUnifiedProductInput(value));
+                              }
+                              onFieldSubmitted();
+                            },
+                            textInputAction: TextInputAction.done,
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.qr_code_scanner),
+                              labelText: 'Scan / Search Product',
+                              hintText: 'Barcode scan karein ya product name type karein',
+                              suffixIcon: Icon(Icons.search),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),

@@ -64,20 +64,9 @@ class _PrinterScreenState extends State<PrinterScreen> {
   usb_print.UsbPrinterDevice? _selectedUsbDevice;
   bool _isUsbScanning = false;
   bool _isUsbConnected = false;
-  int _usbPaperWidth = Platform.isWindows ? 80 : 58;
+  static const int _usbPaperWidth = 80;
   int _receiptTextScale = 1;
   int _paperMarginMm = 2;
-
-  usb_print.TextSize get _receiptTextSize {
-    switch (_receiptTextScale) {
-      case 2:
-        return usb_print.TextSize.size2;
-      case 3:
-        return usb_print.TextSize.size3;
-      default:
-        return usb_print.TextSize.size1;
-    }
-  }
 
   double get _subtotal => widget.subtotalAmount ?? widget.totalAmount;
 
@@ -87,8 +76,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   double _itemTotal(Map<String, dynamic> item) {
-    return _number(item['quantity'] ?? item['qty']) *
-        _number(item['salePrice'] ?? item['sale_price'] ?? item['price']);
+    final quantity = _number(item['quantity'] ?? item['qty']);
+    final rate = _number(item['salePrice'] ?? item['sale_price'] ?? item['price']);
+    final itemDiscount = _number(item['itemDiscount']);
+    return (rate - itemDiscount).clamp(0.0, double.infinity).toDouble() * quantity;
   }
 
   String _itemName(Map<String, dynamic> item) =>
@@ -102,97 +93,93 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   String _money(double amount) => amount.toStringAsFixed(2);
 
-  String _line(String left, String right, {int width = 32}) {
-    final available = width - left.length - right.length;
-    if (available <= 1) {
-      return '${left.substring(0, left.length > width - right.length - 1 ? width - right.length - 1 : left.length)} $right';
-    }
-    return left + List.filled(available, ' ').join() + right;
+  int get _receiptLineWidth => ((576 - (_paperMarginMm * 16)) ~/ 12).clamp(40, 48).toInt();
+
+  String _singleLine(String value, int maxWidth) {
+    if (maxWidth <= 0) return '';
+    final normalized = value.replaceAll(RegExp(r'[\r\n\t]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= maxWidth) return normalized;
+    if (maxWidth <= 2) return normalized.substring(0, maxWidth);
+    return '${normalized.substring(0, maxWidth - 2)}..';
   }
 
-  List<String> _wrapReceiptText(String value, int maxWidth) {
-    final words = value.trim().split(RegExp(r'\s+'));
-    final lines = <String>[];
-    var current = '';
-    for (final word in words) {
-      if (current.isEmpty) {
-        current = word;
-      } else if ((current.length + word.length + 1) <= maxWidth) {
-        current = '$current $word';
-      } else {
-        lines.add(current);
-        current = word;
-      }
-    }
-    if (current.isNotEmpty) lines.add(current);
-    return lines.isEmpty ? [''] : lines;
+  String _line(String left, String right, {int? width}) {
+    final lineWidth = width ?? _receiptLineWidth;
+    final safeRight = _singleLine(right, lineWidth);
+    final leftWidth = (lineWidth - safeRight.length - 1).clamp(0, lineWidth).toInt();
+    final safeLeft = _singleLine(left, leftWidth);
+    final spaces = (lineWidth - safeLeft.length - safeRight.length).clamp(0, lineWidth).toInt();
+    return safeLeft + List.filled(spaces, ' ').join() + safeRight;
+  }
+
+  String _center(String value, {int? width}) {
+    final lineWidth = width ?? _receiptLineWidth;
+    final safe = _singleLine(value, lineWidth);
+    return safe.padLeft(((lineWidth + safe.length) / 2).floor()).padRight(lineWidth);
+  }
+
+  String _itemHeaderRow() =>
+      'Qty'.padLeft(4) + ' ' + 'Description'.padRight(17) +
+      ' ' + 'Rate'.padLeft(10) + ' ' + 'Amount'.padLeft(11);
+
+  String _itemReceiptRow(Map<String, dynamic> item) {
+    final qty = _itemQuantity(item).toStringAsFixed(0);
+    final rate = _money(_itemRate(item));
+    final amount = _money(_itemTotal(item));
+    final qtyWidth = qty.length > 4 ? qty.length : 4;
+    final rateWidth = rate.length > 10 ? rate.length : 10;
+    final amountWidth = amount.length > 11 ? amount.length : 11;
+    final descriptionWidth = (_receiptLineWidth - qtyWidth - rateWidth - amountWidth - 3)
+        .clamp(1, 17).toInt();
+    final name = _singleLine(_itemName(item), descriptionWidth);
+    return qty.padLeft(qtyWidth) + ' ' + name.padRight(descriptionWidth) +
+        ' ' + rate.padLeft(rateWidth) + ' ' + amount.padLeft(amountWidth);
   }
 
   String _billText({required bool plain}) {
-    final paperDots = _usbPaperWidth == 80 ? 576 : 384;
-    final marginDots = _paperMarginMm * 8;
-    final baseCharacters = _usbPaperWidth == 80 ? 48 : 32;
-    final width = (baseCharacters *
-            (paperDots - marginDots * 2) /
-            paperDots /
-            _receiptTextScale)
-        .floor()
-        .clamp(10, baseCharacters);
-    final separator = List.filled(width, '-').join();
+    final separator = List.filled(_receiptLineWidth, '-').join();
     final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
     final received = widget.receivedAmount ?? widget.totalAmount;
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
-    final due = widget.balanceDue ?? (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
+    final due = widget.balanceDue ??
+        (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
     final buffer = StringBuffer()
-      ..writeln('🛒 KHAN BABA 🛒')
-      ..writeln('GENERAL STORE')
-      ..writeln('G.T ROAD SANAWAN')
-      ..writeln('PH#03451444325')
+      ..writeln(_center('KHAN BABA'))
+      ..writeln(_center('GENERAL STORE'))
+      ..writeln(_center('G.T ROAD SANAWAN'))
+      ..writeln(_center('PH#03451444325'))
+      ..writeln()
+      ..writeln(_line('Bill# ${widget.invoiceId.toString().padLeft(6, '0')}', 'Date: ${DateFormat('dd/MM/yy').format(parsedDate)}'))
+      ..writeln(_line('Cashier: ${widget.cashierName}', 'Time: ${DateFormat('hh:mm:ss a').format(parsedDate)}'))
+      ..writeln(_line('Type: ${widget.salesType}', ''))
+      ..writeln(_line('Customer: ${widget.customerName}', ''))
       ..writeln(separator)
-      ..writeln('Bill# ${widget.invoiceId.toString().padLeft(6, '0')}  Date: ${DateFormat('dd-MM-yyyy').format(parsedDate)}  Time: ${DateFormat('hh:mm a').format(parsedDate)}  Cashier: ${widget.cashierName}  Type: ${widget.salesType}')
-      ..writeln(separator)
-      ..writeln('Customer: ${widget.customerName}');
-    if (widget.customerPhone.trim().isNotEmpty) {
-      buffer.writeln('Phone: ${widget.customerPhone}');
-    }
-    buffer
-      ..writeln(separator)
-      ..writeln(_line('Sr# Item', 'Qty Amount', width: width))
+      ..writeln(_itemHeaderRow())
       ..writeln(separator);
-
-    for (var i = 0; i < widget.cartItems.length; i++) {
-      final item = widget.cartItems[i];
-      final qty = _itemQuantity(item).toStringAsFixed(0);
-      final amount = _money(_itemTotal(item));
-      final leftWidth = (width - qty.length - amount.length - 2).clamp(4, width - 1);
-      final itemLabel = '${i + 1} ${_itemName(item)}';
-      final compactItem = itemLabel.length > leftWidth
-          ? itemLabel.substring(0, leftWidth)
-          : itemLabel;
-      buffer.writeln(_line(compactItem, '$qty $amount', width: width));
-    }
-
-    buffer
-      ..writeln(separator)
-      ..writeln(_line('Sub Total', _money(_subtotal), width: width));
-    if (widget.discountAmount > 0) {
-      buffer.writeln(_line('Discount', _money(widget.discountAmount), width: width));
-    }
-    if (widget.taxAmount > 0) {
-      buffer.writeln(_line('Tax (GST)', _money(widget.taxAmount), width: width));
+    for (final item in widget.cartItems) {
+      buffer.writeln(_itemReceiptRow(item));
     }
     buffer
-      ..writeln(_line('TOTAL', _money(widget.totalAmount), width: width))
       ..writeln(separator)
-      ..writeln(_line('Payment', widget.paymentType, width: width))
-      ..writeln(_line('Received', _money(received), width: width));
-    if (due > 0) buffer.writeln(_line('Balance Due', _money(due), width: width));
-    if (change > 0) buffer.writeln(_line('Change', _money(change), width: width));
+      ..writeln(_line('Total Items: ${widget.cartItems.length}', 'Gross: ${_money(_subtotal)}'))
+      ..writeln(_line('Discount', _money(widget.discountAmount)));
+    if (widget.taxAmount > 0) buffer.writeln(_line('Tax (GST)', _money(widget.taxAmount)));
     buffer
       ..writeln(separator)
-      ..writeln('       THANK YOU - VISIT AGAIN')
-      ..writeln(' Developed by SohaibTech')
-      ..writeln(' WhatsApp: 03401832381')
+      ..writeln(_center('NET AMOUNT: Rs. ${_money(widget.totalAmount)}'))
+      ..writeln(separator)
+      ..writeln(_line('Payment: ${widget.paymentType}', ''))
+      ..writeln(_line('Received', _money(received)));
+    if (due > 0) buffer.writeln(_line('Balance Due', _money(due)));
+    if (change > 0) buffer.writeln(_line('Change', _money(change)));
+    if (widget.customerPhone.trim().isNotEmpty) {
+      buffer.writeln(_line('Phone: ${widget.customerPhone}', ''));
+    }
+    buffer
+      ..writeln(separator)
+      ..writeln(_center('THANK YOU - VISIT AGAIN'))
+      ..writeln(_center('KHAN BABA GENERAL STORE'))
       ..writeln('\n');
     return buffer.toString();
   }
@@ -325,9 +312,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
     try {
       if (_isUsbConnected) {
-        final paperSize = _usbPaperWidth == 80
-            ? usb_print.PaperSize.mm80
-            : usb_print.PaperSize.mm58;
+        final paperSize = usb_print.PaperSize.mm80;
         final ticket = await usb_print.Ticket.create(paperSize);
         final paperDots = _usbPaperWidth == 80 ? 576 : 384;
         final marginDots = _paperMarginMm * 8;
@@ -340,10 +325,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
         }
         final lines = _billText(plain: true).split(String.fromCharCode(10));
         for (final line in lines) {
-          if (line.contains('KHAN BABA')) {
+          if (line.trim() == 'KHAN BABA') {
             await ticket.textRaster(
-              '🛒 KHAN BABA 🛒',
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              'KHAN BABA',
+              style: TextStyle(fontSize: 20 + (_receiptTextScale * 3), fontWeight: FontWeight.bold),
               align: usb_print.PrintAlign.center,
             );
           } else if (line.trim() == 'GENERAL STORE' || line.trim() == 'G.T ROAD SANAWAN' || line.trim() == 'PH#03451444325') {
@@ -352,31 +337,18 @@ class _PrinterScreenState extends State<PrinterScreen> {
               align: usb_print.PrintAlign.center,
               style: usb_print.PrintTextStyle(bold: line.trim() == 'GENERAL STORE'),
             );
-          } else if (line.startsWith('TOTAL')) {
-            final totalValue = line.trim().split(RegExp(r'\s+')).last;
-            ticket.text(
-              'TOTAL',
-              style: const usb_print.PrintTextStyle(
-                bold: true,
-                height: usb_print.TextSize.size2,
-                width: usb_print.TextSize.size2,
-              ),
-            );
-            ticket.text(
-              totalValue,
-              align: usb_print.PrintAlign.right,
-              style: const usb_print.PrintTextStyle(
-                bold: true,
-                height: usb_print.TextSize.size2,
-                width: usb_print.TextSize.size2,
-              ),
+          } else if (line.contains('NET AMOUNT:')) {
+            await ticket.textRaster(
+              line.trim(),
+              style: TextStyle(fontSize: 17 + (_receiptTextScale * 2), fontWeight: FontWeight.bold),
+              align: usb_print.PrintAlign.center,
             );
           } else {
             ticket.text(
               line,
               style: usb_print.PrintTextStyle(
-                height: _receiptTextSize,
-                width: _receiptTextSize,
+                height: usb_print.TextSize.size1,
+                width: usb_print.TextSize.size1,
               ),
             );
           }
@@ -415,23 +387,38 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   Future<Uint8List> _generateInvoicePdf() async {
     final document = pw.Document();
-    final invoiceNumber = widget.invoiceId > 0 ? widget.invoiceId.toString() : 'N/A';
     final parsedDate = DateTime.tryParse(widget.saleDate) ?? DateTime.now();
     final received = widget.receivedAmount ?? widget.totalAmount;
     final change = (received - widget.totalAmount).clamp(0, double.infinity).toDouble();
     final due = widget.balanceDue ??
         (widget.totalAmount - received).clamp(0, double.infinity).toDouble();
-
-    // Compact 58mm receipt: short header, aligned Qty/Rate/Amount and tight spacing.
-    final pageHeight = (116 + widget.cartItems.length * 8).toDouble();
+    final pageHeight = (112 + widget.cartItems.length * 8).toDouble();
     final pageFormat = PdfPageFormat(
-      _usbPaperWidth * PdfPageFormat.mm,
+      80 * PdfPageFormat.mm,
       pageHeight * PdfPageFormat.mm,
       marginLeft: _paperMarginMm * PdfPageFormat.mm,
       marginRight: _paperMarginMm * PdfPageFormat.mm,
       marginTop: _paperMarginMm * PdfPageFormat.mm,
       marginBottom: _paperMarginMm * PdfPageFormat.mm,
     );
+    pw.Widget fittedCell(String value, {required pw.TextAlign align, required int flex, bool bold = false}) {
+      final alignment = align == pw.TextAlign.right
+          ? pw.Alignment.centerRight
+          : align == pw.TextAlign.center
+              ? pw.Alignment.center
+              : pw.Alignment.centerLeft;
+      return pw.Expanded(
+        flex: flex,
+        child: pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          alignment: alignment,
+          child: pw.Text(value, maxLines: 1, style: pw.TextStyle(
+            fontSize: 7,
+            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          )),
+        ),
+      );
+    }
 
     document.addPage(
       pw.Page(
@@ -439,74 +426,64 @@ class _PrinterScreenState extends State<PrinterScreen> {
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Center(child: pw.Text('🛒 KHAN BABA 🛒',
-              style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold))),
-            pw.Center(child: pw.Text('GENERAL STORE',
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold))),
-            pw.Center(child: pw.Text('G.T ROAD SANAWAN', style: const pw.TextStyle(fontSize: 7.5))),
-            pw.Center(child: pw.Text('PH#03451444325', style: const pw.TextStyle(fontSize: 7))),
-            pw.Divider(height: 5, thickness: 0.6),
-            pw.Text(
-              'Bill# $invoiceNumber  Date: ${DateFormat('dd-MM-yyyy').format(parsedDate)}  Time: ${DateFormat('hh:mm a').format(parsedDate)}  Cashier: ${widget.cashierName}  Type: ${widget.salesType}',
-              style: const pw.TextStyle(fontSize: 5.5),
-            ),
-            pw.Divider(height: 5, thickness: 0.6),
-            pw.Text(
-              'Customer: ${widget.customerName}',
-              style: const pw.TextStyle(fontSize: 6.5),
-            ),
-            if (widget.customerPhone.trim().isNotEmpty)
-              pw.Text(
-                'Phone: ${widget.customerPhone}',
-                style: const pw.TextStyle(fontSize: 6.5),
-              ),
-            pw.Divider(height: 5, thickness: 0.6),
+            pw.Center(child: pw.Text('KHAN BABA', style: pw.TextStyle(fontSize: 19, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('GENERAL STORE', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('G.T ROAD SANAWAN', style: const pw.TextStyle(fontSize: 8))),
+            pw.Center(child: pw.Text('PH#03451444325', style: const pw.TextStyle(fontSize: 8))),
+            pw.SizedBox(height: 5),
+            pw.Divider(height: 4, thickness: 0.8),
             pw.Row(children: [
-              pw.Expanded(flex: 1, child: pw.Text('Sr#', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
-              pw.Expanded(flex: 5, child: pw.Text('Item', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
-              pw.Expanded(flex: 2, child: pw.Text('Qty', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
-              pw.Expanded(flex: 3, child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+              pw.Expanded(child: pw.Text('Bill# ${widget.invoiceId.toString().padLeft(6, '0')}', style: const pw.TextStyle(fontSize: 7))),
+              pw.Expanded(child: pw.Text('Date: ${DateFormat('dd/MM/yy').format(parsedDate)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 7))),
             ]),
-            pw.SizedBox(height: 2),
-            ...widget.cartItems.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              return pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 2),
-                child: pw.Row(children: [
-                  pw.Expanded(flex: 1, child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 6.5))),
-                  pw.Expanded(flex: 5, child: pw.Text(_itemName(item), style: const pw.TextStyle(fontSize: 6.5))),
-                  pw.Expanded(flex: 2, child: pw.Text(_itemQuantity(item).toStringAsFixed(0), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5))),
-                  pw.Expanded(flex: 3, child: pw.Text(_money(_itemTotal(item)), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6.5))),
-                ]),
-              );
-            }),
-            pw.Divider(height: 5, thickness: 0.6),
-            _pdfInfoRow('Sub Total', _money(_subtotal)),
-            if (widget.discountAmount > 0)
-              _pdfInfoRow('Discount', _money(widget.discountAmount)),
-            if (widget.taxAmount > 0)
-              _pdfInfoRow('Tax (GST)', _money(widget.taxAmount)),
-            _pdfInfoRow('TOTAL', _money(widget.totalAmount), bold: true),
-            pw.Divider(height: 5, thickness: 0.6),
+            pw.Row(children: [
+              pw.Expanded(child: pw.Text('Cashier: ${_singleLine(widget.cashierName, 18)}', style: const pw.TextStyle(fontSize: 7))),
+              pw.Expanded(child: pw.Text('Time: ${DateFormat('hh:mm:ss a').format(parsedDate)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 7))),
+            ]),
+            pw.Text('Type: ${_singleLine(widget.salesType, 20)}', style: const pw.TextStyle(fontSize: 7)),
+            pw.Text('Customer: ${_singleLine(widget.customerName, 45)}', style: const pw.TextStyle(fontSize: 7)),
+            if (widget.customerPhone.trim().isNotEmpty)
+              pw.Text('Phone: ${_singleLine(widget.customerPhone, 30)}', style: const pw.TextStyle(fontSize: 7)),
+            pw.Divider(height: 5, thickness: 0.8),
+            pw.Row(children: [
+              fittedCell('Qty', align: pw.TextAlign.left, flex: 4, bold: true),
+              fittedCell('Description', align: pw.TextAlign.left, flex: 17, bold: true),
+              fittedCell('Rate', align: pw.TextAlign.right, flex: 10, bold: true),
+              fittedCell('Amount', align: pw.TextAlign.right, flex: 11, bold: true),
+            ]),
+            pw.Divider(height: 3, thickness: 0.5),
+            ...widget.cartItems.map((item) => pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 2),
+              child: pw.Row(children: [
+                fittedCell(_itemQuantity(item).toStringAsFixed(0), align: pw.TextAlign.left, flex: 4),
+                fittedCell(_singleLine(_itemName(item), 17), align: pw.TextAlign.left, flex: 17),
+                fittedCell(_money(_itemRate(item)), align: pw.TextAlign.right, flex: 10),
+                fittedCell(_money(_itemTotal(item)), align: pw.TextAlign.right, flex: 11),
+              ]),
+            )),
+            pw.Divider(height: 5, thickness: 0.8),
+            _pdfInfoRow('Total Items: ${widget.cartItems.length}', 'Gross: ${_money(_subtotal)}'),
+            _pdfInfoRow('Discount', _money(widget.discountAmount)),
+            if (widget.taxAmount > 0) _pdfInfoRow('Tax (GST)', _money(widget.taxAmount)),
+            pw.Container(
+              margin: const pw.EdgeInsets.symmetric(vertical: 5),
+              padding: const pw.EdgeInsets.all(6),
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: 1.2)),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('NET AMOUNT', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Rs. ${_money(widget.totalAmount)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ),
             _pdfInfoRow('Payment', widget.paymentType),
             _pdfInfoRow('Received', _money(received)),
             if (due > 0) _pdfInfoRow('Balance Due', _money(due)),
             if (change > 0) _pdfInfoRow('Change', _money(change)),
-            pw.SizedBox(height: 4),
-            pw.Center(
-              child: pw.Text(
-                'THANK YOU - VISIT AGAIN',
-                style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
-              ),
-            ),
-            pw.Center(
-              child: pw.Text(
-                'Developed by SohaibTech\nWhatsApp: 03401832381',
-                textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(fontSize: 6),
-              ),
-            ),
+            pw.SizedBox(height: 5),
+            pw.Center(child: pw.Text('THANK YOU - VISIT AGAIN', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('KHAN BABA GENERAL STORE', style: const pw.TextStyle(fontSize: 7))),
           ],
         ),
       ),
@@ -706,27 +683,18 @@ class _PrinterScreenState extends State<PrinterScreen> {
               spacing: 16,
               runSpacing: 8,
               children: [
-                Row(
+                const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Paper:'),
-                    const SizedBox(width: 8),
-                    DropdownButton<int>(
-                      value: _usbPaperWidth,
-                      items: const [
-                        DropdownMenuItem(value: 58, child: Text('58 mm')),
-                        DropdownMenuItem(value: 80, child: Text('80 mm')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) setState(() => _usbPaperWidth = value);
-                      },
-                    ),
+                    Text('Paper:'),
+                    SizedBox(width: 8),
+                    Text('80 mm'),
                   ],
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Text Size:'),
+                    const Text('Header/Total Size:'),
                     const SizedBox(width: 8),
                     DropdownButton<int>(
                       value: _receiptTextScale,
@@ -751,8 +719,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
                       items: const [
                         DropdownMenuItem(value: 0, child: Text('0 mm')),
                         DropdownMenuItem(value: 2, child: Text('2 mm')),
-                        DropdownMenuItem(value: 4, child: Text('4 mm')),
-                        DropdownMenuItem(value: 6, child: Text('6 mm')),
                       ],
                       onChanged: (value) {
                         if (value != null) setState(() => _paperMarginMm = value);

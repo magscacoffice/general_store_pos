@@ -10,6 +10,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'invoice_unit_converter.dart';
 
 class DBHelper {
+  static const int maxReceiptProductNameLength = 17;
   static Database? _db;
   // Windows portable mode runs locally without Firebase/cloud synchronization.
   static bool localOnlyMode = false;

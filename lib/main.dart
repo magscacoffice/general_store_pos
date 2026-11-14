@@ -182,18 +182,19 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
       DBHelper.localOnlyMode = true;
       unawaited(_writeWindowsStartupLog('Opening local database.'));
       await DBHelper.database;
-      try {
-        await DriveSyncService.initialize();
-        await DriveSyncService.restoreStatus();
-        DriveSyncService.startAutoSync();
-      } catch (error, stackTrace) {
-        unawaited(_writeWindowsStartupLog(
-          'Cloud sync initialization deferred; local POS will continue offline.',
-          error,
-          stackTrace,
-        ));
+      if (widget.windowType == PosWindows.dashboard) {
+        try {
+          await DriveSyncService.initialize();
+          await DriveSyncService.restoreStatus();
+          DriveSyncService.startAutoSync();
+        } catch (error, stackTrace) {
+          unawaited(_writeWindowsStartupLog(
+            'Cloud sync initialization deferred; local POS will continue offline.',
+            error,
+            stackTrace,
+          ));
+        }
       }
-      unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
       if (widget.windowType == PosWindows.dashboard) {
         try {
           await PosSystemTrayService.initialize();
@@ -206,6 +207,7 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
           ));
         }
       }
+      unawaited(_writeWindowsStartupLog('Local database opened successfully.'));
 
       if (widget.windowType == PosWindows.sale && (_billId == null || _billId!.isEmpty)) {
         final pending = await DBHelper.getPendingBills();
