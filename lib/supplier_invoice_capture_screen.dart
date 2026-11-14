@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'db_helper.dart';
+import 'invoice_unit_converter.dart';
 
 class SupplierInvoiceCaptureScreen extends StatefulWidget {
   const SupplierInvoiceCaptureScreen({super.key});
@@ -23,6 +24,8 @@ class _InvoiceLineDraft {
   final barcode = TextEditingController();
   final quantity = TextEditingController(text: '1');
   final unitLabel = TextEditingController();
+  final conversionFactor = TextEditingController(text: '1');
+  final baseUnit = TextEditingController();
   final unitCost = TextEditingController(text: '0');
   final lineTotal = TextEditingController();
   final salePrice = TextEditingController();
@@ -32,6 +35,8 @@ class _InvoiceLineDraft {
     barcode.dispose();
     quantity.dispose();
     unitLabel.dispose();
+    conversionFactor.dispose();
+    baseUnit.dispose();
     unitCost.dispose();
     lineTotal.dispose();
     salePrice.dispose();
@@ -123,6 +128,8 @@ class _SupplierInvoiceCaptureScreenState
     String name = '',
     String quantity = '1',
     String unitLabel = '',
+    String conversionFactor = '1',
+    String baseUnit = '',
     String unitCost = '0',
     String lineTotal = '',
   }) {
@@ -130,6 +137,8 @@ class _SupplierInvoiceCaptureScreenState
       ..name.text = name
       ..quantity.text = quantity
       ..unitLabel.text = unitLabel
+      ..conversionFactor.text = conversionFactor
+      ..baseUnit.text = baseUnit
       ..unitCost.text = unitCost
       ..lineTotal.text = lineTotal
       ..productId = _matchProduct(name);
@@ -140,6 +149,30 @@ class _SupplierInvoiceCaptureScreenState
       double.tryParse(value.replaceAll(',', '').trim()) ?? 0;
 
   String _moneyToken(String value) => value.replaceAll(',', '').trim();
+
+  String _suggestedStockUnit(String invoiceUnit) {
+    switch (InvoiceUnitConverter.canonicalUnit(invoiceUnit)) {
+      case 'kg':
+      case 'g':
+        return 'g';
+      case 'l':
+      case 'ml':
+        return 'ml';
+      case 'dozen':
+      case 'pcs':
+        return 'pcs';
+      default:
+        return '';
+    }
+  }
+
+  void _suggestLineConversion(_InvoiceLineDraft line) {
+    final factor = InvoiceUnitConverter.suggestedFactor(
+      invoiceUnit: line.unitLabel.text,
+      stockUnit: line.baseUnit.text,
+    );
+    if (factor != null) line.conversionFactor.text = factor.toString();
+  }
 
   void _extractInvoiceFields(String text) {
     final invoiceMatch = RegExp(
@@ -218,26 +251,88 @@ class _SupplierInvoiceCaptureScreenState
       }
       final matches = numericPattern.allMatches(lineText).toList();
       if (matches.length < 3) continue;
-      final lastThree = matches.sublist(matches.length - 3);
-      final name = lineText.substring(0, lastThree.first.start).trim()
+      final unitMatch = RegExp(
+        r'\b(kg|kgs|g|gm|gram|ltr|l|ml|pcs|pc|pack|box|dozen|ctn|carton|bag|bottle|tray)\b',
+        caseSensitive: false,
+      ).firstMatch(lineText);
+      late RegExpMatch quantityMatch;
+      late RegExpMatch rateMatch;
+      late RegExpMatch amountMatch;
+      var unitToken = unitMatch?.group(1) ?? '';
+      var invoiceUnit = unitToken;
+      var suggestedFactor = '1';
+      var suggestedBaseUnit = '';
+      if (unitMatch != null) {
+        final beforeUnit = matches.where((match) => match.end <= unitMatch.start).toList();
+        final afterUnit = matches.where((match) => match.start >= unitMatch.end).toList();
+        if (beforeUnit.length >= 2 && afterUnit.length >= 2) {
+          if (unitToken.toLowerCase() == 'pcs' &&
+              RegExp(r'[x×]', caseSensitive: false).hasMatch(
+                lineText.substring(beforeUnit[beforeUnit.length - 2].end, beforeUnit.last.start),
+              )) {
+            quantityMatch = beforeUnit[beforeUnit.length - 2];
+            suggestedFactor = beforeUnit.last.group(0) ?? '1';
+            invoiceUnit = 'pack';
+            unitToken = 'pack';
+            suggestedBaseUnit = 'pcs';
+          } else {
+            quantityMatch = beforeUnit.last;
+          }
+          rateMatch = afterUnit[0];
+          amountMatch = afterUnit[1];
+        } else if (afterUnit.length >= 3) {
+          // Unit appears before quantity (e.g. "Tea box 2 1200 2400").
+          // Ignore a leading invoice line number before the product name.
+          quantityMatch = afterUnit[0];
+          rateMatch = afterUnit[1];
+          amountMatch = afterUnit[2];
+        } else if (beforeUnit.length == 1 && afterUnit.length >= 2) {
+          quantityMatch = beforeUnit.first;
+          rateMatch = afterUnit[0];
+          amountMatch = afterUnit[1];
+        } else {
+          final lastThree = matches.sublist(matches.length - 3);
+          quantityMatch = lastThree[0];
+          rateMatch = lastThree[1];
+          amountMatch = lastThree[2];
+        }
+      } else {
+        final lastThree = matches.sublist(matches.length - 3);
+        quantityMatch = lastThree[0];
+        rateMatch = lastThree[1];
+        amountMatch = lastThree[2];
+      }
+      final nameEnd = unitMatch != null && unitMatch.start < quantityMatch.start
+          ? unitMatch.start
+          : quantityMatch.start;
+      final name = lineText.substring(0, nameEnd).trim()
           .replaceAll(RegExp(r'^[\d\s.\-]+'), '')
           .replaceAll(RegExp(r'\s{2,}'), ' ');
       if (name.length < 2) continue;
-      final qty = _number(lastThree[0].group(0) ?? '');
-      final rate = _number(lastThree[1].group(0) ?? '');
-      final amount = _number(lastThree[2].group(0) ?? '');
+      final qty = _number(quantityMatch.group(0) ?? '');
+      final rate = _number(rateMatch.group(0) ?? '');
+      final amount = _number(amountMatch.group(0) ?? '');
       if (qty <= 0 || qty > 100000 || rate < 0 || amount < 0) continue;
-      final unitMatch = RegExp(
-        r'\d+(?:\.\d+)?\s?(?:kg|kgs|g|gm|gram|ltr|l|ml|pcs|pc|pack|box|dozen)',
-        caseSensitive: false,
-      ).firstMatch(lineText);
       final draft = _InvoiceLineDraft()
         ..name.text = name
         ..quantity.text = qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)
-        ..unitLabel.text = unitMatch?.group(0) ?? ''
+        ..unitLabel.text = invoiceUnit
+        ..conversionFactor.text = suggestedFactor
+        ..baseUnit.text = suggestedBaseUnit.isEmpty
+            ? _suggestedStockUnit(unitToken)
+            : suggestedBaseUnit
         ..unitCost.text = rate.toStringAsFixed(2)
         ..lineTotal.text = amount.toStringAsFixed(2)
         ..productId = _matchProduct(name);
+      if (draft.productId != null) {
+        final product = _products.firstWhere(
+          (value) => (value['id'] as num).toInt() == draft.productId,
+        );
+        final storedUnit = product['stock_unit']?.toString() ?? '';
+        if (storedUnit.isNotEmpty) draft.baseUnit.text = storedUnit;
+      }
+      _suggestLineConversion(draft);
+      if (suggestedFactor != '1') draft.conversionFactor.text = suggestedFactor;
       candidates.add(draft);
     }
 
@@ -332,12 +427,32 @@ class _SupplierInvoiceCaptureScreenState
 
     final payload = <Map<String, dynamic>>[];
     for (final line in _lines) {
-      final quantity = int.tryParse(line.quantity.text.trim()) ?? 0;
+      final invoiceQuantity = double.tryParse(line.quantity.text.trim()) ?? 0;
+      final conversionFactor = double.tryParse(line.conversionFactor.text.trim()) ?? 0;
+      final baseUnit = InvoiceUnitConverter.canonicalUnit(line.baseUnit.text);
       final rate = _number(line.unitCost.text);
+      if (baseUnit.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Stock unit (base unit) select karein.')),
+        );
+        return;
+      }
+      int stockQuantity;
+      try {
+        stockQuantity = InvoiceUnitConverter.toStockQuantity(
+          invoiceQuantity: invoiceQuantity,
+          conversionFactor: conversionFactor,
+        );
+      } catch (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Invalid argument(s): ', ''))),
+        );
+        return;
+      }
       final lineAmount = line.lineTotal.text.trim().isEmpty
-          ? quantity * rate
+          ? invoiceQuantity * rate
           : _number(line.lineTotal.text);
-      if (quantity <= 0 || rate < 0 || lineAmount < 0) {
+      if (invoiceQuantity <= 0 || rate < 0 || lineAmount < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Har item ki quantity, rate aur amount verify karein.')),
         );
@@ -354,7 +469,10 @@ class _SupplierInvoiceCaptureScreenState
         'product_id': line.productId,
         'new_product_name': line.productId == null ? line.name.text.trim() : null,
         'new_product_barcode': line.productId == null ? line.barcode.text.trim() : null,
-        'quantity': quantity,
+        'quantity': stockQuantity,
+        'invoice_quantity': invoiceQuantity,
+        'conversion_factor': conversionFactor,
+        'base_unit': baseUnit,
         'unit_label': line.unitLabel.text.trim(),
         'unit_cost': rate,
         'line_total': lineAmount,
@@ -435,7 +553,11 @@ class _SupplierInvoiceCaptureScreenState
                     (p) => (p['id'] as num).toInt() == value,
                   );
                   line.name.text = product['name']?.toString() ?? '';
+                  line.baseUnit.text = product['stock_unit']?.toString() ?? '';
+                } else if (line.baseUnit.text.isEmpty) {
+                  line.baseUnit.text = _suggestedStockUnit(line.unitLabel.text);
                 }
+                _suggestLineConversion(line);
               }),
             ),
             if (line.productId == null) ...[
@@ -458,13 +580,14 @@ class _SupplierInvoiceCaptureScreenState
             Row(children: [
               Expanded(child: TextField(
                 controller: line.quantity,
-                keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                decoration: const InputDecoration(labelText: 'Quantity'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Invoice quantity'),
               )),
               const SizedBox(width: 8),
               Expanded(child: TextField(
                 controller: line.unitLabel,
-                decoration: const InputDecoration(labelText: 'Unit / Pack'),
+                onChanged: (_) => _suggestLineConversion(line),
+                decoration: const InputDecoration(labelText: 'Invoice unit / pack'),
               )),
               const SizedBox(width: 8),
               Expanded(child: TextField(
@@ -473,6 +596,25 @@ class _SupplierInvoiceCaptureScreenState
                 decoration: const InputDecoration(labelText: 'Purchase rate'),
               )),
             ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: TextField(
+                controller: line.conversionFactor,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Stock units per pack'),
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: TextField(
+                controller: line.baseUnit,
+                onChanged: (_) => _suggestLineConversion(line),
+                decoration: const InputDecoration(labelText: 'Stock unit (e.g. pcs, g, ml)'),
+              )),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+              'Stock quantity = invoice quantity × pack conversion. Existing product ka stock unit badalne se pehle purana stock bhi isi unit mein hona confirm karein.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: line.lineTotal,
@@ -593,7 +735,7 @@ class _SupplierInvoiceCaptureScreenState
                   ),
                 ]),
                 const Text(
-                  'OCR initial reading hai: printed English / Latin text aur digits behtar read hotay hain. Urdu ya handwritten entries mein ghalti ho sakti hai. Stock ya supplier balance update hone se pehle supplier, invoice number, products, quantity, rates, discount, tax aur total manually verify karein.',
+                  'Printed invoice OCR offline try karta hai. Handwritten invoice photo recognition ke liye Google Cloud Vision ki online service aur billing approval darkar hai; jab tak woh enable na ho, handwritten fields manually verify/enter karein. Stock ya supplier balance update hone se pehle supplier, invoice number, products, quantity, rates, discount, tax aur total manually verify karein.',
                   style: TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 10),

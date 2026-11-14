@@ -63,7 +63,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   final item = matches[index];
                   return ListTile(dense: true,
                     title: Text(item['name']?.toString() ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    subtitle: Text('Barcode: ${item['barcode']}  |  Stock: ${item['quantity']}  |  Cost: Rs. ${item['purchasePrice']}', style: const TextStyle(fontSize: 11)),
+                    subtitle: Text('Barcode: ${item['barcode']}  |  Stock: ${item['quantity']} ${item['stock_unit'] ?? 'pcs'}  |  Cost: Rs. ${item['purchasePrice']} per ${item['stock_unit'] ?? 'pcs'}', style: const TextStyle(fontSize: 11)),
                     onTap: () => Navigator.pop(dialogContext, item));
                 },
               )),
@@ -300,9 +300,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                                             DataColumn(label: Text('Invoice')),
                                             DataColumn(label: Text('Product')),
                                             DataColumn(label: Text('Date')),
-                                            DataColumn(label: Text('Quantity'), numeric: true),
-                                            DataColumn(label: Text('Unit / Pack')),
-                                            DataColumn(label: Text('Unit Cost'), numeric: true),
+                                            DataColumn(label: Text('Stock Qty'), numeric: true),
+                                            DataColumn(label: Text('Invoice Pack')),
+                                            DataColumn(label: Text('Invoice Rate / Unit'), numeric: true),
                                             DataColumn(label: Text('Total Cost'), numeric: true),
                                           ],
                                           rows: purchases.map((purchase) => DataRow(cells: [
@@ -316,9 +316,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                                               ),
                                             )),
                                             DataCell(Text('${purchase['invoice_date'] ?? purchase['date'] ?? ''}')),
-                                            DataCell(Text('${purchase['quantity'] ?? 0}')),
-                                            DataCell(Text(purchase['unit_label']?.toString() ?? '—')),
-                                            DataCell(Text('Rs. ${purchase['unit_cost'] ?? 0}')),
+                                            DataCell(Text('${purchase['quantity'] ?? 0} ${purchase['base_unit'] ?? ''}')),
+                                            DataCell(Text(
+                                              purchase['invoice_quantity'] == null
+                                                  ? (purchase['unit_label']?.toString() ?? '—')
+                                                  : '${purchase['invoice_quantity']} ${purchase['unit_label'] ?? ''} × ${purchase['conversion_factor'] ?? 1} ${purchase['base_unit'] ?? ''}',
+                                            )),
+                                            DataCell(Text('Rs. ${purchase['invoice_unit_cost'] ?? purchase['unit_cost'] ?? 0}')),
                                             DataCell(Text('Rs. ${purchase['total_cost'] ?? 0}')),
                                           ])).toList(),
                                           ),
@@ -403,8 +407,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 const Divider(height: 32),
                 const Text('Purchase history', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ...purchases.map((purchase) => ListTile(
-                  title: Text('${purchase['product_name']} × ${purchase['quantity']}'),
-                  subtitle: Text('${purchase['invoice_number'] == null ? purchase['date'] : 'Invoice ${purchase['invoice_number']} • ${purchase['invoice_date'] ?? purchase['date']}'} • Rs. ${purchase['unit_cost']} each'),
+                  title: Text('${purchase['product_name']} × ${purchase['quantity']} ${purchase['base_unit'] ?? ''}'),
+                  subtitle: Text('${purchase['invoice_number'] == null ? purchase['date'] : 'Invoice ${purchase['invoice_number']} • ${purchase['invoice_date'] ?? purchase['date']}'} • ${purchase['invoice_quantity'] == null ? 'Rs. ${purchase['unit_cost']} per stock unit' : '${purchase['invoice_quantity']} ${purchase['unit_label'] ?? ''} @ Rs. ${purchase['invoice_unit_cost'] ?? 0}'}'),
                   trailing: Text('Rs. ${purchase['total_cost']}'),
                 )),
               ],

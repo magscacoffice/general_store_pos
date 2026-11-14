@@ -7,11 +7,17 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'invoice_unit_converter.dart';
 
 class DBHelper {
   static Database? _db;
   // Windows portable mode runs locally without Firebase/cloud synchronization.
   static bool localOnlyMode = false;
+  // Android switches to Drive-only business-data sync after the first safe
+  // Firebase round-trip and a successful initial Drive upload.
+  static bool drivePrimaryMode = false;
+  // Test-only override used to open two isolated SQLite databases in sync tests.
+  static String? databasePathOverrideForTests;
   // Once Google Drive is paired, pause Android Firestore data sync so two cloud
   // providers cannot overwrite each other's inventory or account balances.
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -28,9 +34,10 @@ class DBHelper {
   static bool _isSyncingPending = false;
   static bool _syncPendingAgain = false;
   static bool _syncAllAgain = false;
+  static Completer<void>? _syncAllCompleter;
 
   static void startAutoSync() {
-    if (localOnlyMode || _connectivitySubscription != null) return;
+    if (localOnlyMode || drivePrimaryMode || _connectivitySubscription != null) return;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       if (results.any((result) => result != ConnectivityResult.none)) {
         unawaited(syncAllData());
@@ -667,13 +674,20 @@ class DBHelper {
     });
   }
 
-  static Future<void> syncAllData() async {
-    if (localOnlyMode) return;
+  static Future<void> syncAllData({bool requireComplete = false}) async {
+    if (localOnlyMode || drivePrimaryMode) return;
     if (_isSyncingAll) {
-      _syncAllAgain = true;
-      return;
+      if (!requireComplete) {
+        _syncAllAgain = true;
+        return;
+      }
+      // A Drive cutover must wait for any earlier Firestore sync rather than
+      // mistaking an in-flight sync for a completed migration.
+      await _syncAllCompleter?.future;
+      return syncAllData(requireComplete: true);
     }
     _isSyncingAll = true;
+    _syncAllCompleter = Completer<void>();
     try {
       await _ensureLegacySyncIds();
       await _queueMissingProducts();
@@ -683,6 +697,12 @@ class DBHelper {
         await syncPendingChanges(batchSize: 100);
         final after = await getPendingSyncCount();
         if (after >= before) break;
+      }
+      final pendingAfterUpload = await getPendingSyncCount();
+      if (requireComplete && pendingAfterUpload > 0) {
+        throw StateError(
+          'Firebase outbox mein $pendingAfterUpload pending change(s) upload nahi huin.',
+        );
       }
       await _pullProductsFromCloud();
       await _pullParties();
@@ -696,11 +716,19 @@ class DBHelper {
       await _pullReturnItems();
     } catch (e) {
       developer.log('Firebase Full Sync Error', name: 'DBHelper', error: e);
+      if (requireComplete) rethrow;
     } finally {
       _isSyncingAll = false;
+      final completedSync = _syncAllCompleter;
+      _syncAllCompleter = null;
+      completedSync?.complete();
       if (_syncAllAgain) {
         _syncAllAgain = false;
-        unawaited(syncAllData());
+        if (requireComplete) {
+          await syncAllData(requireComplete: true);
+        } else {
+          unawaited(syncAllData());
+        }
       }
     }
   }
@@ -750,12 +778,12 @@ class DBHelper {
     }
 
     return {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'products': await rows('products'),
       'parties': await rows('parties'),
       'sales': await rows('sales', remove: const ['id', 'customer_id']),
       'sale_items': await rows('sale_items', remove: const ['id', 'sale_id', 'product_id']),
-      'purchases': await rows('purchases', remove: const ['id', 'product_id', 'supplier_id']),
+      'purchases': await rows('purchases', remove: const ['id', 'product_id', 'supplier_id', 'invoice_image_path']),
       'khata_transactions': await rows('khata_transactions', remove: const ['id', 'party_id']),
       'expenses': await rows('expenses'),
       'reminders': await rows('reminders'),
@@ -820,6 +848,7 @@ class DBHelper {
               'quantity': _numberAsInt(payload['quantity']),
               'damaged_quantity': _numberAsInt(payload['damaged_quantity']),
               'is_active': _numberAsInt(payload['is_active'] ?? 1),
+              'stock_unit': payload['stock_unit']?.toString(),
             };
             await txn.insert('products', values, conflictAlgorithm: ConflictAlgorithm.replace);
             await txn.delete('drive_sync_tombstones', where: 'entity_type = ? AND entity_key = ?', whereArgs: ['product', remoteKey]);
@@ -929,6 +958,7 @@ class DBHelper {
             'quantity': _numberAsInt(payload['quantity']),
             'damaged_quantity': _numberAsInt(payload['damaged_quantity']),
             'is_active': _numberAsInt(payload['is_active'] ?? 1),
+            'stock_unit': payload['stock_unit']?.toString(),
           };
           await txn.update('products', values, where: 'barcode = ?', whereArgs: [barcode]);
         } else if (entityType == 'party') {
@@ -960,7 +990,7 @@ class DBHelper {
     bool detectConflicts = true,
   }) async {
     final data = snapshot['data'];
-    if (snapshot['schemaVersion'] != 1 || data is! Map) {
+    if (![1, 2].contains(snapshot['schemaVersion']) || data is! Map) {
       throw const FormatException('Cloud snapshot version or data is invalid.');
     }
     const requiredCollections = [
@@ -1073,6 +1103,7 @@ class DBHelper {
                 'damaged_quantity': _numberAsInt(remote['damaged_quantity']),
                 'quantity': _numberAsInt(remote['quantity']),
                 'is_active': _numberAsInt(remote['is_active'] ?? 1),
+                'stock_unit': remote['stock_unit']?.toString(),
                 '_has_related_records': collection('sale_items').any((item) => item['barcode']?.toString() == barcode) ||
                     collection('purchases').any((item) => item['barcode']?.toString() == barcode),
               },
@@ -1092,6 +1123,8 @@ class DBHelper {
           'damaged_quantity': _numberAsInt(remote['damaged_quantity']),
           'quantity': _numberAsInt(remote['quantity']),
           'is_active': _numberAsInt(remote['is_active'] ?? 1),
+          'stock_unit': remote['stock_unit']?.toString() ??
+              (existing.isEmpty ? null : existing.first['stock_unit']?.toString()),
         };
         if (existing.isEmpty) {
           await txn.insert('products', values);
@@ -1099,7 +1132,7 @@ class DBHelper {
           await txn.update('products', values, where: 'barcode = ?', whereArgs: [barcode]);
         } else {
           final local = existing.first;
-          final different = ['name', 'price', 'purchasePrice', 'wholesalePrice', 'damaged_quantity', 'quantity', 'is_active']
+          final different = ['name', 'price', 'purchasePrice', 'wholesalePrice', 'damaged_quantity', 'quantity', 'is_active', 'stock_unit']
               .any((key) => (local[key] ?? 0).toString() != (values[key] ?? 0).toString());
           if (different && detectConflicts) {
             await addConflict(
@@ -1579,6 +1612,8 @@ class DBHelper {
   // the live SQLite file. A restored database is staged under a new filename and
   // this small pointer selects it for subsequent app starts.
   static Future<String> getDatabaseFilePath() async {
+    final testOverride = databasePathOverrideForTests;
+    if (testOverride != null) return testOverride;
     final directory = await getDatabaseDirectory();
     final marker = File(join(directory, '.active_database'));
     if (!await marker.exists()) {
@@ -1637,7 +1672,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 16,
+      version: 18,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE products(
@@ -1649,7 +1684,8 @@ class DBHelper {
             wholesalePrice REAL DEFAULT 0.0,
             damaged_quantity INTEGER DEFAULT 0,
             quantity INTEGER NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1
+            is_active INTEGER NOT NULL DEFAULT 1,
+            stock_unit TEXT
           )
         ''');
 
@@ -1726,7 +1762,11 @@ class DBHelper {
           invoice_paid_amount REAL,
           invoice_balance_due REAL,
           invoice_image_path TEXT,
-          unit_label TEXT
+          unit_label TEXT,
+          invoice_quantity REAL,
+          conversion_factor REAL DEFAULT 1,
+          base_unit TEXT,
+          invoice_unit_cost REAL
         )''');
         await db.execute('''CREATE TABLE sale_items(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1740,7 +1780,8 @@ class DBHelper {
           line_total REAL NOT NULL,
           cost_total REAL NOT NULL,
           sync_id TEXT,
-          sale_sync_id TEXT
+          sale_sync_id TEXT,
+           stock_unit TEXT
         )''');
         await db.execute('''CREATE TABLE sync_queue(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1790,7 +1831,8 @@ class DBHelper {
           condition TEXT NOT NULL DEFAULT 'saleable',
           sync_id TEXT,
           return_sync_id TEXT,
-          sale_item_sync_id TEXT
+          sale_item_sync_id TEXT,
+           stock_unit TEXT
         )''');
         await db.execute('''CREATE TABLE khata_reminder_log(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1867,6 +1909,17 @@ class DBHelper {
         }
         if (oldVersion < 16) {
           await _ensureColumn(db, 'purchases', 'unit_label', 'TEXT');
+        }
+        if (oldVersion < 18) {
+          await _ensureColumn(db, 'sale_items', 'stock_unit', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'stock_unit', 'TEXT');
+        }
+        if (oldVersion < 17) {
+          await _ensureColumn(db, 'products', 'stock_unit', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'invoice_quantity', 'REAL');
+          await _ensureColumn(db, 'purchases', 'conversion_factor', 'REAL DEFAULT 1');
+          await _ensureColumn(db, 'purchases', 'base_unit', 'TEXT');
+          await _ensureColumn(db, 'purchases', 'invoice_unit_cost', 'REAL');
         }
         if (oldVersion < 10) {
           await _ensureColumn(db, 'products', 'is_active', 'INTEGER NOT NULL DEFAULT 1');
@@ -2103,7 +2156,7 @@ class DBHelper {
     required Map<String, dynamic> payload,
     String operation = 'set',
   }) async {
-    if (localOnlyMode) return;
+    if (localOnlyMode || drivePrimaryMode) return;
     final syncPayload = Map<String, dynamic>.from(payload);
     if (collection == 'products' && syncPayload['_deleted'] != true) {
       syncPayload['_deleted'] = false;
@@ -2130,7 +2183,7 @@ class DBHelper {
   }
 
   static Future<void> syncPendingChanges({int batchSize = 50}) async {
-    if (localOnlyMode) return;
+    if (localOnlyMode || drivePrimaryMode) return;
     if (_isSyncingPending) {
       _syncPendingAgain = true;
       return;
@@ -2429,6 +2482,7 @@ class DBHelper {
           'purchase_price': purchasePrice,
           'line_total': salePrice * qty,
           'cost_total': purchasePrice * qty,
+          'stock_unit': product['stock_unit']?.toString() ?? item['stockUnit']?.toString() ?? 'pcs',
           'sync_id': _newSyncId(),
           'sale_sync_id': saleSyncId,
         };
@@ -2995,6 +3049,8 @@ class DBHelper {
         'supplier_sync_id': supplierRows.isEmpty ? null : supplierRows.first['sync_id'],
         'sync_id': _newSyncId(),
         'date': DateTime.now().toIso8601String().substring(0, 19),
+        'unit_label': p['stock_unit']?.toString(),
+        'base_unit': p['stock_unit']?.toString(),
       };
       final id = await txn.insert('purchases', purchase);
       await _queueRow(txn, 'purchases', purchase, remove: ['product_id', 'supplier_id']);
@@ -3026,18 +3082,46 @@ class DBHelper {
       throw Exception('Invoice total aur paid amount valid enter karein.');
     }
     if (items.isEmpty) throw Exception('Invoice mein kam az kam aik item zaroori hai.');
+
     for (final item in items) {
-      final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+      final stockQuantity = (item['quantity'] as num?)?.toInt() ?? 0;
+      final invoiceQuantity =
+          (item['invoice_quantity'] as num?)?.toDouble() ??
+          (item['quantity'] as num?)?.toDouble() ??
+          0;
+      final conversionFactor =
+          (item['conversion_factor'] as num?)?.toDouble() ?? 1;
       final unitCost = (item['unit_cost'] as num?)?.toDouble() ?? -1;
-      if (quantity <= 0 || !unitCost.isFinite || unitCost < 0) {
-        throw Exception('Har invoice item ki quantity aur purchase rate valid honi chahiye.');
+      final baseUnit = item['base_unit']?.toString().trim() ?? '';
+      if (stockQuantity <= 0 ||
+          !invoiceQuantity.isFinite ||
+          invoiceQuantity <= 0 ||
+          !conversionFactor.isFinite ||
+          conversionFactor <= 0 ||
+          !unitCost.isFinite ||
+          unitCost < 0 ||
+          baseUnit.isEmpty) {
+        throw Exception(
+          'Har item ki invoice quantity, pack conversion, stock unit aur rate verify karein.',
+        );
+      }
+      final converted = invoiceQuantity * conversionFactor;
+      if (!converted.isFinite ||
+          (converted - stockQuantity).abs() > 0.000001) {
+        throw Exception(
+          'Invoice quantity aur conversion factor ka result stock quantity se match nahi karta.',
+        );
       }
     }
 
     final rawLineTotals = items.map((item) {
-      final quantity = (item['quantity'] as num?)?.toDouble() ?? 0;
+      final invoiceQuantity =
+          (item['invoice_quantity'] as num?)?.toDouble() ??
+          (item['quantity'] as num?)?.toDouble() ??
+          0;
       final unitCost = (item['unit_cost'] as num?)?.toDouble() ?? 0;
-      return (item['line_total'] as num?)?.toDouble() ?? quantity * unitCost;
+      return (item['line_total'] as num?)?.toDouble() ??
+          invoiceQuantity * unitCost;
     }).toList();
     if (rawLineTotals.any((value) => !value.isFinite || value < 0)) {
       throw Exception('Invoice item amount valid nahi.');
@@ -3071,9 +3155,15 @@ class DBHelper {
       for (var itemIndex = 0; itemIndex < items.length; itemIndex++) {
         final item = items[itemIndex];
         var productId = (item['product_id'] as num?)?.toInt();
-        final quantity = (item['quantity'] as num).toInt();
-        final unitCost = (item['unit_cost'] as num).toDouble();
+        final stockQuantity = (item['quantity'] as num).toInt();
+        final invoiceQuantity =
+            (item['invoice_quantity'] as num?)?.toDouble() ?? stockQuantity.toDouble();
+        final conversionFactor =
+            (item['conversion_factor'] as num?)?.toDouble() ?? 1;
+        final invoiceUnitCost = (item['unit_cost'] as num).toDouble();
+        final baseUnit = item['base_unit']?.toString().trim() ?? '';
         final salePrice = (item['sale_price'] as num?)?.toDouble();
+
         if (productId == null) {
           final newName = item['new_product_name']?.toString().trim() ?? '';
           final newBarcode = item['new_product_barcode']?.toString().trim() ?? '';
@@ -3090,36 +3180,58 @@ class DBHelper {
             'name': newName,
             'barcode': newBarcode,
             'price': salePrice ?? 0,
-            'purchasePrice': unitCost,
+            'purchasePrice': 0,
             'wholesalePrice': 0,
             'damaged_quantity': 0,
             'quantity': 0,
             'is_active': 1,
+            'stock_unit': baseUnit,
           });
         }
+
         final productRows = await txn.query(
           'products', where: 'id = ?', whereArgs: [productId], limit: 1,
         );
-        if (productRows.isEmpty) throw Exception('Invoice ka selected product inventory mein nahi mila.');
+        if (productRows.isEmpty) {
+          throw Exception('Invoice ka selected product inventory mein nahi mila.');
+        }
         final product = productRows.first;
+        final storedUnit = product['stock_unit']?.toString().trim() ?? '';
+        if (storedUnit.isNotEmpty &&
+            InvoiceUnitConverter.canonicalUnit(storedUnit) !=
+                InvoiceUnitConverter.canonicalUnit(baseUnit)) {
+          throw Exception(
+            '${product['name']} ka stock unit "$storedUnit" hai. Invoice conversion mein bhi isi unit ko select karein.',
+          );
+        }
         if (salePrice != null && (!salePrice.isFinite || salePrice < 0)) {
           throw Exception('Retail sale price valid nahi.');
         }
+
         final barcode = product['barcode']?.toString() ?? '';
         final rawLineTotal = rawLineTotals[itemIndex];
         final adjustedLineTotal = rawItemsTotal > 0
             ? rawLineTotal * invoiceTotal / rawItemsTotal
             : invoiceTotal / items.length;
-        final effectiveUnitCost = adjustedLineTotal / quantity;
+        final effectiveUnitCost = adjustedLineTotal / stockQuantity;
+        if (salePrice != null && salePrice < effectiveUnitCost) {
+          throw Exception(
+            'Retail sale price purchase cost se kam nahi ho sakti: ${product['name']}',
+          );
+        }
+        if (!adjustedLineTotal.isFinite || adjustedLineTotal < 0) {
+          throw Exception('Invoice item total valid nahi.');
+        }
+
         if (salePrice == null) {
           await txn.rawUpdate(
-            'UPDATE products SET quantity = quantity + ?, purchasePrice = ? WHERE id = ?',
-            [quantity, effectiveUnitCost, productId],
+            'UPDATE products SET quantity = quantity + ?, purchasePrice = ?, stock_unit = ? WHERE id = ?',
+            [stockQuantity, effectiveUnitCost, baseUnit, productId],
           );
         } else {
           await txn.rawUpdate(
-            'UPDATE products SET quantity = quantity + ?, purchasePrice = ?, price = ? WHERE id = ?',
-            [quantity, effectiveUnitCost, salePrice, productId],
+            'UPDATE products SET quantity = quantity + ?, purchasePrice = ?, price = ?, stock_unit = ? WHERE id = ?',
+            [stockQuantity, effectiveUnitCost, salePrice, baseUnit, productId],
           );
         }
         final updated = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
@@ -3128,15 +3240,12 @@ class DBHelper {
           await _queueSync(txn, collection: 'products', documentId: barcode, payload: payload);
         }
 
-        if (!adjustedLineTotal.isFinite || adjustedLineTotal < 0) {
-          throw Exception('Invoice item total valid nahi.');
-        }
         final purchase = <String, dynamic>{
           'product_id': productId,
           'product_name': product['name']?.toString() ?? 'Product',
           'barcode': barcode,
-          'quantity': quantity,
-          'unit_cost': unitCost,
+          'quantity': stockQuantity,
+          'unit_cost': effectiveUnitCost,
           'total_cost': adjustedLineTotal,
           'supplier_id': supplierId,
           'supplier_sync_id': supplierSyncId,
@@ -3152,6 +3261,10 @@ class DBHelper {
           'invoice_balance_due': payable,
           'invoice_image_path': invoiceImagePath,
           'unit_label': item['unit_label']?.toString().trim(),
+          'invoice_quantity': invoiceQuantity,
+          'conversion_factor': conversionFactor,
+          'base_unit': baseUnit,
+          'invoice_unit_cost': invoiceUnitCost,
         };
         await txn.insert('purchases', purchase);
         await _queueRow(txn, 'purchases', purchase,

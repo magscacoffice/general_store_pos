@@ -1,0 +1,61 @@
+name: POS sync and invoice conversion tests
+
+on:
+  push:
+    branches:
+      - 'codex/khan-baba-pos-implementation'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-sync-and-invoices:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze changed sync and invoice files
+        shell: bash
+        run: |
+          flutter analyze \
+            lib/db_helper.dart \
+            lib/drive_sync_service.dart \
+            lib/cloud_sync_screen.dart \
+            lib/supplier_invoice_capture_screen.dart \
+            lib/invoice_unit_converter.dart \
+            lib/purchase_screen.dart \
+            lib/sales_screen.dart \
+            lib/inventory_screen.dart \
+            lib/customer_history_screen.dart \
+            test/drive_sync_integration_test.dart \
+            test/invoice_unit_converter_test.dart \
+            test/supplier_invoice_conversion_test.dart
+
+      - name: Run Google Drive reconciliation and invoice conversion tests
+        shell: bash
+        run: |
+          flutter test \
+            test/drive_sync_integration_test.dart \
+            test/invoice_unit_converter_test.dart \
+            test/supplier_invoice_conversion_test.dart

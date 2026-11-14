@@ -322,7 +322,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Pending bills and local reminder-log entries remain on their own device. Both apps continue working offline; cloud changes wait until internet is available. Firebase/Firestore ka existing Android sync is testing ke dauran active rahega; Drive sync us ke saath alag Windows-master channel ke taur par chalega. Firebase data ya rules ko remove/disable nahi kiya jayega.',
+                    'Pending bills and local reminder-log entries remain on their own device. Both apps continue working offline; cloud changes wait until internet is available. On first Android pairing, existing Firebase business data is synchronized and its pending upload queue must be empty. After the first successful Google Drive sync, Drive becomes the only Android business-data sync provider. Firebase remains in use for sign-in/access checks and update notifications, not inventory, sales, purchases or Khata data. Android aur Windows dono par latest app version install karke sync karein; older sync-schema versions newer stock-unit data merge nahi kar sakte.',
                     style: TextStyle(color: Colors.black54),
                   ),
                 ],

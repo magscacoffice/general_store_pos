@@ -52,6 +52,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final stockController = TextEditingController(
       text: product != null ? product['quantity'].toString() : '0',
     );
+    final stockUnitController = TextEditingController(
+      text: product?['stock_unit']?.toString() ?? 'pcs',
+    );
     final purchasePriceController = TextEditingController(
       text: product != null
           ? (product['purchasePrice']?.toString() ?? '0')
@@ -156,6 +159,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 ),
                 TextField(
+                  controller: stockUnitController,
+                  decoration: const InputDecoration(
+                    labelText: 'Stock Unit *',
+                    helperText: 'Quantity aur rates isi unit mein honge. Existing stock ka unit badalne se pehle uski quantity convert karein (pcs, kg, g, ml).',
+                  ),
+                ),
+                TextField(
                   controller: stockController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
@@ -187,15 +197,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 String barcode = barcodeController.text.trim();
                 String name = nameController.text.trim();
                 int stock = int.tryParse(stockController.text) ?? 0;
+                final stockUnit = stockUnitController.text.trim().toLowerCase();
                 double purchasePrice =
                     double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice =
                     double.tryParse(salePriceController.text) ?? 0.0;
 
-                if (barcode.isEmpty || name.isEmpty) {
+                if (barcode.isEmpty || name.isEmpty || stockUnit.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Bar code aur Name lazmi hain!'),
+                      content: Text('Barcode, Name aur Stock Unit lazmi hain!'),
                     ),
                   );
                   return;
@@ -221,6 +232,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'purchasePrice': purchasePrice,
                   'damaged_quantity': product?['damaged_quantity'] ?? 0,
                   'quantity': stock,
+                  'stock_unit': stockUnit,
                 };
 
                 // Edit par existing row update ho; naya product create na ho.
@@ -382,7 +394,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           width: 130,
                                           child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
                                         )),
-                                        DataCell(Text('${item['quantity'] ?? 0}')),
+                                        DataCell(Text('${item['quantity'] ?? 0} ${item['stock_unit'] ?? 'pcs'}')),
                                         DataCell(Text('${item['damaged_quantity'] ?? 0}')),
                                         DataCell(Text('Rs. ${item['purchasePrice'] ?? 0}')),
                                         DataCell(Text('Rs. ${item['price'] ?? 0}')),
@@ -424,7 +436,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       child: ListTile(
                         title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Stock: ${item['quantity']} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']}'),
+                        subtitle: Text('Stock: ${item['quantity']} ${item['stock_unit'] ?? 'pcs'} | Damaged: ${item['damaged_quantity'] ?? 0} | Sale Price: Rs.${item['price']} per ${item['stock_unit'] ?? 'pcs'}'),
                         trailing: Wrap(spacing: 0, children: [
                           IconButton(tooltip: 'Modify product', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _showAddOrEditProductDialog(product: item)),
                           IconButton(tooltip: 'Delete product', icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDeleteProduct(item)),

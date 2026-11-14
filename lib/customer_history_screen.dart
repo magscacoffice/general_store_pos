@@ -100,8 +100,9 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
             final name = item['product_name']?.toString() ?? 'Product';
             final quantity = (item['quantity'] as num?)?.toDouble() ?? 0;
             final rate = (item['sale_price'] as num?)?.toDouble() ?? 0;
+            final unit = item['stock_unit']?.toString() ?? 'pcs';
             final lineTotal = (item['line_total'] as num?)?.toDouble() ?? quantity * rate;
-            return '$name x${quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 2)} @ Rs. ${rate.toStringAsFixed(2)} = Rs. ${lineTotal.toStringAsFixed(2)}';
+            return '$name x${quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 2)} $unit @ Rs. ${rate.toStringAsFixed(2)} / $unit = Rs. ${lineTotal.toStringAsFixed(2)}';
           }).join('\n');
           description = '$description\n$itemText';
         }

@@ -456,7 +456,7 @@ class _SalesScreenState extends State<SalesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   subtitle: Text(
-                                    'Barcode: ${product['barcode'] ?? '—'}  |  Stock: $stock  |  Rate: Rs. ${product['price'] ?? 0}',
+                                    'Barcode: ${product['barcode'] ?? '—'}  |  Stock: $stock ${product['stock_unit'] ?? 'pcs'}  |  Rate: Rs. ${product['price'] ?? 0}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -495,7 +495,7 @@ class _SalesScreenState extends State<SalesScreen> {
           : (cart[existingIndex]['quantity'] as num?)?.toInt() ?? 0;
       if (stock <= alreadyInCart) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Available stock sirf $stock pieces hai.')),
+          SnackBar(content: Text('Available stock sirf $stock ${selected['stock_unit'] ?? 'pcs'} hai.')),
         );
         return;
       }
@@ -511,6 +511,7 @@ class _SalesScreenState extends State<SalesScreen> {
             'name': selected['name']?.toString() ?? 'Product',
             'purchasePrice': purchasePrice,
             'salePrice': safeSalePrice,
+            'stockUnit': selected['stock_unit']?.toString() ?? 'pcs',
             'quantity': 1,
           });
         }
@@ -585,6 +586,7 @@ class _SalesScreenState extends State<SalesScreen> {
             'name': product['name']?.toString() ?? 'Product',
             'purchasePrice': purchasePrice,
             'salePrice': safeSalePrice,
+            'stockUnit': product['stock_unit']?.toString() ?? 'pcs',
             'quantity': 1,
           });
         }
@@ -698,6 +700,7 @@ class _SalesScreenState extends State<SalesScreen> {
             'name': product['name']?.toString() ?? 'Product',
             'purchasePrice': cost,
             'salePrice': effectiveSalePrice,
+            'stockUnit': product['stock_unit']?.toString() ?? 'pcs',
             'quantity': saleQuantity,
           });
         }
@@ -744,7 +747,7 @@ class _SalesScreenState extends State<SalesScreen> {
         requested[code] = (requested[code] ?? 0) + (item['quantity'] as num).toInt();
         if (requested[code]! > (stockByBarcode[code] ?? 0)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Stock se zyada quantity select ho rahi hai: ${item['name']}')),
+            SnackBar(content: Text('Stock se zyada quantity select ho rahi hai: ${item['name']} (${item['stockUnit'] ?? 'pcs'})')),
           );
           return;
         }
@@ -797,8 +800,9 @@ class _SalesScreenState extends State<SalesScreen> {
         final barcode = cart[index]['barcode']?.toString();
         final matchingProducts = products.where((p) => p['barcode']?.toString() == barcode).toList();
         final availableStock = matchingProducts.isEmpty ? 0 : (matchingProducts.first['quantity'] as num?)?.toInt() ?? 0;
+        final stockUnit = matchingProducts.isEmpty ? 'pcs' : (matchingProducts.first['stock_unit']?.toString() ?? 'pcs');
         if (updatedQuantity > availableStock) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Available stock sirf ' + availableStock.toString() + ' pieces hai.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Available stock sirf $availableStock $stockUnit hai.')));
           return;
         }
         setState(() => cart[index]['quantity'] = updatedQuantity);
@@ -1355,7 +1359,7 @@ class _SalesScreenState extends State<SalesScreen> {
                               width: 120,
                               child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
                             )),
-                            DataCell(Text('$quantity')),
+                            DataCell(Text('$quantity ${item['stockUnit'] ?? 'pcs'}')),
                             DataCell(Text('Rs. ${rate.toStringAsFixed(2)}')),
                             DataCell(Text('Rs. ${(rate * quantity).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600))),
                             DataCell(Row(
@@ -1388,7 +1392,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     child: ListTile(
                       title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Rate: Rs. ${item['salePrice']}  |  Qty: ${item['quantity']}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                      subtitle: Text('Rate: Rs. ${item['salePrice']} per ${item['stockUnit'] ?? 'pcs'}  |  Qty: ${item['quantity']} ${item['stockUnit'] ?? 'pcs'}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
                       trailing: Wrap(
                         spacing: 0,
                         children: [

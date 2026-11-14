@@ -50,6 +50,21 @@ class DriveSyncService {
   static Future<void> _initialize() async {
     if (!kIsWeb && Platform.isAndroid) {
       try {
+        final savedDrivePrimary =
+            await _secureStorage.read(key: 'drive_primary_mode');
+        DBHelper.drivePrimaryMode = savedDrivePrimary == 'true';
+        if (DBHelper.drivePrimaryMode) {
+          await DBHelper.stopAutoSync();
+        }
+      } catch (error) {
+        // Fail closed: never resume Firestore automatically if the saved
+        // provider choice cannot be read after an app restart.
+        DBHelper.drivePrimaryMode = true;
+        lastError = error.toString();
+        status = 'Cloud sync paused: saved Google Drive setting could not be read';
+        debugPrint('Drive provider setting could not be restored: $error');
+      }
+      try {
         await GoogleSignIn.instance.initialize(
           serverClientId: _androidServerClientId,
         );
@@ -449,17 +464,43 @@ class DriveSyncService {
     lastError = null;
     try {
       final token = await _accessToken(prompt: true);
-      if (Platform.isAndroid) {
-        // Keep the existing Firebase/Firestore sync active during Drive testing.
-        // A regular round-trip first helps include the latest local cloud data.
-        await DBHelper.syncAllData();
-        await _secureStorage.write(key: 'drive_sync_enabled', value: 'true');
+      if (Platform.isAndroid && !DBHelper.drivePrimaryMode) {
+        // Migrate any pending Firebase business data before making Drive primary.
+        // Stop its background listener during the Drive cutover, but keep local
+        // writes queued so a failed Drive attempt can safely resume Firestore.
+        await DBHelper.syncAllData(requireComplete: true);
+        await DBHelper.stopAutoSync();
+        for (var attempt = 0; attempt < 3; attempt++) {
+          await _runSync(token);
+          final pending = await DBHelper.getPendingSyncCount();
+          if (pending == 0) break;
+          if (attempt == 2) {
+            throw StateError(
+              'Firebase outbox mein $pending pending change(s) hain. Google Drive primary mode activate nahi kiya gaya.',
+            );
+          }
+          await DBHelper.syncAllData(requireComplete: true);
+        }
+        final remaining = await DBHelper.getPendingSyncCount();
+        if (remaining > 0) {
+          throw StateError('Firebase outbox abhi bhi $remaining changes pending rakhta hai.');
+        }
+        // Persist the choice before exposing the in-memory gate. If storage
+        // fails, the catch block restores Firestore auto-sync.
+        await _secureStorage.write(key: 'drive_primary_mode', value: 'true');
+        DBHelper.drivePrimaryMode = true;
+        await DBHelper.stopAutoSync();
+      } else {
+        await _runSync(token);
       }
-      await _runSync(token);
+      await _secureStorage.write(key: 'drive_sync_enabled', value: 'true');
       startAutoSync();
     } catch (error) {
       lastError = error.toString();
       status = 'Google Drive connection needs attention';
+      if (Platform.isAndroid && !DBHelper.drivePrimaryMode) {
+        DBHelper.startAutoSync();
+      }
       startAutoSync();
       rethrow;
     }
@@ -523,7 +564,7 @@ class DriveSyncService {
       final localData = await DBHelper.exportDriveSnapshot();
       final localHash = _snapshotHash(localData);
       final localEnvelope = {
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'deviceId': deviceId,
         'snapshotHash': localHash,
         'data': localData,
@@ -563,6 +604,9 @@ class DriveSyncService {
           if (_snapshotHash(Map<String, dynamic>.from(sourceData)) != sourceHash) {
             throw const FormatException('Device cloud snapshot checksum mismatch.');
           }
+          // Do not reconcile an unchanged device snapshot on every poll.
+          // This avoids repeated backups and keeps already-approved conflicts closed.
+          if (processed[sourceId] == sourceHash) continue;
           final priorBackup = preMergeBackups[sourceId]?.toString();
           final databaseDirectory = await DBHelper.getDatabaseDirectory();
           final priorBackupPath = priorBackup == null
@@ -588,7 +632,7 @@ class DriveSyncService {
         final conflicts = await DBHelper.getDriveSyncConflictCount();
         final masterData = await DBHelper.exportDriveSnapshot();
         final masterEnvelope = {
-          'schemaVersion': 1,
+          'schemaVersion': 2,
           'masterDeviceId': deviceId,
           'processedSnapshots': processed,
           'preMergeBackups': preMergeBackups,
@@ -656,8 +700,21 @@ class DriveSyncService {
   }
 
   static Future<void> _startAndroidAutoSync() async {
-    if (await _secureStorage.read(key: 'drive_sync_enabled') != 'true') return;
-    _attachAutoSync();
+    try {
+      if (await _secureStorage.read(key: 'drive_sync_enabled') != 'true') return;
+      if (!DBHelper.drivePrimaryMode) {
+        // Existing paired devices upgrade themselves safely: finish the final
+        // Firestore migration, complete a Drive upload, then persist Drive-only
+        // business-data sync without requiring the user to pair again.
+        await connectAndSync();
+        return;
+      }
+      _attachAutoSync();
+    } catch (error) {
+      lastError = error.toString();
+      status = 'Google Drive migration/sync needs attention';
+      debugPrint('Android Drive auto-sync initialization failed: $error');
+    }
   }
 
   static Future<void> _startWindowsAutoSync() async {
@@ -714,6 +771,8 @@ class DriveSyncService {
     await _secureStorage.delete(key: 'drive_access_expires_at');
     await _secureStorage.delete(key: 'drive_refresh_token');
     await _secureStorage.delete(key: 'drive_sync_enabled');
+    // Keep Drive as the sole business-data provider after disconnect. Local
+    // POS operations continue, and Firestore is not silently re-enabled.
     if (Platform.isAndroid) {
       await GoogleSignIn.instance.signOut();
       _androidAccount = null;
