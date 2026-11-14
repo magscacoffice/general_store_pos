@@ -1,6 +1,9 @@
 name: Build Windows POS
 
 on:
+  push:
+    branches:
+      - 'codex/khan-baba-pos-implementation'
   workflow_dispatch:
 
 permissions:

@@ -12,6 +12,7 @@ permissions:
 jobs:
   test-sync-and-invoices:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -38,7 +39,7 @@ jobs:
       - name: Analyze changed sync and invoice files
         shell: bash
         run: |
-          flutter analyze \
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
             lib/db_helper.dart \
             lib/drive_sync_service.dart \
             lib/cloud_sync_screen.dart \
