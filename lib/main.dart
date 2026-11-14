@@ -252,7 +252,9 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
               // Keep the POS resident in the notification area; users can reopen
               // Dashboard or start a new bill from the system tray.
               event.request.cancel();
-              nativeWindow.minimize();
+              // Hide from the taskbar while keeping the resident POS available
+              // from the Windows notification area.
+              nativeWindow.hide();
             }
           });
           nativeWindow.show();

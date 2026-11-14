@@ -46,9 +46,18 @@ class WindowsPosUpdateService {
       'https://api.github.com/repos/magscacoffice/general_store_pos/releases?per_page=100';
 
   static Future<WindowsPosUpdate?> checkForUpdate() async {
+    // Avoid a cached release-list response so a newly published higher build
+    // is offered immediately instead of prompting for an older build first.
+    final releasesUri = Uri.parse(
+      '$_releasesUrl&nocache=${DateTime.now().microsecondsSinceEpoch}',
+    );
     final response = await http.get(
-      Uri.parse(_releasesUrl),
-      headers: const {'Accept': 'application/vnd.github+json'},
+      releasesUri,
+      headers: const {
+        'Accept': 'application/vnd.github+json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
     ).timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw HttpException('Windows update check failed (${response.statusCode}).');
@@ -70,7 +79,12 @@ class WindowsPosUpdateService {
     candidates.sort((a, b) {
       final aBuild = _buildNumber(a['tag_name']?.toString() ?? '');
       final bBuild = _buildNumber(b['tag_name']?.toString() ?? '');
-      return bBuild.compareTo(aBuild);
+      final buildOrder = bBuild.compareTo(aBuild);
+      if (buildOrder != 0) return buildOrder;
+      final aPublished = DateTime.tryParse(a['published_at']?.toString() ?? '');
+      final bPublished = DateTime.tryParse(b['published_at']?.toString() ?? '');
+      if (aPublished == null || bPublished == null) return 0;
+      return bPublished.compareTo(aPublished);
     });
     if (candidates.isEmpty) return null;
 
@@ -113,10 +127,14 @@ class WindowsPosUpdateService {
   }
 
   static Future<Directory> _updateDirectory() async {
+    // Keep the verified installer package in a normal, user-visible folder.
+    final profile = Platform.environment['USERPROFILE'];
     final local = Platform.environment['LOCALAPPDATA'];
-    final base = local != null && local.isNotEmpty
-        ? Directory(p.join(local, 'KhanBabaPOS', 'Updates'))
-        : Directory(p.join((await getApplicationSupportDirectory()).path, 'Updates'));
+    final base = profile != null && profile.isNotEmpty
+        ? Directory(p.join(profile, 'Downloads', 'Khan Baba POS Updates'))
+        : local != null && local.isNotEmpty
+            ? Directory(p.join(local, 'KhanBabaPOS', 'Updates'))
+            : Directory(p.join((await getApplicationSupportDirectory()).path, 'Updates'));
     await base.create(recursive: true);
     return base;
   }
@@ -179,6 +197,13 @@ class WindowsPosUpdateService {
         await zipFile.delete();
         throw const FormatException('Windows update ZIP checksum match nahi hua. File install nahi ki gayi.');
       }
+      // Open the folder after a verified download so the retained ZIP is easy
+      // to locate even though installation continues automatically.
+      await Process.start(
+        'explorer.exe',
+        [updateDir.path],
+        mode: ProcessStartMode.detached,
+      );
     } finally {
       client.close(force: true);
     }
