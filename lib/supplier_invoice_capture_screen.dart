@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'gemini_invoice_ocr_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
@@ -386,6 +388,135 @@ class _SupplierInvoiceCaptureScreenState
     }
   }
 
+  Future<String?> _requestGeminiApiKey() async {
+    final controller = TextEditingController();
+    try {
+      final saved = await GeminiInvoiceOcrService.readApiKey();
+      if (saved != null) controller.text = saved;
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Gemini free-tier API key'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Google AI Studio se Gemini API key banayein. Sirf us project ki key use karein jisme billing enabled na ho. '
+                  'Free-tier limit par Google request reject karega; app koi paid model ya paid fallback use nahi karegi.',
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Privacy: invoice image Google ko OCR ke liye bheji jayegi. Google ke free-tier terms ke mutabiq submitted content product improvement ke liye use ho sakta hai. Sensitive invoice bhejne se pehle is baat ko madde-nazar rakhein.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: controller,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Gemini API key',
+                    hintText: 'Paste API key',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            if (saved != null)
+              TextButton(
+                onPressed: () async {
+                  await GeminiInvoiceOcrService.clearApiKey();
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, '');
+                },
+                child: const Text('Remove saved key'),
+              ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+              },
+              child: const Text('Save key'),
+            ),
+          ],
+        ),
+      );
+      if (result == null) return null;
+      if (result.isEmpty) return null;
+      await GeminiInvoiceOcrService.saveApiKey(result);
+      return result;
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _runGeminiHandwritingOcr() async {
+    if (_reading || _saving) return;
+    final image = _invoiceImage;
+    if (image == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pehle invoice ki photo capture karein.')),
+      );
+      return;
+    }
+
+    final apiKey = await GeminiInvoiceOcrService.readApiKey() ??
+        await _requestGeminiApiKey();
+    if (apiKey == null || apiKey.isEmpty || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send invoice to Gemini OCR?'),
+        content: const Text(
+          'Current invoice image Google Gemini ko bheji jayegi. OCR result editable fields mein apply hoga. '
+          'Supplier, invoice number, items, quantities, rates aur totals ko post karne se pehle verify karna zaroori hai.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Send image'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _reading = true);
+    try {
+      final recognizedText =
+          await GeminiInvoiceOcrService.recognizeInvoice(image, apiKey);
+      if (!mounted) return;
+      setState(() => _ocrText.text = recognizedText);
+      _extractInvoiceFields(recognizedText);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gemini OCR complete. Extracted fields verify/edit karein; abhi stock post nahi hua.'),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gemini OCR: ${error.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
+
   Future<void> _persistInvoiceImage(File source) async {
     final directory = await getApplicationDocumentsDirectory();
     final folder = Directory(p.join(directory.path, 'supplier_invoices'));
@@ -659,6 +790,17 @@ class _SupplierInvoiceCaptureScreenState
                     borderRadius: BorderRadius.circular(8),
                     child: Image.file(_invoiceImage!, height: 190, fit: BoxFit.contain),
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _reading || _saving ? null : _runGeminiHandwritingOcr,
+                    icon: const Icon(Icons.edit_document),
+                    label: const Text('Read Handwriting with Gemini (Free Tier)'),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Optional online OCR: invoice image Google ko bheji jayegi. Free-tier API key use karein; quota khatam hone par paid fallback nahi hoga.',
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 if (_ocrSupplierName.text.trim().isNotEmpty) ...[
@@ -735,7 +877,7 @@ class _SupplierInvoiceCaptureScreenState
                   ),
                 ]),
                 const Text(
-                  'Printed invoice OCR offline try karta hai. Handwritten invoice photo recognition ke liye Google Cloud Vision ki online service aur billing approval darkar hai; jab tak woh enable na ho, handwritten fields manually verify/enter karein. Stock ya supplier balance update hone se pehle supplier, invoice number, products, quantity, rates, discount, tax aur total manually verify karein.',
+                  'Printed text ke liye on-device OCR available hai. Handwritten text ke liye optional Gemini free-tier OCR button use karein; warna manually enter karein. Stock ya supplier balance update hone se pehle supplier, invoice number, products, quantity, rates, discount, tax aur total verify karein.',
                   style: TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 10),
