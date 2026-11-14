@@ -3,7 +3,7 @@ name: Build Windows POS
 on:
   push:
     branches:
-      - 'codex/khan-baba-pos-implementation'
+      - 'main'
   workflow_dispatch:
 
 permissions:

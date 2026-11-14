@@ -160,7 +160,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ),
                         ),
                       ),
-              ),
               const Divider(),
               Align(
                 alignment: Alignment.centerRight,

@@ -179,7 +179,6 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

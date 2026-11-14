@@ -58,7 +58,7 @@ class PosUpdateService {
     final release = jsonDecode(response.body) as Map<String, dynamic>;
     if (release['draft'] == true || release['prerelease'] == true) return null;
     final tag = release['tag_name']?.toString() ?? '';
-    final match = RegExp(r'-build(\d+).firstMatch(tag);
+    final match = RegExp(r'-build([0-9]+)$').firstMatch(tag);
     if (match == null) return null;
 
     final buildNumber = int.tryParse(match.group(1)!) ?? 0;

@@ -3,7 +3,7 @@ name: POS sync and invoice conversion tests
 on:
   push:
     branches:
-      - 'codex/khan-baba-pos-implementation'
+      - 'main'
   workflow_dispatch:
 
 permissions:

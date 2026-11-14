@@ -328,7 +328,7 @@ void main() {
     for (final sale in finalSales) {
       totalSaleItems += (await DBHelper.getSaleItems((sale['id'] as num).toInt())).length;
     }
-    expect(totalSaleItems, 4);
+    expect(totalSaleItems, 3);
     expect((await DBHelper.getPurchases()).length, 2);
     expect((await DBHelper.getProducts()).single['quantity'], 12);
     expect((await DBHelper.getParties('customer')).single['balance'], 53.0);

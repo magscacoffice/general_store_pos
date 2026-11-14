@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches:
-      - 'codex/khan-baba-pos-implementation'
+      - 'main'
   workflow_dispatch:
 
 jobs:

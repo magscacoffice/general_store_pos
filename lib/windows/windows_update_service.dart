@@ -31,6 +31,16 @@ class WindowsPosUpdate {
   });
 }
 
+class _Sha256DigestSink implements Sink<Digest> {
+  Digest? digest;
+
+  @override
+  void add(Digest value) => digest = value;
+
+  @override
+  void close() {}
+}
+
 class WindowsPosUpdateService {
   static const _releasesUrl =
       'https://api.github.com/repos/magscacoffice/general_store_pos/releases?per_page=100';
@@ -143,7 +153,7 @@ class WindowsPosUpdateService {
         throw HttpException('Windows package download failed (${response.statusCode}).');
       }
       final sink = zipFile.openWrite();
-      final digestSink = AccumulatorSink<Digest>();
+      final digestSink = _Sha256DigestSink();
       final converter = sha256.startChunkedConversion(digestSink);
       final total = response.contentLength > 0
           ? response.contentLength
@@ -165,8 +175,7 @@ class WindowsPosUpdateService {
         if (await zipFile.exists()) await zipFile.delete();
         rethrow;
       }
-      if (digestSink.events.isEmpty ||
-          digestSink.events.single.toString().toLowerCase() != expected) {
+      if (digestSink.digest?.toString().toLowerCase() != expected) {
         await zipFile.delete();
         throw const FormatException('Windows update ZIP checksum match nahi hua. File install nahi ki gayi.');
       }
