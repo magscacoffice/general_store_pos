@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(storeId) {
+      return /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid);
+    }
+
+    function activeMember(storeId) {
+      return signedIn()
+        && exists(memberPath(storeId))
+        && get(memberPath(storeId)).data.active == true;
+    }
+
+    function storeAdmin(storeId) {
+      return activeMember(storeId)
+        && get(memberPath(storeId)).data.role == 'admin';
+    }
+
+    match /stores/{storeId}/members/{userId} {
+      allow get: if (signedIn() && request.auth.uid == userId)
+        || storeAdmin(storeId);
+      allow list: if storeAdmin(storeId);
+      allow create, update, delete: if storeAdmin(storeId);
+    }
+
+    // Store data collections. Member documents are deliberately excluded.
+    match /stores/{storeId}/{collection}/{documentId} {
+      allow read, write: if activeMember(storeId)
+        && collection in [
+          'products', 'sales', 'sale_items', 'parties',
+          'purchases', 'khata_transactions', 'expenses', 'reminders',
+          'sale_returns', 'sale_return_items'
+        ];
+    }
+
+    // No root-level or unrecognized collection access.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

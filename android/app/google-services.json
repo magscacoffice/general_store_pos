@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "692616571023",
+    "project_id": "khan-baba-general-store",
+    "storage_bucket": "khan-baba-general-store.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:692616571023:android:ebbc5b7c4a3a6be7eee8fa",
+        "android_client_info": {
+          "package_name": "com.example.khan_baba_general_store"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1utkazjYufbLqIQcEBvgNeZQa-SSflcw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

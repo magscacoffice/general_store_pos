@@ -138,3 +138,22 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] **Barcode scanner model — Speed X SP9260.** User has confirmed that the physical barcode scanner used with the POS is the **Speed X SP9260**. Use this exact model when reviewing scanner compatibility, configuration, focus/input handling, and Windows system-tray/New Sale behaviour. Do not confuse it with previously mentioned SpeedX model numbers.
 - [ ] **Supplier inventory invoice capture — use the Android/mobile camera.** Supplier purchase/inventory invoices will be scanned or photographed using the **mobile phone camera**. The intended workflow is camera capture followed by OCR-assisted extraction and an editable review/confirmation step before posting purchase, stock, or supplier-account changes. This is separate from the Speed X SP9260 barcode scanner, which is for scanning product barcodes.
 
+## User-approved scope update — 2026-11-14
+
+### Google Drive two-way sync
+- Google Drive is the only Android business-data cloud provider after the first complete Firebase/Firestore business-data round-trip and a successful initial Drive upload.
+- Firebase remains enabled for authentication/access checks and Firebase Messaging update notifications. Firestore inventory, sales, purchases, parties and Khata synchronization is paused after Drive cutover.
+- Existing Android devices that already paired Drive must complete this migration automatically on the next app start. If the Firebase outbox cannot drain or the Drive upload fails, keep the previous provider state and do not cut over.
+- Windows remains local-first and acts as the Drive master. Device snapshots are checksum-verified; processed snapshots are idempotent; conflicts require an explicit Keep Windows / Use Other Device decision.
+- Drive snapshot schema v2 carries stock-unit and invoice conversion fields. Newer snapshots must not be silently imported by older app versions.
+
+### Supplier invoice pack and stock-unit conversion
+- Product stock quantities use an explicit stock unit (for example pcs, g, or ml).
+- Invoice lines retain invoice quantity, invoice pack/unit, conversion factor, stock quantity, base stock unit, invoice-unit rate and base-unit cost.
+- Known conversions may be suggested (dozen to pcs, kg to g, litre to ml); carton/box/pack size must be entered or verified by the user.
+- Converted stock quantity must resolve to a whole number because the POS stock model uses integer quantities. The invoice is not posted until all lines and supplier totals are reviewed.
+- Retail sale price must not be below the converted base-unit purchase cost. Duplicate supplier invoice numbers are rejected.
+
+### Handwriting OCR status
+- The current on-device ML Kit camera OCR is intended for printed Latin text and numeric fields.
+- Photo-based handwritten invoice recognition is not enabled until the owner explicitly approves an online handwriting OCR service and its possible billing/data-transfer implications.

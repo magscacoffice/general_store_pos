@@ -1,0 +1,136 @@
+name: Build Windows POS
+
+on:
+  push:
+    branches:
+      - 'codex/khan-baba-pos-implementation'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Compile and package portable Windows POS
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Configure CMake compatibility
+        shell: pwsh
+        run: |
+          $cmakeFile = "windows/CMakeLists.txt"
+          $content = Get-Content $cmakeFile -Raw
+          $anchor = 'add_subdirectory(${FLUTTER_MANAGED_DIR})'
+          if (-not $content.Contains('set(CMAKE_POLICY_VERSION_MINIMUM 3.5)')) {
+            if (-not $content.Contains($anchor)) {
+              throw "Could not find Flutter CMake subdirectory anchor."
+            }
+            $content = $content.Replace($anchor, "set(CMAKE_POLICY_VERSION_MINIMUM 3.5)`r`n$anchor")
+            Set-Content -Path $cmakeFile -Value $content -NoNewline
+          }
+
+      - name: Verify Windows Google OAuth configuration
+        shell: pwsh
+        env:
+          GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_WINDOWS_CLIENT_SECRET)) {
+            throw "Add GOOGLE_WINDOWS_CLIENT_SECRET in GitHub repository Settings > Secrets and variables > Actions before building Windows Cloud Sync."
+          }
+
+      - name: Build Windows release
+        shell: pwsh
+        env:
+          GOOGLE_WINDOWS_CLIENT_SECRET: ${{ secrets.GOOGLE_WINDOWS_CLIENT_SECRET }}
+          WINDOWS_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          flutter build windows --release --dart-define=GOOGLE_WINDOWS_CLIENT_SECRET="$env:GOOGLE_WINDOWS_CLIENT_SECRET" --dart-define=APP_BUILD_NUMBER="$env:WINDOWS_BUILD_NUMBER"
+
+      - name: Stage portable runtime and package
+        shell: pwsh
+        run: |
+          $releaseDir = "build/windows/x64/runner/Release"
+          $exe = Get-ChildItem $releaseDir -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "Windows POS executable was not found." }
+
+          $vswhere = Join-Path "${env:ProgramFiles(x86)}" "Microsoft Visual Studio/Installer/vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "Visual Studio locator was not found." }
+          $vsPath = & $vswhere -latest -products "*" -property installationPath
+          if ([string]::IsNullOrWhiteSpace($vsPath)) { throw "Visual Studio installation path was not found." }
+          $crtRoot = Join-Path $vsPath "VC/Redist/MSVC"
+          $crt = Get-ChildItem -Path $crtRoot -Directory -Recurse -Filter "Microsoft.VC143.CRT" |
+            Where-Object { $_.FullName -like '*\x64\Microsoft.VC143.CRT' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw "App-local Microsoft VC runtime files were not found." }
+          Copy-Item -Path (Join-Path $crt.FullName "*") -Destination $releaseDir -Recurse -Force
+
+          foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            if (-not (Test-Path (Join-Path $releaseDir $dll))) {
+              throw "Required app-local runtime DLL is missing: $dll"
+            }
+          }
+          if (-not (Test-Path (Join-Path $releaseDir "flutter_windows.dll"))) {
+            throw "Flutter Windows runtime is missing."
+          }
+          $sqliteDll = Get-ChildItem $releaseDir -Filter "sqlite3.dll" -Recurse | Select-Object -First 1
+          if (-not $sqliteDll) { throw "SQLite native runtime is missing." }
+
+          @"
+          @echo off
+          setlocal
+          set "APP_DIR=%~dp0"
+          start "" "%APP_DIR%$($exe.Name)"
+          endlocal
+          "@ | Set-Content -Path (Join-Path $releaseDir "Start-Khan-Baba-POS.bat") -Encoding ASCII
+
+          @"
+          KHAN BABA GENERAL STORE - WINDOWS PORTABLE POS
+          Extract the complete ZIP and run Start-Khan-Baba-POS.bat.
+          No installer or administrator rights are required.
+          Database: %LOCALAPPDATA%\KhanBabaPOS\Data\khan_baba_pos.db
+          Startup logs: %LOCALAPPDATA%\KhanBabaPOS\Logs\startup.log
+          Google Drive: Windows is the master copy; connect the same Google account on Android.
+          Keep all extracted files together.
+          "@ | Set-Content -Path (Join-Path $releaseDir "README-PORTABLE.txt") -Encoding UTF8
+
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath build/khan-baba-pos-windows.zip -Force
+          $hash = (Get-FileHash build/khan-baba-pos-windows.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  khan-baba-pos-windows.zip" | Set-Content build/khan-baba-pos-windows.zip.sha256 -Encoding ASCII
+
+      - name: Upload portable Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: khan-baba-pos-windows
+          path: |
+            build/khan-baba-pos-windows.zip
+            build/khan-baba-pos-windows.zip.sha256
+          if-no-files-found: error
+
+      - name: Publish Windows update release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: windows-v1.0.0-build${{ github.run_number }}
+          name: Khan Baba POS Windows build ${{ github.run_number }}
+          body: |
+            Portable Windows update package.
+            The local database remains in the Windows user profile.
+          files: |
+            build/khan-baba-pos-windows.zip
+            build/khan-baba-pos-windows.zip.sha256
+          make_latest: false
+          overwrite_files: true

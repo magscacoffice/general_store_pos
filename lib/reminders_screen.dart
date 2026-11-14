@@ -1,3 +1,5 @@
+import 'windows/desktop_app_bar.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -20,6 +22,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
 
   Future<void> _loadReminders() async {
     final data = await DBHelper.getReminders();
+    if (!mounted) return;
     setState(() => reminders = data);
   }
 
@@ -61,7 +64,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     'date': DateTime.now().toString().substring(0, 10),
                     'is_done': 0,
                   });
-                  if (mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
                   _loadReminders();
                 }
               },
@@ -77,18 +82,73 @@ class _RemindersScreenState extends State<RemindersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !Platform.isWindows,
+        leading: desktopWorkspaceButton(),
         title: const Text('وصولی اور ریمائنڈرز'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
+        onPressed: _addReminderDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Reminder'),
+      ) : FloatingActionButton(
         backgroundColor: Colors.teal,
         onPressed: _addReminderDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: reminders.isEmpty
-          ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
-          : ListView.builder(
+      body: Platform.isWindows
+          ? reminders.isEmpty
+              ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text('Reminder Register', style: Theme.of(context).textTheme.titleLarge)),
+                              Text('${reminders.length} reminders', style: Theme.of(context).textTheme.bodySmall),
+                              IconButton(tooltip: 'Refresh', onPressed: _loadReminders, icon: const Icon(Icons.refresh)),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                              headingRowHeight: 42,
+                              dataRowMinHeight: 40,
+                              dataRowMaxHeight: 52,
+                              columns: const [
+                                DataColumn(label: Text('Reminder')),
+                                DataColumn(label: Text('Details')),
+                                DataColumn(label: Text('Date')),
+                                DataColumn(label: Text('Status')),
+                              ],
+                              rows: reminders.map((item) => DataRow(cells: [
+                                DataCell(SizedBox(width: 220, child: Text('${item['title'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                                DataCell(SizedBox(width: 360, child: Text('${item['details'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis))),
+                                DataCell(Text('${item['date'] ?? ''}')),
+                                DataCell(Text(item['is_done'] == 1 || item['is_done'] == true ? 'Completed' : 'Pending')),
+                              ])).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+          : reminders.isEmpty
+              ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
+              : ListView.builder(
               itemCount: reminders.length,
               itemBuilder: (context, index) {
                 final item = reminders[index];
