@@ -82,5 +82,13 @@ ThemeData buildWindowsTheme() {
     popupMenuTheme: PopupMenuThemeData(textStyle: const TextStyle(fontSize: 12, color: ink), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5))),
     snackBarTheme: SnackBarThemeData(behavior: SnackBarBehavior.floating, contentTextStyle: const TextStyle(fontSize: 12, color: Colors.white), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5))),
     tabBarTheme: const TabBarThemeData(labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600), unselectedLabelStyle: TextStyle(fontSize: 12), indicatorSize: TabBarIndicatorSize.label),
+    // Keep desktop scroll affordances visible across all Windows screens.
+    scrollbarTheme: ScrollbarThemeData(
+      thumbVisibility: MaterialStatePropertyAll(true),
+      thickness: MaterialStatePropertyAll(8),
+      thumbColor: MaterialStatePropertyAll(Color(0xFF84919C)),
+      radius: Radius.circular(4),
+      interactive: true,
+    ),
   );
 }

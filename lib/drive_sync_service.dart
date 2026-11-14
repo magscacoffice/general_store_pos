@@ -762,6 +762,34 @@ class DriveSyncService {
 
   static Future<void> restoreStatus() async {
     lastSyncAt = await _secureStorage.read(key: 'drive_last_sync_at');
+    if (!kIsWeb && Platform.isWindows) {
+      // Windows remains usable as a local POS even when cloud sync is unavailable.
+      try {
+        final connectivity = await Connectivity().checkConnectivity();
+        final online = connectivity.any(
+          (result) => result != ConnectivityResult.none,
+        );
+        final refresh = await _secureStorage.read(key: 'drive_refresh_token');
+        final access = await _secureStorage.read(key: 'drive_access_token');
+        final hasCredentials = (refresh != null && refresh.isNotEmpty) ||
+            (access != null && access.isNotEmpty);
+        if (!online) {
+          status = lastSyncAt == null
+              ? 'Windows local POS ready — internet unavailable; cloud sync paused'
+              : 'Windows local POS ready — internet unavailable; last successful sync: $lastSyncAt';
+        } else if (!hasCredentials) {
+          status = 'Windows local POS ready — Google Drive is not connected';
+        } else {
+          status = lastSyncAt == null
+              ? 'Windows local POS ready — Google Drive connection found; initial sync pending'
+              : 'Google Drive credentials saved — last successful sync: $lastSyncAt';
+        }
+      } catch (error) {
+        lastError = error.toString();
+        status = 'Windows local POS ready — connection status unavailable; local data remains available';
+      }
+      return;
+    }
     if (lastSyncAt != null) status = 'Last successful sync: $lastSyncAt';
   }
 
