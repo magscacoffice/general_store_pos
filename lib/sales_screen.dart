@@ -301,7 +301,9 @@ class SalesScreenState extends State<SalesScreen> {
     setState(() {
       customers = data;
       if (selectedCustomerId != null &&
-          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId)) {
+          !customers.any((c) =>
+              (c['id'] as num?)?.toInt() == selectedCustomerId &&
+              (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)) {
         selectedCustomerId = null;
       }
     });
