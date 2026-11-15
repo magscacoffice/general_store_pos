@@ -576,3 +576,11 @@ Future improvements: add new ideas here when the owner requests them.
 - Still pending: test inventory operations against a disposable copy of the user's actual schema; implement the remaining purchase, sales history, Khata, returns, reports, expenses, reminders, backup/restore, printer and Drive sync screens; remove obsolete Flutter Windows presentation/window-management branches; and complete physical Windows acceptance.
 
 - Final check for this work segment: the build-only WPF workflow (restore + Release build, with publish/upload removed) passed on the latest tracker commit `d77a45edcf8e96bcb1a1a24de70f5beed4577619`. No build package was uploaded by this run.
+
+
+### WPF sales history progress — 2026-11-15
+
+- Added a native Sales History window with search by invoice/customer/date/payment, from/to date filters, sortable and virtualized DataGrid, and an invoice detail view showing items, quantities, rates, totals, discount, received, balance and returned amount.
+- Sale totals/received/balance reconstruction follows the Flutter legacy-sale fallback rules. Date filters compare the date prefix so both legacy ISO `T` timestamps and WPF space-separated timestamps are included.
+- Sales history + invoice detail UI compiled successfully on commit `544c1b078b451c6d905aa110c03ff59bf8273bc7`; the date-prefix filter correction is on commit `3350df8d6fc610e5900de4a6e03b63cefea823e8` and its CI is pending.
+- Invoice reprint, returns/refunds, printer output and physical acceptance remain pending; the detail view is currently read-only.
