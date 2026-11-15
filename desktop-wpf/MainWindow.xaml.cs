@@ -532,6 +532,13 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private void Reminders_Click(object sender, RoutedEventArgs e)
+    {
+        var reminders = new RemindersWindow { Owner = this };
+        reminders.ShowDialog();
+        FocusScanner();
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
