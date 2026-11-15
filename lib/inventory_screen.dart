@@ -325,7 +325,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: Platform.isWindows ? null : FloatingActionButton(
+      floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.teal,
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
