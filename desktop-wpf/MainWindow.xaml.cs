@@ -457,6 +457,8 @@ public partial class MainWindow : Window
         _suppressPersistence = true;
         _activeBillId = Guid.NewGuid().ToString("N");
         CartLines.Clear();
+        SaleTypeBox.SelectedItem = "Walk-in";
+        ApplyCustomerTypeFilter();
         CustomerBox.SelectedValue = 0;
         PaymentModeBox.SelectedItem = "Cash";
         DiscountModeBox.SelectedIndex = 0;
@@ -522,6 +524,8 @@ public partial class MainWindow : Window
             _suppressPersistence = true;
             CartLines.Clear();
             _activeBillId = Guid.NewGuid().ToString("N");
+            SaleTypeBox.SelectedItem = "Walk-in";
+            ApplyCustomerTypeFilter();
             CustomerBox.SelectedValue = 0;
             PaymentModeBox.SelectedItem = "Cash";
             DiscountModeBox.SelectedIndex = 0;
@@ -623,7 +627,18 @@ public sealed class CartLine : INotifyPropertyChanged
     private int _quantity;
     public string Name { get; }
     public string Barcode { get; }
-    public double Price { get; }
+    private double _price;
+    public double Price
+    {
+        get => _price;
+        set
+        {
+            if (!double.IsFinite(value)) return;
+            _price = Math.Max(value, PurchasePrice);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LineTotal));
+        }
+    }
     public double PurchasePrice { get; }
     public string StockUnit { get; }
     public int AvailableStock { get; }
@@ -644,7 +659,7 @@ public sealed class CartLine : INotifyPropertyChanged
     {
         Name = name;
         Barcode = barcode;
-        Price = price;
+        _price = Math.Max(price, purchasePrice);
         PurchasePrice = purchasePrice;
         StockUnit = stockUnit;
         AvailableStock = availableStock;
