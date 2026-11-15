@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly ProductLookupService _products = new();
     private readonly CustomerLookupService _customers = new();
     private readonly SalePostingService _sales = new();
+    private IReadOnlyList<CustomerLookup> _allCustomers = [];
     private readonly PendingBillService _pendingBills = new();
     private readonly DispatcherTimer _searchTimer;
     private readonly DispatcherTimer _pendingSaveTimer;
@@ -33,6 +34,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+
+        SaleTypeBox.Items.Add("Walk-in");
+        SaleTypeBox.Items.Add("Khata");
+        SaleTypeBox.Items.Add("Wholesale");
+        SaleTypeBox.SelectedItem = "Walk-in";
 
         PaymentModeBox.Items.Add("Cash");
         PaymentModeBox.Items.Add("Credit");
@@ -76,9 +82,8 @@ public partial class MainWindow : Window
             DatabaseStatusText.Foreground = Brushes.SeaGreen;
             SearchStatusText.Text = "Database ready. Scan or search an item.";
 
-            var customers = await _customers.GetCustomersAsync();
-            Customers.Clear();
-            foreach (var customer in customers) Customers.Add(customer);
+            _allCustomers = await _customers.GetCustomersAsync();
+            ApplyCustomerTypeFilter();
             CustomerBox.SelectedValue = 0;
 
             var pending = await _pendingBills.GetAllAsync();
@@ -104,6 +109,43 @@ public partial class MainWindow : Window
         }
         RefreshTotals();
         FocusScanner();
+    }
+
+    private void ApplyCustomerTypeFilter()
+    {
+        var type = SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in";
+        Customers.Clear();
+        if (type == "Walk-in")
+        {
+            Customers.Add(new CustomerLookup(0, "Walk-in Customer", string.Empty, 0, "Walk-in"));
+            CustomerBox.SelectedValue = 0;
+            return;
+        }
+
+        foreach (var customer in _allCustomers.Where(x =>
+                     string.Equals(x.CustomerType, type, StringComparison.OrdinalIgnoreCase)))
+            Customers.Add(customer);
+        CustomerBox.SelectedValue = null;
+    }
+
+    private void SaleTypeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressPersistence)
+        {
+            ApplyCustomerTypeFilter();
+            return;
+        }
+        if (CartLines.Count > 0 && e.RemovedItems.Count > 0)
+        {
+            _suppressPersistence = true;
+            SaleTypeBox.SelectedItem = e.RemovedItems[0];
+            _suppressPersistence = false;
+            SearchStatusText.Text = "Customer type change karne se pehle cart clear karein.";
+            return;
+        }
+        ApplyCustomerTypeFilter();
+        RefreshTotals();
+        SchedulePendingSave();
     }
 
     private void FocusScanner()
