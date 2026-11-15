@@ -108,13 +108,13 @@ public sealed class CustomerLedgerWindow:Window
         period.Children.Add(_from);
         period.Children.Add(new TextBlock{Text="To",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12,0,6,0)});
         period.Children.Add(_to);
-        var periodPdf=new Button{Content="Save Period Statement PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(10,0,0,0)};
+        var periodPdf=new Button{Content="Print / Save Period PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(10,0,0,0)};
         periodPdf.Click+=async(_,_)=>await ExportPeriodStatementAsync();period.Children.Add(periodPdf);
         footer.Children.Add(period);
         var actions=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right};
         var copy=new Button{Content="Copy Full Ledger",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)};
         copy.Click+=(_,_)=>CopyLedger();actions.Children.Add(copy);
-        var ledgerPdf=new Button{Content="Save Full Ledger PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)};
+        var ledgerPdf=new Button{Content="Print / Save Full Ledger PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)};
         ledgerPdf.Click+=async(_,_)=>await SaveLedgerPdfAsync();actions.Children.Add(ledgerPdf);
         var receipt=new Button{Content="Record Receipt",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)};
         receipt.Click+=async(_,_)=>await ReceiptAsync();actions.Children.Add(receipt);
