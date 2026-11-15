@@ -61,6 +61,7 @@
                     <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="▣   Expenses" Click="Expenses_Click"/>
                     <Button Content="◷   Reminders" Click="Reminders_Click"/>
+                    <Button Content="▣   Backup &amp; Restore" Click="BackupRestore_Click"/>
                     <Button Content="↗   Profit / Loss" Click="ProfitLoss_Click"/>
                     <Button Content="⚙   Settings" Click="ComingSoon_Click"/>
                 </StackPanel>
