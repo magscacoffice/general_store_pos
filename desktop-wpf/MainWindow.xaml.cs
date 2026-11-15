@@ -497,6 +497,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Inventory_Click(object sender, RoutedEventArgs e)
+    {
+        var inventory = new InventoryWindow { Owner = this };
+        inventory.ShowDialog();
+        FocusScanner();
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
