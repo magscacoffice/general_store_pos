@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using KhanBabaPos.Wpf.Services;
 
@@ -12,14 +14,34 @@ namespace KhanBabaPos.Wpf;
 public partial class MainWindow : Window
 {
     public ObservableCollection<CartLine> CartLines { get; } = [];
+    public ObservableCollection<CustomerLookup> Customers { get; } = [];
+    public ObservableCollection<PendingBillSnapshot> PendingBills { get; } = [];
+
     private readonly ProductLookupService _products = new();
+    private readonly CustomerLookupService _customers = new();
+    private readonly SalePostingService _sales = new();
+    private readonly PendingBillService _pendingBills = new();
     private readonly DispatcherTimer _searchTimer;
+    private readonly DispatcherTimer _pendingSaveTimer;
     private CancellationTokenSource? _searchCts;
+    private string _activeBillId = Guid.NewGuid().ToString("N");
+    private bool _suppressPersistence;
+    private bool _suppressPendingSelection;
+    private bool _checkoutInProgress;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = this;
+
+        PaymentModeBox.Items.Add("Cash");
+        PaymentModeBox.Items.Add("Credit");
+        PaymentModeBox.Items.Add("Partial");
+        PaymentModeBox.SelectedIndex = 0;
+        DiscountModeBox.Items.Add("Rupe");
+        DiscountModeBox.Items.Add("FeeSad (%)");
+        DiscountModeBox.SelectedIndex = 0;
+
         CartLines.CollectionChanged += (_, args) =>
         {
             if (args.NewItems is not null)
@@ -27,9 +49,22 @@ public partial class MainWindow : Window
             if (args.OldItems is not null)
                 foreach (CartLine line in args.OldItems) line.PropertyChanged -= CartLine_PropertyChanged;
             RefreshTotals();
+            SchedulePendingSave();
         };
+
         _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
-        _searchTimer.Tick += async (_, _) => { _searchTimer.Stop(); await SearchProductsAsync(ScannerBox.Text.Trim()); };
+        _searchTimer.Tick += async (_, _) =>
+        {
+            _searchTimer.Stop();
+            await SearchProductsAsync(ScannerBox.Text.Trim());
+        };
+
+        _pendingSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _pendingSaveTimer.Tick += async (_, _) =>
+        {
+            _pendingSaveTimer.Stop();
+            await PersistActiveBillAsync();
+        };
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -38,15 +73,36 @@ public partial class MainWindow : Window
         {
             await _products.VerifyDatabaseAsync();
             DatabaseStatusText.Text = "Existing SQLite v18 verified";
-            DatabaseStatusText.Foreground = System.Windows.Media.Brushes.SeaGreen;
+            DatabaseStatusText.Foreground = Brushes.SeaGreen;
             SearchStatusText.Text = "Database ready. Scan or search an item.";
+
+            var customers = await _customers.GetCustomersAsync();
+            Customers.Clear();
+            foreach (var customer in customers) Customers.Add(customer);
+            CustomerBox.SelectedValue = 0;
+
+            var pending = await _pendingBills.GetAllAsync();
+            if (pending.Count > 0)
+            {
+                _suppressPendingSelection = true;
+                PendingBills.Clear();
+                foreach (var bill in pending) PendingBills.Add(bill);
+                _suppressPendingSelection = false;
+                RestoreBill(pending[0]);
+            }
+            else
+            {
+                _activeBillId = Guid.NewGuid().ToString("N");
+                await RefreshPendingBillsAsync();
+            }
         }
         catch (Exception ex)
         {
             DatabaseStatusText.Text = "Database unavailable";
-            DatabaseStatusText.Foreground = System.Windows.Media.Brushes.Firebrick;
+            DatabaseStatusText.Foreground = Brushes.Firebrick;
             SearchStatusText.Text = ex.Message;
         }
+        RefreshTotals();
         FocusScanner();
     }
 
@@ -57,13 +113,41 @@ public partial class MainWindow : Window
         ScannerBox.CaretIndex = ScannerBox.Text.Length;
     }
 
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F2)
+        {
+            FocusScanner();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F4)
+        {
+            CustomerBox.Focus();
+            CustomerBox.IsDropDownOpen = true;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F5 && !_checkoutInProgress)
+        {
+            _ = CreateNewBillAsync();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            if (SuggestionsList.IsKeyboardFocusWithin)
+            {
+                FocusScanner();
+                e.Handled = true;
+            }
+        }
+    }
+
     private void ScannerBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _searchTimer.Stop();
-        SuggestionsList.ItemsSource = null; // Never let Enter select a stale result from the previous query.
+        _searchCts?.Cancel();
+        SuggestionsList.ItemsSource = null;
         if (string.IsNullOrWhiteSpace(ScannerBox.Text))
         {
-            SuggestionsList.ItemsSource = null;
             SearchStatusText.Text = "Ready for barcode scan.";
             return;
         }
@@ -73,12 +157,19 @@ public partial class MainWindow : Window
 
     private async Task SearchProductsAsync(string query)
     {
-        _searchCts?.Cancel(); _searchCts?.Dispose(); _searchCts = new CancellationTokenSource();
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
         try
         {
-            var results = await _products.SearchAsync(query, _searchCts.Token);
+            var results = await _products.SearchAsync(query, token);
+            if (token.IsCancellationRequested || !string.Equals(query, ScannerBox.Text.Trim(), StringComparison.Ordinal))
+                return;
             SuggestionsList.ItemsSource = results;
-            SearchStatusText.Text = results.Count == 0 ? "No matching product found." : $"{results.Count} matching product(s). Press Enter to add the highlighted result.";
+            SearchStatusText.Text = results.Count == 0
+                ? "No matching product found."
+                : $"{results.Count} matching product(s). Press Enter to add the highlighted result.";
             if (results.Count > 0) SuggestionsList.SelectedIndex = 0;
         }
         catch (OperationCanceledException) { }
@@ -89,7 +180,10 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Down && SuggestionsList.Items.Count > 0)
         {
-            SuggestionsList.Focus(); SuggestionsList.SelectedIndex = 0; e.Handled = true; return;
+            SuggestionsList.Focus();
+            SuggestionsList.SelectedIndex = 0;
+            e.Handled = true;
+            return;
         }
         if (e.Key != Key.Enter) return;
         e.Handled = true;
@@ -98,10 +192,19 @@ public partial class MainWindow : Window
         try
         {
             var exact = await _products.FindExactBarcodeAsync(query);
-            if (exact is not null) { AddProduct(exact); return; }
-            if (SuggestionsList.SelectedItem is ProductLookup selected) { AddProduct(selected); return; }
+            if (exact is not null)
+            {
+                AddProduct(exact);
+                return;
+            }
+            if (SuggestionsList.SelectedItem is ProductLookup selected)
+            {
+                AddProduct(selected);
+                return;
+            }
             await SearchProductsAsync(query);
-            if (SuggestionsList.Items.Count > 0 && SuggestionsList.Items[0] is ProductLookup first) AddProduct(first);
+            if (SuggestionsList.Items.Count > 0 && SuggestionsList.Items[0] is ProductLookup first)
+                AddProduct(first);
         }
         catch (Exception ex) { SearchStatusText.Text = "Scan lookup failed: " + ex.Message; }
     }
@@ -111,8 +214,15 @@ public partial class MainWindow : Window
     private void SuggestionsList_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter && SuggestionsList.SelectedItem is ProductLookup selected)
-        { AddProduct(selected); e.Handled = true; }
-        else if (e.Key == Key.Escape) { FocusScanner(); e.Handled = true; }
+        {
+            AddProduct(selected);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            FocusScanner();
+            e.Handled = true;
+        }
     }
 
     private void SuggestionsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -120,30 +230,274 @@ public partial class MainWindow : Window
         if (SuggestionsList.SelectedItem is ProductLookup selected) AddProduct(selected);
     }
 
-    private void CartLine_PropertyChanged(object? sender, PropertyChangedEventArgs e) => RefreshTotals();
+    private void CartLine_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        RefreshTotals();
+        SchedulePendingSave();
+    }
 
     private void AddProduct(ProductLookup product)
     {
-        var existing = CartLines.FirstOrDefault(x => x.ProductId == product.Id);
-        if (existing is null) CartLines.Add(new CartLine(product.Id, product.Name, product.Barcode, product.Price, 1));
-        else existing.Quantity++;
-        ScannerBox.Clear(); SuggestionsList.ItemsSource = null;
+        var existing = CartLines.FirstOrDefault(x => string.Equals(x.Barcode, product.Barcode, StringComparison.Ordinal));
+        var inCart = existing?.Quantity ?? 0;
+        if (product.Quantity <= inCart)
+        {
+            SearchStatusText.Text = $"Available stock is only {product.Quantity} {product.StockUnit}.";
+            FocusScanner();
+            return;
+        }
+
+        var safePrice = Math.Max(product.Price, product.PurchasePrice);
+        if (existing is null)
+            CartLines.Add(new CartLine(product.Name, product.Barcode, safePrice, 1,
+                product.PurchasePrice, product.StockUnit, product.Quantity));
+        else
+            existing.Quantity = Math.Min(existing.Quantity + 1, product.Quantity);
+
+        ScannerBox.Clear();
+        SuggestionsList.ItemsSource = null;
         SearchStatusText.Text = $"{product.Name} added. Scan the next item.";
-        RefreshTotals(); FocusScanner();
+        RefreshTotals();
+        FocusScanner();
     }
+
+    private double Subtotal => CartLines.Sum(x => x.LineTotal);
+    private double DiscountValue => double.TryParse(DiscountValueBox.Text, NumberStyles.Number,
+        CultureInfo.InvariantCulture, out var value) ? value : 0;
+    private bool IsPercentageDiscount => DiscountModeBox.SelectedIndex == 1;
+    private double CalculatedDiscount => IsPercentageDiscount ? Subtotal * DiscountValue / 100d : DiscountValue;
+    private double FinalTotal => Math.Max(0d, Subtotal - CalculatedDiscount);
 
     private void RefreshTotals()
     {
-        SubtotalText.Text = $"Rs. {CartLines.Sum(x => x.LineTotal):N2}";
+        if (SubtotalText is null) return;
+        SubtotalText.Text = $"Rs. {Subtotal:N2}";
+        FinalTotalText.Text = $"Rs. {FinalTotal:N2}";
+        DiscountPreviewText.Text = $"Discount: Rs. {CalculatedDiscount:N2}";
         CartCountText.Text = $"{CartLines.Sum(x => x.Quantity)} units • {CartLines.Count} lines";
+        CheckoutButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
+        var walkIn = (CustomerBox.SelectedValue as int? ?? 0) == 0;
+        PaymentModeBox.IsEnabled = !walkIn;
+        if (walkIn && PaymentModeBox.SelectedItem?.ToString() != "Cash")
+            PaymentModeBox.SelectedItem = "Cash";
+        PartialAmountBox.Visibility = PaymentModeBox.SelectedItem?.ToString() == "Partial"
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
-    private void NewSale_Click(object sender, RoutedEventArgs e) { CartLines.Clear(); ScannerBox.Clear(); SearchStatusText.Text = "New temporary bill started."; FocusScanner(); }
-    private void RemoveSelected_Click(object sender, RoutedEventArgs e) { if (CartGrid.SelectedItem is CartLine selected) CartLines.Remove(selected); FocusScanner(); }
-    private void ClearBill_Click(object sender, RoutedEventArgs e) { CartLines.Clear(); FocusScanner(); }
+    private void CheckoutFields_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshTotals();
+        SchedulePendingSave();
+    }
+
+    private void CheckoutFields_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshTotals();
+        SchedulePendingSave();
+    }
+
+    private void CustomerBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshTotals();
+        SchedulePendingSave();
+    }
+
+    private void PaymentModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshTotals();
+        SchedulePendingSave();
+    }
+
+    private void SchedulePendingSave()
+    {
+        if (_suppressPersistence || _checkoutInProgress || !IsLoaded) return;
+        _pendingSaveTimer.Stop();
+        _pendingSaveTimer.Start();
+    }
+
+    private async Task PersistActiveBillAsync()
+    {
+        if (_suppressPersistence || _checkoutInProgress || !IsLoaded) return;
+        try
+        {
+            if (CartLines.Count == 0)
+            {
+                await _pendingBills.DeleteAsync(_activeBillId);
+            }
+            else
+            {
+                var snapshot = new PendingBillSnapshot(
+                    _activeBillId,
+                    BillLabel(_activeBillId),
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                    CartLines.Select(x => new PendingBillLine(x.Barcode, x.Name, x.Price, x.Quantity,
+                        x.PurchasePrice, x.StockUnit)).ToList(),
+                    SelectedCustomerId,
+                    SelectedCustomerId is null ? "Walk-in" : "Khata",
+                    PaymentModeBox.SelectedItem?.ToString() ?? "Cash",
+                    DiscountValue,
+                    IsPercentageDiscount,
+                    PartialAmountBox.Text);
+                await _pendingBills.SaveAsync(snapshot);
+            }
+            await RefreshPendingBillsAsync();
+        }
+        catch (Exception ex)
+        {
+            SearchStatusText.Text = "Pending bill save failed: " + ex.Message;
+        }
+    }
+
+    private int? SelectedCustomerId
+    {
+        get
+        {
+            if (CustomerBox.SelectedValue is int id && id > 0) return id;
+            return null;
+        }
+    }
+
+    private string BillLabel(string billId) => "Bill #" +
+        (billId.Length > 4 ? billId[^4..] : billId);
+
+    private async Task RefreshPendingBillsAsync()
+    {
+        var selectedId = _activeBillId;
+        var pending = await _pendingBills.GetAllAsync();
+        _suppressPendingSelection = true;
+        PendingBills.Clear();
+        foreach (var bill in pending) PendingBills.Add(bill);
+        PendingBillsBox.SelectedValue = selectedId;
+        _suppressPendingSelection = false;
+    }
+
+    private void RestoreBill(PendingBillSnapshot bill)
+    {
+        _suppressPersistence = true;
+        _activeBillId = bill.BillId;
+        CartLines.Clear();
+        foreach (var line in bill.Cart)
+            CartLines.Add(new CartLine(line.Name, line.Barcode, line.SalePrice, line.Quantity,
+                line.PurchasePrice, line.StockUnit, int.MaxValue));
+        CustomerBox.SelectedValue = bill.SelectedCustomerId ?? 0;
+        PaymentModeBox.SelectedItem = bill.CustomerPaymentMode;
+        DiscountModeBox.SelectedIndex = bill.IsPercentageDiscount ? 1 : 0;
+        DiscountValueBox.Text = bill.OverallDiscount.ToString(CultureInfo.InvariantCulture);
+        PartialAmountBox.Text = bill.ReceivedAmount;
+        _suppressPersistence = false;
+        RefreshTotals();
+        FocusScanner();
+    }
+
+    private async void PendingBillsBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressPendingSelection || PendingBillsBox.SelectedItem is not PendingBillSnapshot selected ||
+            selected.BillId == _activeBillId) return;
+        await PersistActiveBillAsync();
+        RestoreBill(selected);
+    }
+
+    private async Task CreateNewBillAsync()
+    {
+        if (_checkoutInProgress) return;
+        await PersistActiveBillAsync();
+        _suppressPersistence = true;
+        _activeBillId = Guid.NewGuid().ToString("N");
+        CartLines.Clear();
+        CustomerBox.SelectedValue = 0;
+        PaymentModeBox.SelectedItem = "Cash";
+        DiscountModeBox.SelectedIndex = 0;
+        DiscountValueBox.Text = "0";
+        PartialAmountBox.Clear();
+        _suppressPersistence = false;
+        await RefreshPendingBillsAsync();
+        SearchStatusText.Text = "New bill ready.";
+        RefreshTotals();
+        FocusScanner();
+    }
+
+    private async void NewSale_Click(object sender, RoutedEventArgs e) => await CreateNewBillAsync();
+
+    private void RemoveSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (CartGrid.SelectedItem is CartLine selected) CartLines.Remove(selected);
+        FocusScanner();
+    }
+
+    private void ClearBill_Click(object sender, RoutedEventArgs e)
+    {
+        CartLines.Clear();
+        FocusScanner();
+    }
+
+    private async void Checkout_Click(object sender, RoutedEventArgs e)
+    {
+        if (_checkoutInProgress || CartLines.Count == 0) return;
+        try
+        {
+            var subtotal = Subtotal;
+            if (!double.TryParse(DiscountValueBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var discountValue) ||
+                !double.IsFinite(discountValue) || discountValue < 0 ||
+                (IsPercentageDiscount && discountValue > 100) ||
+                (!IsPercentageDiscount && discountValue > subtotal))
+                throw new InvalidOperationException(IsPercentageDiscount
+                    ? "Discount 0 se 100 percent ke darmiyan hona chahiye."
+                    : "Discount subtotal se zyada nahi ho sakta.");
+
+            double? partial = null;
+            if (PaymentModeBox.SelectedItem?.ToString() == "Partial")
+            {
+                if (!double.TryParse(PartialAmountBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+                    throw new InvalidOperationException("Partial received amount enter karein.");
+                partial = parsed;
+            }
+
+            _checkoutInProgress = true;
+            RefreshTotals();
+            var request = new SaleCheckoutRequest(
+                CartLines.Select(x => new SaleLineInput(x.Barcode, x.Quantity, x.Price)).ToList(),
+                SelectedCustomerId,
+                PaymentModeBox.SelectedItem?.ToString() ?? "Cash",
+                partial,
+                discountValue,
+                IsPercentageDiscount,
+                "Local Windows User");
+            var result = await _sales.CompleteSaleAsync(request);
+            await _pendingBills.DeleteAsync(_activeBillId);
+
+            _suppressPersistence = true;
+            CartLines.Clear();
+            _activeBillId = Guid.NewGuid().ToString("N");
+            CustomerBox.SelectedValue = 0;
+            PaymentModeBox.SelectedItem = "Cash";
+            DiscountModeBox.SelectedIndex = 0;
+            DiscountValueBox.Text = "0";
+            PartialAmountBox.Clear();
+            _suppressPersistence = false;
+            await RefreshPendingBillsAsync();
+
+            MessageBox.Show(
+                $"Sale #{result.SaleId} successfully saved.\nNet total: Rs. {result.FinalAmount:N2}\nReceived: Rs. {result.ReceivedAmount:N2}\nBalance: Rs. {result.BalanceDue:N2}",
+                "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
+            SearchStatusText.Text = $"Sale #{result.SaleId} saved successfully.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Sale could not be completed", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _checkoutInProgress = false;
+            RefreshTotals();
+            FocusScanner();
+        }
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.", "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
+            "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
         FocusScanner();
     }
 }
@@ -151,13 +505,37 @@ public partial class MainWindow : Window
 public sealed class CartLine : INotifyPropertyChanged
 {
     private int _quantity;
-    public int ProductId { get; }
     public string Name { get; }
     public string Barcode { get; }
     public double Price { get; }
-    public int Quantity { get => _quantity; set { _quantity = Math.Max(1, value); OnPropertyChanged(); OnPropertyChanged(nameof(LineTotal)); } }
+    public double PurchasePrice { get; }
+    public string StockUnit { get; }
+    public int AvailableStock { get; }
+    public int Quantity
+    {
+        get => _quantity;
+        set
+        {
+            _quantity = Math.Clamp(value, 1, Math.Max(1, AvailableStock));
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LineTotal));
+        }
+    }
     public double LineTotal => Price * Quantity;
-    public CartLine(int productId, string name, string barcode, double price, int quantity) { ProductId = productId; Name = name; Barcode = barcode; Price = price; _quantity = quantity; }
+
+    public CartLine(string name, string barcode, double price, int quantity,
+        double purchasePrice, string stockUnit, int availableStock)
+    {
+        Name = name;
+        Barcode = barcode;
+        Price = price;
+        PurchasePrice = purchasePrice;
+        StockUnit = stockUnit;
+        AvailableStock = availableStock;
+        _quantity = Math.Clamp(quantity, 1, Math.Max(1, availableStock));
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
