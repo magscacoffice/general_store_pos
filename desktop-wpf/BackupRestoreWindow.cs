@@ -96,7 +96,7 @@ public sealed class BackupRestoreWindow : Window
             _backups.Clear();
             foreach (var backup in DatabaseBackupService.ListBackups(dataDirectory))
                 _backups.Add(backup);
-            _status.Text = $"{_backups.Count:N0} verified backup file(s) found. Current database: {PosDatabasePath.Resolve()}";
+            _status.Text = $"{_backups.Count:N0} saved backup file(s) found. Selected files are schema-verified before restore. Current database: {PosDatabasePath.Resolve()}";
         }
         catch (Exception ex)
         {
