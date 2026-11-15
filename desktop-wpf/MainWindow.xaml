@@ -56,7 +56,7 @@
                     <Button Content="▤   Inventory" Click="Inventory_Click"/>
                     <Button Content="▧   Sales History" Click="SalesHistory_Click"/>
                     <Button Content="▥   Purchases" Click="ComingSoon_Click"/>
-                    <Button Content="◫   Customer Khata" Click="ComingSoon_Click"/>
+                    <Button Content="◫   Customer Khata" Click="Khata_Click"/>
                     <Button Content="▦   Reports" Click="ComingSoon_Click"/>
                     <Button Content="⚙   Settings" Click="ComingSoon_Click"/>
                 </StackPanel>

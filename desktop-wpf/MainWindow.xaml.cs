@@ -497,6 +497,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Khata_Click(object sender, RoutedEventArgs e)
+    {
+        var khata = new KhataWindow { Owner = this };
+        khata.ShowDialog();
+        FocusScanner();
+    }
+
     private void SalesHistory_Click(object sender, RoutedEventArgs e)
     {
         var history = new SalesHistoryWindow { Owner = this };
