@@ -11,6 +11,7 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 - Sale returns/refunds, sales reports, expenses, reminders and profit/loss views.
 - Windows printer queue discovery and preferred-printer settings, 80mm ESC/POS receipt builder, raw spooler output, test print, invoice/receipt preview and PDF save/open.
 - Existing SQLite v18 entity/schema foundation, read-only schema verifier, Windows data path/restore-pointer resolver and schema compatibility tests are retained from current main.
+- Manual Backup & Restore uses verified SQLite backups, SHA-256 sidecars, schema-v18 validation and a staged restore file activated through an atomic `.active_database` pointer; the previous live database is never overwritten.
 - Windows business data remains local-first. Firebase/Firestore business-data sync is not added.
 
 ## Build and test
@@ -27,4 +28,4 @@ Use only a verified disposable copy of a real schema-v18 database for integratio
 
 ## Still required before production cutover
 
-The integrated .NET 10 Release build and current SQLite v18 schema tests pass in GitHub Actions. Android Flutter Wholesale parity, broader disposable-database transaction tests, Windows runtime/visual acceptance, Google Drive sync/authentication/role parity, and physical SpeedX SP60D / Black Copper BC-86AC hardware acceptance remain pending. A successful CI build does not complete those checks. No release/package should be produced until the project tracker is complete and owner acceptance is recorded.
+The integrated .NET 10 Release build and current SQLite v18 schema tests pass in GitHub Actions. A disposable-database backup/restore regression test is added and awaiting its CI run. Android Flutter Wholesale parity, broader disposable-database transaction tests, Windows runtime/visual acceptance, Google Drive sync/authentication/role parity, and physical SpeedX SP60D / Black Copper BC-86AC hardware acceptance remain pending. A successful CI build does not complete those checks. No release/package should be produced until the project tracker is complete and owner acceptance is recorded.
