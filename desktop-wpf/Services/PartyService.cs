@@ -20,6 +20,15 @@ public sealed class PartyService
   cmd.Parameters.AddWithValue("$name",name);cmd.Parameters.AddWithValue("$phone",phone);cmd.Parameters.AddWithValue("$type",type);cmd.Parameters.AddWithValue("$customerType",type=="customer"?customerType:DBNull.Value);cmd.Parameters.AddWithValue("$sync",$"{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid():N}");
   await cmd.ExecuteNonQueryAsync(ct);await tx.CommitAsync(ct);
  }
+ public async Task UpdateCustomerTypeAsync(int id,string customerType,CancellationToken ct=default)
+ {
+  if(customerType is not ("Khata" or "Wholesale"))throw new InvalidOperationException("Customer type must be Khata or Wholesale.");
+  var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
+  await using var db=await Open(path,false,ct);await using var cmd=db.CreateCommand();
+  cmd.CommandText="UPDATE parties SET customer_type=$type WHERE id=$id AND type='customer';";
+  cmd.Parameters.AddWithValue("$type",customerType);cmd.Parameters.AddWithValue("$id",id);
+  if(await cmd.ExecuteNonQueryAsync(ct)!=1)throw new InvalidOperationException("Customer account not found.");
+ }
  static async Task<SqliteConnection> Open(string path,bool ro,CancellationToken ct){var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=path,Mode=ro?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWrite,Pooling=false}.ToString());await db.OpenAsync(ct);return db;}
 }
 public sealed record PartyRow(int Id,string Name,string Phone,double Balance,string Type,string CustomerType);
