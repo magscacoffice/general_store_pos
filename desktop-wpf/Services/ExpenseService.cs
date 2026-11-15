@@ -18,11 +18,11 @@ public sealed class ExpenseService
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);
   await using var cmd=db.CreateCommand();cmd.Transaction=(SqliteTransaction)tx;
-  cmd.CommandText="INSERT INTO expenses(title,amount,date,sync_id) VALUES($title,$amount,$date,$sync);";
+  cmd.CommandText="INSERT INTO expenses(title,amount,date,sync_id) VALUES($title,$amount,$date,$sync); SELECT last_insert_rowid();";
   cmd.Parameters.AddWithValue("$title",title);cmd.Parameters.AddWithValue("$amount",amount);
   cmd.Parameters.AddWithValue("$date",DateTime.Now.ToString("yyyy-MM-dd HH:mm",System.Globalization.CultureInfo.InvariantCulture));
   cmd.Parameters.AddWithValue("$sync",Guid.NewGuid().ToString("N"));
-  await cmd.ExecuteNonQueryAsync(ct);var id=(int)db.LastInsertRowId;await tx.CommitAsync(ct);return id;
+  var value=await cmd.ExecuteScalarAsync(ct);var id=Convert.ToInt32(value,System.Globalization.CultureInfo.InvariantCulture);await tx.CommitAsync(ct);return id;
  }
  static async Task<SqliteConnection> Open(string path,bool ro,CancellationToken ct){var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=path,Mode=ro?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWrite,Pooling=false}.ToString());await db.OpenAsync(ct);return db;}
 }
