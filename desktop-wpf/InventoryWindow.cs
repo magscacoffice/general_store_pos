@@ -136,10 +136,16 @@ public sealed class InventoryWindow : Window
 public sealed class ProductEditorWindow : Window
 {
     private readonly TextBox _name=new(), _barcode=new(), _quantity=new(), _unit=new(), _purchase=new(), _sale=new(), _wholesale=new();
+    private readonly TextBlock _barcodeStatus = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0), FontSize = 11 };
+    private readonly Button _saveButton = MakeButton("Save Product");
+    private readonly DispatcherTimer _barcodeTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly InventoryService _service = new();
+    private readonly int? _existingId;
     public ProductMutation? Product { get; private set; }
 
     public ProductEditorWindow(InventoryProduct? existing=null)
     {
+        _existingId = existing?.Id;
         Title=existing is null?"Add Product":"Edit Product"; Width=440; Height=610; MinWidth=420;
         WindowStartupLocation=WindowStartupLocation.CenterOwner; ResizeMode=ResizeMode.NoResize;
         Background=System.Windows.Media.Brushes.WhiteSmoke;
@@ -147,6 +153,7 @@ public sealed class ProductEditorWindow : Window
         panel.Children.Add(new TextBlock { Text=Title, FontSize=23, FontWeight=FontWeights.Bold, Margin=new Thickness(0,0,0,14) });
         AddField(panel,"Product name *",_name);
         AddField(panel,"Barcode *",_barcode);
+        panel.Children.Add(_barcodeStatus);
         AddField(panel,"Stock quantity *",_quantity);
         AddField(panel,"Stock unit *",_unit);
         AddField(panel,"Purchase price",_purchase);
@@ -161,8 +168,10 @@ public sealed class ProductEditorWindow : Window
         }
         var buttons=new StackPanel { Orientation=Orientation.Horizontal, HorizontalAlignment=HorizontalAlignment.Right, Margin=new Thickness(0,16,0,0) };
         var cancel=MakeButton("Cancel");cancel.Click+=(_,_)=>DialogResult=false;
-        var save=MakeButton("Save Product");save.Click+=Save;
-        buttons.Children.Add(cancel);buttons.Children.Add(save);panel.Children.Add(buttons);
+        _saveButton.Click+=Save;
+        buttons.Children.Add(cancel);buttons.Children.Add(_saveButton);panel.Children.Add(buttons);
+        _barcode.TextChanged += (_, _) => { _barcodeTimer.Stop(); _barcodeTimer.Start(); };
+        _barcodeTimer.Tick += async (_, _) => { _barcodeTimer.Stop(); await CheckBarcodeAsync(); };
         Content=new ScrollViewer { Content=panel, VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     }
 
@@ -174,10 +183,44 @@ public sealed class ProductEditorWindow : Window
 
     private static Button MakeButton(string text)=>new(){Content=text,Padding=new Thickness(12,8,12,8),Margin=new Thickness(6,0,0,0)};
 
+    private async Task CheckBarcodeAsync()
+    {
+        var barcode = _barcode.Text.Trim();
+        if (barcode.Length == 0)
+        {
+            _barcodeStatus.Text = string.Empty;
+            _saveButton.IsEnabled = true;
+            return;
+        }
+        try
+        {
+            var owner = await _service.FindBarcodeOwnerAsync(barcode, _existingId);
+            if (owner is null)
+            {
+                _barcodeStatus.Text = "Barcode available.";
+                _barcodeStatus.Foreground = System.Windows.Media.Brushes.SeaGreen;
+                _saveButton.IsEnabled = true;
+            }
+            else
+            {
+                _barcodeStatus.Text = $"This barcode is already assigned to '{owner}'.";
+                _barcodeStatus.Foreground = System.Windows.Media.Brushes.Firebrick;
+                _saveButton.IsEnabled = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _barcodeStatus.Text = "Barcode check failed: " + ex.Message;
+            _barcodeStatus.Foreground = System.Windows.Media.Brushes.Firebrick;
+            _saveButton.IsEnabled = false;
+        }
+    }
+
     private void Save(object sender,RoutedEventArgs e)
     {
         var name=_name.Text.Trim();var barcode=_barcode.Text.Trim();var unit=_unit.Text.Trim().ToLowerInvariant();
         if(name.Length==0||barcode.Length==0||unit.Length==0){MessageBox.Show("Barcode, Name aur Stock Unit lazmi hain.");return;}
+        if(!_saveButton.IsEnabled){MessageBox.Show("Barcode duplicate hai ya verify nahi ho saka. Pehle barcode check complete karein.");return;}
         if(name.Length>17){MessageBox.Show("Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.");return;}
         if(!int.TryParse(_quantity.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out var qty)||qty<0||
            !double.TryParse(_purchase.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var cost)||!double.IsFinite(cost)||cost<0||
