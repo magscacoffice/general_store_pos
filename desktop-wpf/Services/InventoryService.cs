@@ -14,7 +14,7 @@ public sealed class InventoryService
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT id, name, barcode, COALESCE(price,0), COALESCE(purchasePrice,0),
-                   COALESCE(quantity,0), COALESCE(damaged_quantity,0),
+                   COALESCE(wholesalePrice,0), COALESCE(quantity,0), COALESCE(damaged_quantity,0),
                    COALESCE(stock_unit,'pcs'), COALESCE(is_active,1)
             FROM products
             WHERE ($search = '' OR barcode LIKE $like OR name LIKE $like)
@@ -26,8 +26,8 @@ public sealed class InventoryService
         var result = new List<InventoryProduct>();
         while (await reader.ReadAsync(cancellationToken))
             result.Add(new InventoryProduct(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
-                reader.GetDouble(3), reader.GetDouble(4), reader.GetInt32(5), reader.GetInt32(6),
-                reader.GetString(7), reader.GetInt32(8) == 1));
+                reader.GetDouble(3), reader.GetDouble(4), reader.GetDouble(5), reader.GetInt32(6), reader.GetInt32(7),
+                reader.GetString(8), reader.GetInt32(9) == 1));
         return result;
     }
 
@@ -45,8 +45,8 @@ public sealed class InventoryService
             await using var cmd = db.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = """
-                INSERT INTO products(name,barcode,price,purchasePrice,damaged_quantity,quantity,is_active,stock_unit)
-                VALUES($name,$barcode,$price,$cost,0,$quantity,1,$unit);
+                INSERT INTO products(name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
+                VALUES($name,$barcode,$price,$cost,$wholesale,0,$quantity,1,$unit);
                 """;
             AddParams(cmd, p);
             await cmd.ExecuteNonQueryAsync(ct);
@@ -83,7 +83,7 @@ public sealed class InventoryService
             await using var cmd = db.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = """
-                UPDATE products SET name=$name,barcode=$barcode,price=$price,purchasePrice=$cost,
+                UPDATE products SET name=$name,barcode=$barcode,price=$price,purchasePrice=$cost,wholesalePrice=$wholesale,
                     quantity=$quantity,stock_unit=$unit WHERE id=$id;
                 """;
             AddParams(cmd, p);
@@ -195,6 +195,7 @@ public sealed class InventoryService
         cmd.Parameters.AddWithValue("$barcode", p.Barcode);
         cmd.Parameters.AddWithValue("$price", p.SalePrice);
         cmd.Parameters.AddWithValue("$cost", p.PurchasePrice);
+        cmd.Parameters.AddWithValue("$wholesale", p.WholesalePrice);
         cmd.Parameters.AddWithValue("$quantity", p.Quantity);
         cmd.Parameters.AddWithValue("$unit", p.StockUnit);
     }
@@ -205,8 +206,9 @@ public sealed class InventoryService
             throw new InvalidOperationException("Barcode, Name aur Stock Unit lazmi hain.");
         if (p.Name.Length > 17)
             throw new InvalidOperationException("Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.");
-        if (p.Quantity < 0 || !double.IsFinite(p.PurchasePrice) || !double.IsFinite(p.SalePrice) ||
-            p.PurchasePrice < 0 || p.SalePrice < 0)
+        if (p.Quantity < 0 || !double.IsFinite(p.PurchasePrice) || !double.IsFinite(p.SalePrice) || !double.IsFinite(p.WholesalePrice) ||
+            p.PurchasePrice < 0 || p.SalePrice < 0 || p.WholesalePrice < 0 ||
+            (p.WholesalePrice > 0 && p.WholesalePrice < p.PurchasePrice))
             throw new InvalidOperationException("Stock aur prices valid non-negative values honi chahiye.");
     }
 
@@ -220,8 +222,8 @@ public sealed class InventoryService
     }
 }
 
-public sealed record ProductMutation(string Name,string Barcode,int Quantity,string StockUnit,double PurchasePrice,double SalePrice);
-public sealed record InventoryProduct(int Id,string Name,string Barcode,double SalePrice,double PurchasePrice,
+public sealed record ProductMutation(string Name,string Barcode,int Quantity,string StockUnit,double PurchasePrice,double SalePrice,double WholesalePrice);
+public sealed record InventoryProduct(int Id,string Name,string Barcode,double SalePrice,double PurchasePrice,double WholesalePrice,
     int Quantity,int DamagedQuantity,string StockUnit,bool IsActive)
 {
     public string Status => IsActive ? "Active" : "Inactive";
