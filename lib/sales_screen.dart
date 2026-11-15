@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
@@ -65,24 +64,10 @@ class SalesScreenState extends State<SalesScreen> {
     _loadCustomers();
     if (Platform.isWindows) {
       unawaited(_loadProductSearchCache());
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_focusUsbScanner());
-      });
-      unawaited(_restorePendingBills().whenComplete(_focusUsbScanner));
+
     }
   }
 
-  Future<void> _focusUsbScanner() async {
-    if (!Platform.isWindows || !mounted) return;
-    try {
-      final window = WindowManager.instance.getCurrent();
-      window?.show();
-      window?.focus();
-    } catch (_) {
-      // The scanner field can still receive focus if native focus is unavailable.
-    }
-    if (mounted) _usbBarcodeFocusNode.requestFocus();
-  }
 
   Map<String, dynamic> _snapshotCurrentBill() => {
     'bill_id': _activeBillId,
@@ -536,14 +521,8 @@ class SalesScreenState extends State<SalesScreen> {
         _productSearchController.text = selected['name']?.toString() ?? '';
       });
       await _persistActiveBill();
-      if (Platform.isWindows) {
-        final window = WindowManager.instance.getCurrent();
-        window?.show();
-        window?.focus();
-      }
     } finally {
       searchController.dispose();
-      if (mounted && Platform.isWindows) _usbBarcodeFocusNode.requestFocus();
     }
   }
 
@@ -672,12 +651,6 @@ class SalesScreenState extends State<SalesScreen> {
         }
       });
       await _persistActiveBill();
-      if (Platform.isWindows) {
-        final window = WindowManager.instance.getCurrent();
-        window?.show();
-        window?.focus();
-        _usbBarcodeFocusNode.requestFocus();
-      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
