@@ -1,9 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'db_helper.dart';
 import 'drive_sync_service.dart';
 
 class CloudSyncScreen extends StatefulWidget {
@@ -15,7 +12,6 @@ class CloudSyncScreen extends StatefulWidget {
 
 class _CloudSyncScreenState extends State<CloudSyncScreen> {
   bool _busy = false;
-  List<Map<String, dynamic>> _conflicts = [];
 
   @override
   void initState() {
@@ -27,11 +23,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
     try {
       await DriveSyncService.restoreStatus();
     } catch (_) {}
-    final conflicts = Platform.isWindows
-        ? await DBHelper.getDriveSyncConflicts()
-        : <Map<String, dynamic>>[];
-    if (!mounted) return;
-    setState(() => _conflicts = conflicts);
+    if (mounted) setState(() {});
   }
 
   Future<void> _connect() async {
@@ -74,163 +66,6 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _resolve(Map<String, dynamic> conflict, bool useRemote) async {
-    if (useRemote) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Confirm reconciliation'),
-          content: Text(
-            conflict['entity_type'].toString().endsWith('_delete')
-                ? 'This will delete this product or party from the Windows master. Existing stock, balances or transaction history may prevent deletion. Continue?'
-                : conflict['entity_type'].toString().endsWith('_readd')
-                    ? 'This will restore the product or party that was deleted on Windows, using the other device record. Continue?'
-                    : 'This will replace the Windows product stock/prices or customer account details with the other device values. This is a manual choice and cannot be undone automatically. Continue?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(
-                conflict['entity_type'].toString().endsWith('_delete')
-                    ? 'Delete on Windows'
-                    : conflict['entity_type'].toString().endsWith('_readd')
-                        ? 'Restore Other Device'
-                        : 'Use Other Device',
-              ),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
-    setState(() => _busy = true);
-    try {
-      await DBHelper.resolveDriveSyncConflict(
-        (conflict['id'] as num).toInt(),
-        useRemote: useRemote,
-      );
-      await DriveSyncService.syncNow();
-      await _refresh();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Conflict resolve nahi ho saka: $error')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Map<String, dynamic> _decode(String? value) {
-    try {
-      final decoded = jsonDecode(value ?? '{}');
-      return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
-    } catch (_) {
-      return {};
-    }
-  }
-
-  Widget _conflictCard(Map<String, dynamic> conflict) {
-    final local = _decode(conflict['local_payload']?.toString());
-    final remote = _decode(conflict['remote_payload']?.toString());
-    final entityType = conflict['entity_type']?.toString() ?? '';
-    final isProduct = entityType.startsWith('product');
-    final isDelete = entityType.endsWith('_delete');
-    final isReadd = entityType.endsWith('_readd');
-    final key = conflict['entity_key']?.toString() ?? '';
-    final title = isDelete
-        ? (isProduct ? 'Product deletion conflict' : 'Party deletion conflict')
-        : isReadd
-            ? (isProduct ? 'Product restore conflict' : 'Party restore conflict')
-            : (isProduct ? 'Product stock / details conflict' : 'Customer / party details conflict');
-    final localSummary = isReadd
-        ? 'Deleted on Windows master'
-        : isProduct
-            ? '${local['name'] ?? ''}\nWindows stock: ${local['quantity'] ?? 0}  |  Damaged: ${local['damaged_quantity'] ?? 0}\nSale price: Rs. ${local['price'] ?? 0}'
-            : '${local['name'] ?? ''}  •  ${local['phone'] ?? ''}\nWindows balance: Rs. ${local['balance'] ?? 0}';
-    final remoteSummary = isDelete
-        ? 'Deleted on the other device'
-        : isProduct
-            ? '${remote['name'] ?? ''}\nOther device stock: ${remote['quantity'] ?? 0}  |  Damaged: ${remote['damaged_quantity'] ?? 0}\nSale price: Rs. ${remote['price'] ?? 0}'
-            : '${remote['name'] ?? ''}  •  ${remote['phone'] ?? ''}\nOther device balance: Rs. ${remote['balance'] ?? 0}';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(isProduct ? 'Barcode: $key' : 'Account: $key', style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F4F7),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('WINDOWS MASTER', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
-                        const SizedBox(height: 6),
-                        Text(localSummary),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7E8),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('OTHER DEVICE', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
-                        const SizedBox(height: 6),
-                        Text(remoteSummary),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton(
-                  onPressed: _busy ? null : () => _resolve(conflict, false),
-                  child: const Text('Keep Windows'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _busy ? null : () => _resolve(conflict, true),
-                  child: Text(isDelete ? 'Delete on Windows' : isReadd ? 'Restore Other Device' : 'Use Other Device'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
