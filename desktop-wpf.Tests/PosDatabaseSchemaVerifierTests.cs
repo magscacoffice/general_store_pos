@@ -576,6 +576,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
+            await SeedSaleAccountAsync(path, "Khata", 5);
             var service = new InventoryService();
             var initial = new ProductMutation("New Test Item", "WPF-NEW-1", 4, "pcs", 5, 10, 8);
             await service.CreateAsync(initial, path);
