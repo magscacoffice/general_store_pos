@@ -570,6 +570,117 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
+    public async Task WpfInventoryCreateUpdateDuplicateAndDeleteRulesPreserveBarcodeHistory()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var service = new InventoryService();
+            var initial = new ProductMutation("New Test Item", "WPF-NEW-1", 4, "pcs", 5, 10, 8);
+            await service.CreateAsync(initial, path);
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var find = db.CreateCommand();
+            find.CommandText = "SELECT id,wholesalePrice FROM products WHERE barcode='WPF-NEW-1';";
+            await using var reader = await find.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            var id = reader.GetInt32(0);
+            Assert.Equal(8, reader.GetDouble(1), 2);
+            await reader.DisposeAsync();
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(initial, path));
+            await service.UpdateAsync(id, new ProductMutation("Updated Item", "WPF-NEW-2", 7, "pcs", 6, 12, 10), path);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.UpdateAsync(id, new ProductMutation("Updated Item", "WPF-WH-1", 7, "pcs", 6, 12, 10), path));
+            await service.SetActiveAsync(id, false, path);
+
+            await using (var state = db.CreateCommand())
+            {
+                state.CommandText = "SELECT barcode,is_active,wholesalePrice FROM products WHERE id=$id;";
+                state.Parameters.AddWithValue("$id", id);
+                await using var stateReader = await state.ExecuteReaderAsync();
+                Assert.True(await stateReader.ReadAsync());
+                Assert.Equal("WPF-NEW-2", stateReader.GetString(0));
+                Assert.Equal(0, stateReader.GetInt32(1));
+                Assert.Equal(10, stateReader.GetDouble(2), 2);
+            }
+
+            await using (var zero = db.CreateCommand())
+            {
+                zero.CommandText = "UPDATE products SET quantity=0,damaged_quantity=0 WHERE id=$id;";
+                zero.Parameters.AddWithValue("$id", id);
+                await zero.ExecuteNonQueryAsync();
+            }
+            await service.DeleteAsync(id, path);
+
+            await using var verify = db.CreateCommand();
+            verify.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM products WHERE id=$id),
+                  (SELECT COUNT(*) FROM drive_sync_tombstones WHERE entity_type='product' AND entity_key IN ('WPF-NEW-1','WPF-NEW-2'));
+                """;
+            verify.Parameters.AddWithValue("$id", id);
+            await using var verifyReader = await verify.ExecuteReaderAsync();
+            Assert.True(await verifyReader.ReadAsync());
+            Assert.Equal(0, verifyReader.GetInt32(0));
+            Assert.Equal(2, verifyReader.GetInt32(1));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WpfInventoryCannotDeleteProductWithSaleHistoryEvenWhenStockIsZero()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
+            await new SalePostingService().CompleteSaleAsync(
+                new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 1, 18)],
+                    customerId,
+                    "Cash",
+                    null,
+                    0,
+                    false,
+                    "Khata"),
+                path);
+
+            int productId;
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var find = db.CreateCommand();
+                find.CommandText = "SELECT id FROM products WHERE barcode='WPF-WH-1';";
+                productId = Convert.ToInt32(await find.ExecuteScalarAsync());
+                await using var zero = db.CreateCommand();
+                zero.CommandText = "UPDATE products SET quantity=0,damaged_quantity=0 WHERE id=$id;";
+                zero.Parameters.AddWithValue("$id", productId);
+                await zero.ExecuteNonQueryAsync();
+            }
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new InventoryService().DeleteAsync(productId, path));
+            await using var check = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await check.OpenAsync();
+            await using var exists = check.CreateCommand();
+            exists.CommandText = "SELECT COUNT(*) FROM products WHERE id=$id;";
+            exists.Parameters.AddWithValue("$id", productId);
+            Assert.Equal(1, Convert.ToInt32(await exists.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task AcceptsExactFlutterSchemaV18WithoutModifyingDatabase()
     {
         var path = await CreateFixtureAsync();
