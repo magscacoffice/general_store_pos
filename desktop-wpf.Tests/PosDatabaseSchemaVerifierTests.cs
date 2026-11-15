@@ -490,6 +490,78 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
+    public async Task WpfSalesReportAndProfitLossIncludeDiscountsReturnsPurchasesAndExpenses()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var sale = await new SalePostingService().CompleteSaleAsync(
+                new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 2, 18)],
+                    customerId,
+                    "Credit",
+                    null,
+                    10,
+                    true,
+                    "Wholesale"),
+                path);
+
+            int saleItemId;
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await connection.OpenAsync();
+                await using var find = connection.CreateCommand();
+                find.CommandText = "SELECT id FROM sale_items WHERE sale_id=$sale;";
+                find.Parameters.AddWithValue("$sale", sale.SaleId);
+                saleItemId = Convert.ToInt32(await find.ExecuteScalarAsync());
+            }
+
+            var returned = await new SaleReturnService().RecordAsync(
+                sale.SaleId, "Report return", "Khata",
+                [new SaleReturnLineInput(saleItemId, 1, "saleable")], path);
+            Assert.Equal(16.2, returned.RefundAmount, 2);
+
+            int productId;
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await connection.OpenAsync();
+                await using var find = connection.CreateCommand();
+                find.CommandText = "SELECT id FROM products WHERE barcode='WPF-WH-1';";
+                productId = Convert.ToInt32(await find.ExecuteScalarAsync());
+                await using var expense = connection.CreateCommand();
+                expense.CommandText = "INSERT INTO expenses(title,amount,date,sync_id) VALUES('Report test expense',5,$date,'report-expense-sync');";
+                expense.Parameters.AddWithValue("$date", DateTime.Now.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
+                await expense.ExecuteNonQueryAsync();
+            }
+            await new PurchaseService().RecordAsync(productId, 4, 20, 24, path);
+
+            var from = DateTime.Today;
+            var to = DateTime.Today;
+            var report = await new SalesReportService().GetAsync(from, to, path);
+            Assert.Equal(16.2, report.Sales, 2);
+            Assert.Equal(80, report.Purchases, 2);
+            Assert.Equal(5, report.Expenses, 2);
+            Assert.Equal(3.6, report.Discount, 2);
+            Assert.Equal(16.2, report.Returned, 2);
+            Assert.Equal(1, report.SalesCount);
+            Assert.Equal(-68.8, report.NetActivity, 2);
+            Assert.Single(report.Days);
+
+            var profit = await new ProfitLossService().GetAsync(path);
+            Assert.Equal(16.2, profit.Revenue, 2);
+            Assert.Equal(10, profit.Cost, 2);
+            Assert.Equal(5, profit.Expenses, 2);
+            Assert.Equal(1.2, profit.Profit, 2);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task AcceptsExactFlutterSchemaV18WithoutModifyingDatabase()
     {
         var path = await CreateFixtureAsync();
