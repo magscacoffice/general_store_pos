@@ -782,7 +782,7 @@ class SalesScreenState extends State<SalesScreen> {
   void _scanAndAddToCart() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ScannerScreen()),
+      MaterialPageRoute(builder: (context) => ScannerScreen(customerType: selectedSaleType)),
     );
 
     if (!mounted) return;
