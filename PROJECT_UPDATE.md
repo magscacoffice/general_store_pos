@@ -546,3 +546,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added foreground scanner/search behaviour: scanner field is focused at startup and after add; exact barcode adds the product; repeated scan increments its cart quantity; name search suggestions support Up/Down and Enter.
 - [ ] This is a foundation milestone only. Checkout, discount calculation, received/balance posting, stock deduction, persistent pending bills, customer selection/Khata, purchases, inventory CRUD, reports, returns, backup/restore, printer, Drive sync, authentication/role parity, automated business parity tests and physical Windows acceptance remain pending.
 - [ ] Run the WPF Windows CI build and inspect all XAML/runtime interactions before merging. The current cart is temporary and must not be mistaken for a saved sale.
+
+
+### WPF implementation progress — 2026-11-15 (continued)
+
+- Added `SalePostingService` with schema-v18 parameterized SQLite transaction logic for stock validation/deduction, sale + sale-item insertion, fixed/percentage discount validation, Walk-in/Khata payment handling, and customer Khata credit/receipt ledger entries. This service is **not yet connected to the cashier UI** and is not marked complete.
+- Added `PendingBillService` for reading, saving and deleting pending bills in the existing `pending_bills` table using the Flutter-compatible JSON payload shape. Dashboard bill creation/switching/autosave/restore integration and cross-version payload tests remain pending.
+- Corrected the WPF cashier XAML root layout and compiler issues found by GitHub Actions. Latest Windows .NET 10 WPF restore, Release build and publish steps passed on commit `d17eb0f085feb59adb21f136b9997814fff14ee0`. The workflow also uploaded its configured CI package; no separate manual/PDF deliverable has been created.
+- Outstanding: wire and test checkout/pending-bill workflows; complete the rest of the WPF modules and parity tests; remove obsolete Flutter Windows presentation/window-management branches; validate Drive sync, auth/roles, printer, backups, updates and physical Windows acceptance. Do not mark the WPF client production-ready until these checks pass.
