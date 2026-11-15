@@ -497,6 +497,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SalesHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var history = new SalesHistoryWindow { Owner = this };
+        history.ShowDialog();
+        FocusScanner();
+    }
+
     private void Inventory_Click(object sender, RoutedEventArgs e)
     {
         var inventory = new InventoryWindow { Owner = this };
