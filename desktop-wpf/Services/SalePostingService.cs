@@ -16,8 +16,11 @@ public sealed class SalePostingService
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Items.Count == 0) throw new InvalidOperationException("Cart is empty.");
-        if (!double.IsFinite(request.DiscountValue) || request.DiscountValue < 0)
-            throw new InvalidOperationException("Discount value must be a valid non-negative number.");
+        if (!double.IsFinite(request.DiscountValue) || request.DiscountValue < 0 ||
+            (request.IsPercentageDiscount && request.DiscountValue > 100))
+            throw new InvalidOperationException("Discount must be between 0 and 100 percent.");
+        if (!request.IsPercentageDiscount && request.DiscountValue > request.Items.Sum(x => x.SalePrice * x.Quantity))
+            throw new InvalidOperationException("Fixed discount cannot exceed the bill subtotal.");
 
         var databasePath = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
