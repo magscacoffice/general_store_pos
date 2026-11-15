@@ -181,6 +181,38 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
+    public async Task RestoreRejectsBackupWithBadShaSidecarWithoutChangingActivePointer()
+    {
+        var currentFixture = await CreateFixtureAsync();
+        var restoreFixture = await CreateFixtureAsync();
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "khan-baba-bad-backup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDirectory);
+        var currentPath = Path.Combine(dataDirectory, "khan_baba_pos.db");
+        var selectedBackup = Path.Combine(dataDirectory, "selected_backup.db");
+        var pointer = Path.Combine(dataDirectory, ".active_database");
+        try
+        {
+            File.Copy(currentFixture, currentPath);
+            File.Copy(restoreFixture, selectedBackup);
+            await File.WriteAllTextAsync(selectedBackup + ".sha256", new string('0', 64));
+            var currentHash = await Sha256Async(currentPath);
+            var service = new DatabaseBackupService();
+
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                service.RestoreAsync(currentPath, selectedBackup, dataDirectory));
+
+            Assert.False(File.Exists(pointer));
+            Assert.Equal(currentHash, await Sha256Async(currentPath));
+        }
+        finally
+        {
+            File.Delete(currentFixture);
+            File.Delete(restoreFixture);
+            if (Directory.Exists(dataDirectory)) Directory.Delete(dataDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task WpfWholesalePartialAndCashSalesPostReceiptsToSameKhataAccount()
     {
         var path = await CreateDisposableDatabaseAsync();
