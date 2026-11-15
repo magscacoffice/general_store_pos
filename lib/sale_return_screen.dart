@@ -146,11 +146,9 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
         : 'Customer #${widget.sale['customer_id']}';
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: Text('Return Bill #$_saleId'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

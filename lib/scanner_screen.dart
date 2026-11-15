@@ -513,12 +513,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopReturnButton(),
-        toolbarHeight: Platform.isWindows ? 48 : 56,
+        toolbarHeight: 56,
         title: const Text('Live Barcode Scanner'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         actions: Platform.isWindows
             ? const []
             : [
@@ -559,7 +558,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
           // Manual input & scanned items list section
           Expanded(
-            flex: Platform.isWindows ? 1 : 3,
+            flex: 3,
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -638,7 +637,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   if (searchResults.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Container(
-                      constraints: BoxConstraints(maxHeight: Platform.isWindows ? 180 : 180),
+                      constraints: const BoxConstraints(maxHeight: 180),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border.all(color: Colors.teal.shade100),
@@ -651,7 +650,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           final product = searchResults[index];
                           return ListTile(
                             dense: true,
-                            minTileHeight: Platform.isWindows ? 42 : 48,
+                            minTileHeight: 48,
                             leading: const Icon(Icons.inventory_2, color: Colors.teal, size: 18),
                             title: Text(product['name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
                             subtitle: Text('Barcode: ${product['barcode']}  |  Rs. ${product['price']}', maxLines: 1, overflow: TextOverflow.ellipsis),

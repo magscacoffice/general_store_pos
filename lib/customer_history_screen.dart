@@ -287,8 +287,6 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     final balance = (widget.customer['balance'] as num?)?.toDouble() ?? 0;
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: Text('${widget.customer['name']} - History'),
         actions: [
           IconButton(
@@ -312,8 +310,8 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
             ],
           ),
         ],
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       body: Platform.isWindows
           ? _buildDesktopCustomerHistory(balance)

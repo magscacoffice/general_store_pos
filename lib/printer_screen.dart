@@ -574,7 +574,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
         MaterialPageRoute(
           builder: (_) => Scaffold(
             appBar: AppBar(
-              automaticallyImplyLeading: !Platform.isWindows,
               leading: desktopReturnButton(),
               title: const Text('Invoice Preview'),
             ),
@@ -863,12 +862,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
         );
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
         leading: desktopReturnButton(),
-        toolbarHeight: Platform.isWindows ? 48 : 56,
+        toolbarHeight: 56,
         title: const Text('Printer & Invoice'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
