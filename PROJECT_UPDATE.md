@@ -355,38 +355,18 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [Windows] Native WPF cashier and inventory
 
-- [x] Integrated dashboard-hosted WPF cashier source: scanner-ready focus, exact barcode lookup, product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
-- [x] Integrated WPF inventory window and service: searchable product list, product add/edit, active/inactive state, protected delete rules and virtualized DataGrid.
-- [x] Added separate Walk-in / Khata / Wholesale customer-type selection, matching account filtering and pending-bill persistence.
-- [x] Added Wholesale account creation and existing-account reclassification in WPF Parties, persisted product wholesale rates in Inventory, and used saved wholesale rate by default when adding a cart item.
-- [x] Enabled per-item manual rate editing for Wholesale bills only; rate validation never allows a sale price below purchase cost.
-- [x] WPF sale posting now stores the selected customer type and supports Cash, Credit and Partial Wholesale payments. Cash/partial receipts are posted against the same customer's Khata ledger and balance in the same transaction.
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
+- [ ] Validate immediate duplicate-barcode warning using Android camera scanning and the WPF keyboard-wedge scanner on real devices.
 - [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
 - [ ] Complete responsive visual/interaction acceptance at 980×650, 1280×720, maximized and resized states.
 
 ### [Windows] Khata, sales history and transaction workflows
 
-- [x] Integrated WPF sales history search/date filters and read-only invoice details.
-- [x] Integrated customer Khata customer search, balance list, ledger and receipt-posting source.
-- [x] Integrated transactional sale-posting source with stock deduction, discount handling, payment modes and ledger updates.
-- [x] Integrated searchable purchase/stock entry, expense register, reminders, customer/supplier list and profit/loss views.
-- [x] Integrated sale-return/refund source with stock restoration and transaction handling.
-- [x] .NET 10 WPF Release restore/build and the existing SQLite v18 schema verifier tests passed on the integrated source after correcting the disposable test fixture to disable SQLite connection pooling (Actions runs #130, #131, #147, #149 and #150).
-- [x] Backup/restore safety integration test passed on a disposable schema-v18 database (Actions #169).
-- [x] WPF sale-posting integration tests passed on disposable schema-v18 databases: Wholesale partial and full-cash receipts, same-account ledger, outstanding balance, stock deduction, 10% percentage-discount calculation, and mismatched account rejection/rollback (Actions #181).
-- [x] WPF backup failure-path test passed: invalid SHA-256 sidecar is rejected without changing the current database or active pointer (Actions #186).
-- [x] WPF purchase, sale-return/refund and Khata receipt integration tests passed on disposable SQLite v18 copies: purchase stock/cost/wholesale-rate floor, saleable/damaged return stock handling, Khata refund adjustments, receipt balance reduction and overpayment rejection (Actions #198).
-- [x] WPF sales-report and profit/loss calculation integration test passed on a disposable SQLite v18 copy, including percentage discount, sale return, purchase cost and expense totals (Actions #205).
 - [ ] Verify all transaction totals, discount (including percentage), received amounts, customer balances, payment history and stock movements against Android behaviour. Do not alter the existing discount feature.
-- [x] Restored Android Flutter Wholesale parity in billing: Walk-in/Khata/Wholesale are distinct; Wholesale supports Cash/Credit/Partial, saved wholesale product rate defaults, manual per-item rate edits, scanner defaults, and receipts/ledger history against the same account. Existing discount/percentage behaviour is unchanged.
-- [x] Updated Android party creation/reclassification, sale transaction validation and Drive snapshot import/export paths to preserve customer_type instead of forcing every account to Khata. Existing accounts previously converted by the old schema upgrade can be reclassified from the customer account screen; the app does not guess their former type.
 - [ ] Complete on-device Android acceptance for Wholesale creation, manual/default pricing, cash/credit/partial receipts, outstanding balance and Drive snapshot restore. Keep real user data backed up before reclassifying any existing account.
 
 ### [Windows] Printer and invoice
 
-- [x] Integrated WPF printer/invoice source: Windows printer queue discovery, saved preferred printer, 80mm ESC/POS receipt builder, raw spooler output, test print, invoice/receipt preview, PDF save/open and receipt configuration.
-- [x] Integrated compact printer list with queue availability and explicit Connect/Select action; unavailable saved printers are not silently replaced.
 - [ ] Verify saved-printer restoration and unavailable-queue behaviour across Windows application restarts.
 - [ ] Verify PDF save/open/share on the target Windows PC.
 - [ ] Physically test Black Copper BC-86AC 80mm USB printer: alignment, margins, header/total sizing, final-line clipping, cutter and paper feed.
@@ -394,22 +374,13 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [Windows] Data safety, authentication and sync
 
-- [x] Preserved current-main SQLite v18 entity/schema foundation, read-only schema verifier, database path resolver and existing schema compatibility tests during WPF source integration.
-- [x] Preserved the current-main WPF CI workflow and Android validation workflow; preserved main-branch database/schema changes rather than overwriting them with the older feature branch.
 - [ ] Complete full version-18 schema/constraint and Flutter transaction-method audit before production write enablement.
-- [x] Added WPF Backup & Restore window/service: create verified SQLite v18 backups with SHA-256 sidecars; restore only to a new staged database file; verify schema before atomically switching `.active_database`; preserve the previous live database and flush the active cashier bill first.
-- [x] New disposable-database backup/restore integration test passed in WPF Actions run #169; it confirms the old live database remains unchanged and the verified staged copy is activated through the pointer.
-- [x] Added and passed failure-path coverage for a backup with an invalid SHA-256 sidecar; restore is rejected and the active pointer/current database remain unchanged (WPF Actions #186).
 - [ ] Implement and verify Windows Google Drive snapshot sync using the existing Windows-master protocol, including upload/download direction, conflicts, retries, status and offline behaviour. No Firebase/Firestore business-data sync.
 - [ ] Complete Windows authentication, existing role/access parity and safe update flow; verify OAuth configuration without committing secrets.
 - [ ] Complete Windows startup, recovery and restore-pointer validation without creating or replacing the live database.
 
 ### [Windows] Flutter Windows retirement and final cutover
 
-- [x] Flutter Windows runner and its Windows build/release workflow were retired on main; Android Flutter remains the supported Flutter client.
-- [x] Transplanted the reviewed WPF application source from the diverged feature branch onto a fresh integration branch based on current main. The main-branch schema foundation, schema tests, README baseline and CI workflow were preserved.
-- [x] Run WPF .NET 10 restore/build and schema tests on the integrated branch; Actions runs #130, #131, #147 and #149 passed. The latest expanded WPF/Android regression runs #150 and #266 also passed.
-- [x] Review and reconcile the old draft PR #4: closed the diverged draft and replaced it with current-main-based Draft PR #5. Do not merge the old branch directly.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
 - [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
@@ -421,56 +392,20 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 - [ ] **WPF Google Drive periodic auto-sync — native port pending.** The earlier 2-minute timer/connectivity listener belonged to the retired Flutter Windows implementation and is not counted as completed for native WPF. Port the Windows-master snapshot protocol to WPF with safe 1–5 minute scheduling, explicit upload/download direction, pending-change detection, conflict/tombstone handling, retries and status/error feedback. Android Drive sync remains separate and is covered by Android tests.
 - [ ] **WPF startup/cloud status — native implementation pending.** Previous Flutter Windows status UI was retired with the Flutter Windows runner. Native WPF startup must distinguish offline, missing Drive credentials, first sync pending, previous successful sync and sync failure while keeping local POS availability explicit.
-- [x] **WPF lists — persistent native scrollbar theme implemented in source.** Native `App.xaml` applies visible vertical scrollbars, automatic horizontal scrollbars and a consistent track/thumb palette across ScrollViewer/DataGrid content. [ ] Verify thumb visibility, hit targets and clipping on the target Windows PC.
+- [ ] Verify WPF scrollbar thumb visibility, hit targets and clipping on the target Windows PC.
 - [ ] **Native WPF UI audit and acceptance — pending.** The previous Windows UI audit and fixes applied to the retired Flutter Windows client and cannot be counted as WPF completion. The native WPF source has been reviewed for basic layout and build correctness, but a full screen-by-screen audit is still required for 980×650 minimum size, resizing, keyboard/focus, long-list scrolling, modal dialogs, printer preview, scanner input and native Windows rendering. The supplier-invoice camera/Gemini OCR workflow remains Android-only by design.
-- [x] **WPF minimized-app scanner capture — safe foreground fallback retained.** Native WPF accepts ordinary USB HID/keyboard-wedge scanner input only while the New Sale scan field is focused. Do not add a global keyboard hook or suppress other apps' keystrokes. True background support requires a dedicated serial/COM interface, vendor SDK or exclusive scanner mode; support one only if the target device exposes it, otherwise retain focused-New Sale fallback.
-- [x] **WPF New Sale — combined scan/search input implemented in native source.** One visible input accepts exact barcode scans and routes non-matching text into product search; scanner focus returns after item addition. Target Windows keyboard/hardware acceptance remains pending.
-
-## Cross-platform inventory duplicate-check note from user (2026-11-13)
-
-- [x] **[Android + Windows] Immediate duplicate-barcode warning — code implemented.**** When adding a product, if the scanned barcode already belongs to a product in inventory, the app should detect and notify the user immediately at scan time (before the user spends time entering the rest of the product details). Current reported behaviour: the duplicate barcode is accepted during entry and only reported when the user presses Save, wasting time and entered work. Review and fix the barcode lookup/duplicate validation flow on both Android and Windows. Keep legitimate editing/updating of an existing product possible; distinguish an intentional edit from accidentally adding a duplicate new product. Add appropriate feedback and verify both platforms.
-
-## Sales history / invoice detail note from user (2026-11-13)
-
-- [x] **Sales History — invoice detail view — code implemented.**** When the user opens Sales History and taps/clicks an invoice, that invoice should open in a detail view. Show all items/products included in that sale and the relevant invoice details (such as quantities, rates, amounts, totals, date/time, bill number, customer/payment information where available). Review Android and Windows behaviour for consistency unless the existing platform design requires different layouts. The invoice detail must reflect the saved sale record and must not accidentally create or modify a sale.
-
-## Reports / custom date-wise business summary note from user (2026-11-13)
-
-- [x] **Reports — custom date-range report and daily breakdown — code implemented.**** The user should be able to choose any specific date (and ideally a custom from–to date range) and see what happened during that period. Include, at minimum:
-  - Total sales for the selected date/period.
-  - Total purchases for the selected date/period.
-  - Total expenses for the selected date/period.
-  - A clear date-wise daily breakdown when a range contains multiple days, so sales, purchases, and expenses can be reviewed for each individual day, not only as one combined total.
-  - Relevant totals and a net summary where the underlying data supports it; clearly distinguish sales, purchases, and expenses rather than mixing them.
-  Review Android and Windows report screens and keep figures consistent with saved transactions and the selected date boundaries.
-
+- [ ] Validate the combined scan/search input and scanner focus on the target Windows PC.
 
 ## Khata customer ledger and shareable statements note from user (2026-11-13)
 
-- [x] **Android Khata customer account — shareable complete ledger — code implemented.** The Android customer account flow provides a shareable ledger statement.
-- [x] **WPF Khata customer account — shareable complete ledger — code implemented.** Native WPF ledger includes transaction dates, sale charges, receipts, returns, running/outstanding balance, Copy Full Ledger and Print/Save PDF through the Unicode-capable Windows print dialog (choose Microsoft Print to PDF for a file). Release build passed in WPF Actions #226.
 - [ ] **WPF full-ledger PDF/print acceptance — pending.** Verify Unicode customer/product names and Microsoft Print to PDF output on the target Windows PC.
-- [x] **Android Khata customer account — selected-period shareable statement — code implemented.** Full ledger and selected-period item statement are separate options.
-- [x] **WPF Khata customer account — selected-period shareable statement — code implemented.** Custom from/to filters produce a separate item statement with sale/return rows, dates, bill numbers, quantities, rates, discount-adjusted amounts, refund amounts and totals. Disposable SQLite v18 report test verifies correct sale/return quantities and net amount (Actions #216); Unicode-capable print/PDF UI builds successfully (Actions #226).
 - [ ] **WPF period-statement PDF/print acceptance — pending.** Verify date boundaries, Unicode rendering and Microsoft Print to PDF on target Windows.
-
-## Supplier invoice photo scanning / OCR to purchase-stock entry note from user (2026-11-13)
-
-- [x] **Supplier purchase invoice — Android camera capture and printed-text OCR — code implemented.** The app captures invoice photos using the mobile camera and uses on-device ML Kit Latin text recognition to prefill printed invoice details. OCR output remains editable and must be reviewed before posting. Handwritten OCR remains a separate approval-gated item below.
-- [x] **Supplier invoice — editable review and confirm before posting — code implemented.**** Show extracted values in an editable purchase-invoice review screen. Let the user correct OCR mistakes and map invoice item names to existing inventory products; provide a clear path to add a genuinely new product and resolve unit/pack-size conversions. Only after the user confirms should the app save the purchase, update stock, and update supplier/purchase balances according to existing purchase workflows. Never post uncertain OCR results directly to inventory.
-- [x] **Handwritten invoice OCR — optional Gemini free-tier implementation added with owner approval (2026-11-14).** Android invoice review now offers an explicit “Read Handwriting with Gemini (Free Tier)” action using `gemini-2.5-flash-lite`. The owner supplies their own Google AI Studio API key in-app; it is stored with platform secure storage and is not committed to the repository. The image is sent only after a per-invoice confirmation. The result is editable and parsed into the existing review form; it never posts stock automatically. HTTP 429 stops the request with a free-tier-limit message and there is no paid-model fallback. **Important:** use an API key from a project with billing disabled; the app cannot independently verify a Google project's billing status. Google states free-tier submitted content may be used to improve its products, which is disclosed in the key dialog. Manual OCR correction/entry remains available.
-- [x] **Supplier invoice — duplicate posting guard and source image retention — code implemented.**** Review a practical duplicate check using supplier + invoice number/date and/or invoice image/document fingerprint so the same bill is not accidentally entered twice. Where practical, retain the captured invoice image/PDF with the saved purchase record for later reference.
-- [x] **Supplier invoice printed-text OCR feasibility and on-device approach — code implemented.**** Assess OCR/AI accuracy, offline versus internet requirements, privacy/cost, supported image/PDF formats, and Android/Windows capability. Do not assume handwritten OCR is fully automatic or promise zero manual work. Keep the Windows local/offline rule intact unless the user explicitly approves a cloud dependency; clarify any required online service before adopting it. Prefer a workflow that can fall back to manual review/entry.
 
 ## Automatic app-update notifications and in-app download note from user (2026-11-13)
 
-- [x] **Android in-app update checker and notification — code implemented.**
 - [ ] **Native WPF update checker and notification — pending.** The previous Windows implementation was tied to the retired Flutter Windows runner; port release detection, stable-channel filtering, version comparison and non-spam notification to WPF. Do not assume GitHub release publication automatically notifies installed WPF apps.
-- [x] **Android stable release detection and update prompt — code implemented.**
 - [ ] **WPF stable release detection and update prompt — pending.** Implement launch/periodic check, compatible stable version comparison, one notification per version, manual check and release notes.
-- [x] **Android user-initiated APK download and checksum verification — code implemented.**
 - [ ] **WPF package download and checksum verification — pending.** Implement download progress, retry, version/size and integrity validation for the native WPF package.
-- [x] **Android APK installer handoff — code implemented.**
 - [ ] **WPF update staging/installer handoff — pending.** Create a safe native update flow that never overwrites the running executable and preserves SQLite, settings, backups and offline operation.
 - [ ] **Release metadata and platform assets lookup — end-to-end validation pending.** Android release metadata/download code exists; native WPF package channel does not yet exist. Ensure stable releases publish correct compatible assets and checksums; exclude failed/draft/prerelease builds and verify installed-old-version upgrade on both platforms.
 
@@ -495,9 +430,24 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 Future improvements: add new ideas here when the owner requests them.
 
+
 ## Completed Updates
 
 <!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. -->
+
+- [x] **WPF cashier and inventory source** — dashboard-hosted billing, scanner focus, exact barcode lookup/product suggestions, repeat-scan quantity increments, pending bills/autosave, searchable inventory, add/edit/active status and protected delete source implemented.
+- [x] **WPF transaction and business screens** — sales history/invoice details, Khata ledger/receipts, sale posting, purchases, returns/refunds, expenses, reminders, reports and profit/loss source integrated. Disposable SQLite v18 tests passed for sale, purchase, return, receipt, report and profit/loss flows.
+- [x] **WPF printer/invoice source** — saved printer selection, compact queue list, 80mm ESC/POS receipt/test print, preview, PDF save/open and receipt configuration implemented. Physical BC-86AC acceptance remains pending.
+- [x] **WPF backup and restore safety** — verified SQLite v18 backup with SHA-256 sidecar, staged restore, atomic active-database pointer switch, active-bill flush, live-file preservation and corrupt-sidecar rejection all covered by passing disposable-database tests.
+- [x] **WPF Khata statements** — full ledger copy/print-to-PDF and separate date-range item statement including sales/returns implemented; query regression and WPF build passed.
+- [x] **WPF native shell usability** — combined scan/search input, foreground-only safe scanner fallback and consistent visible vertical scrollbar theme implemented. Target Windows visual/scanner acceptance remains pending.
+- [x] **Android sales and account parity** — Wholesale customer classification, account reclassification, saved wholesale rates, manual per-item rate, cash/credit/partial same-account ledger receipts, Drive snapshot preservation and regression tests passed.
+- [x] **Android sales history and reports** — invoice detail and custom date-range/daily business summaries implemented and retained.
+- [x] **Android Khata statements** — full shareable ledger and selected-period item statement implemented.
+- [x] **Android supplier invoice workflow** — camera capture, printed-text OCR, editable review/confirm, duplicate-posting guard, source-image retention and owner-approved Gemini handwriting option implemented; OCR never posts stock without review.
+- [x] **Android app update workflow** — update checker, stable release prompt, APK download/checksum verification and Android installer handoff implemented. Windows-native updater remains pending.
+- [x] **Flutter Windows retirement and WPF branch integration** — Flutter Windows runner/workflow retired; WPF source transplanted onto current-main-based integration branch; old diverged PR #4 closed and current-main Draft PR #5 opened.
+- [x] **WPF CI and regression suite** — .NET 10 Release build plus schema, sale, purchase, return, Khata, report, profit/loss and backup/restore tests passed in Actions #169, #181, #186, #198, #205 and #226; Android validation/regression passed in #266, #285, #292 and #307.
 
 - [x] **Native WPF implementation transplanted safely onto current main baseline** — 31 WPF source files integrated without overwriting current-main SQLite v18 foundation, schema tests, Android source or Drive sync code. Current-main-based Draft PR #5 opened; old diverged PR #4 closed.
 - [x] **WPF Wholesale billing source** — distinct Walk-in/Khata/Wholesale type selector, account filtering/creation/reclassification, saved wholesale product rates, default rate application, Wholesale-only manual item-rate editing, and Cash/Credit/Partial receipt/ledger posting implemented.
