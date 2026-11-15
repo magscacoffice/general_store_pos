@@ -1,7 +1,8 @@
 # Khan Baba POS — Windows Native WPF Migration Roadmap
 
 > **Migration scope:** Replace the **Windows Desktop client only** with a native C#/.NET WPF application. Android remains Flutter and continues to use the existing SQLite database format and approved sync workflows.
-> **Strict UI framework rule:** Use **WPF (Windows Presentation Foundation)** only. **Do not use WinUI 3, Windows App SDK, MAUI, or a web wrapper.**
+> **Strict UI framework rule:** Use **WPF (Windows Presentation Foundation)** only. **Do not use WinUI 3, Windows App SDK, MAUI, a web wrapper, or Flutter Windows.**
+> **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
 > **Planning status:** Audit and migration plan recorded. No C# application code has been generated yet.
@@ -314,7 +315,8 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 | Date | Work summary | Commit / Build | Status |
 |---|---|---|---|
 | 2026-11-15 | Audited repository tree, Flutter screen/service inventory, SQLite v18 DDL and Windows data path; documented WPF-only migration architecture and staged plan. | `ee4bb4d` | Plan recorded. |
-| 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No Flutter files or live database changed. | Initial WPF foundation | Source committed; CI and schema parity tests pending. |
+| 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No live database changed. | `05ff9ec` | Source committed; CI and schema parity tests pending. |
+| 2026-11-15 | Retired the Flutter Windows target: removed its native runner and Windows build/release workflow; removed Flutter's Windows-only startup path and dashboard update prompt. Dedicated Windows helper cleanup and Android CI verification remain in progress. | Current cleanup batch | Not yet committed; final source audit and CI verification pending. |
 
 ---
 
@@ -350,11 +352,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Add new tasks below this line. Keep each task specific. -->
 
-### [Windows] Printer & Invoice screen — desktop UI/UX redesign (2026-11-15)
+### [Windows] Printer & Invoice — WPF implementation (Flutter Windows UI task superseded)
   7. **Remember the selected printer:** Once the user successfully connects/selects a printer, persist that printer as the preferred/default printer in local app settings. On subsequent app launches, restore the saved printer automatically and attempt to reconnect/reuse it so the user does not have to select the same printer every time. Show a clear status if the saved printer is unavailable or disconnected, and allow the user to choose another printer. Do not silently switch to a different printer or claim it is connected when it is not. Preserve platform-specific printer identifiers and existing Android/Windows connection flows; verify persistence across app restarts on both platforms where supported.
 
 
-- [ ] **Refactor the Printer & Invoice screen for a polished Windows desktop POS experience.** Review the existing Flutter screen and the user's supplied visual reference before implementation. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
+- [ ] **Implement Printer & Invoice in native WPF.** Flutter Windows UI redesign is retired; preserve printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours in WPF. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
 
   1. **Back navigation:** Fix the broken vertically stacked “Return” label beside the back arrow. Use a standard AppBar/leading back button or a clean horizontal Row with a back icon and “Back”/“Return” label.
   2. **Action hierarchy:** Make **Thermal Receipt** the single dominant filled primary action. Style **Invoice Preview**, **Share Bill**, and **Share PDF** as lower-emphasis tonal/outlined secondary actions. Group print actions separately from sharing/export actions; keep **Save PDF to Device** clearly available without competing visually with the primary print action. Remove competing teal/green/purple high-emphasis styling.

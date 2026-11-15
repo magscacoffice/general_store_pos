@@ -18,7 +18,6 @@ import 'customer_khata_screen.dart';
 import 'profit_loss_screen.dart';
 import 'party_screen.dart';
 import 'reminders_screen.dart';
-import 'windows/windows_update_service.dart';
 import 'update_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -45,14 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0,
         toolbarHeight: Platform.isWindows ? 48 : 56,
         actions: [
-          if (Platform.isWindows)
-            IconButton(
-              tooltip: 'Check for Windows updates',
-              icon: const Icon(Icons.system_update_alt),
-              onPressed: () => WindowsPosUpdateService.checkAndPrompt(
-                context,
-                manual: true,
-              ),
             ),
           if (!Platform.isWindows)
             IconButton(
