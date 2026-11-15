@@ -83,8 +83,12 @@ public sealed class SalePostingService
                 : request.DiscountValue;
             var finalAmount = Math.Max(0d, subtotal - discount);
             var customerId = request.CustomerId;
-            var customerType = customerId is null ? "Walk-in" : "Khata";
-            var paymentMode = customerId is null ? "Cash" : request.PaymentMode;
+            var customerType = request.CustomerType;
+            if (customerType is not ("Walk-in" or "Khata" or "Wholesale"))
+                throw new InvalidOperationException("Customer type must be Walk-in, Khata or Wholesale.");
+            if ((customerType == "Walk-in") != (customerId is null))
+                throw new InvalidOperationException("Walk-in sale must not have a customer account; Khata/Wholesale sales require a selected customer.");
+            var paymentMode = customerType == "Walk-in" ? "Cash" : request.PaymentMode;
             double receivedAmount;
             string paymentType;
             switch (paymentMode)
@@ -112,12 +116,15 @@ public sealed class SalePostingService
             {
                 await using var customer = connection.CreateCommand();
                 customer.Transaction = transaction;
-                customer.CommandText = "SELECT sync_id FROM parties WHERE id = $id AND type = 'customer' LIMIT 1;";
+                customer.CommandText = "SELECT sync_id, COALESCE(customer_type, 'Khata') FROM parties WHERE id = $id AND type = 'customer' LIMIT 1;";
                 customer.Parameters.AddWithValue("$id", customerId.Value);
-                var value = await customer.ExecuteScalarAsync(cancellationToken);
-                if (value is null || value is DBNull)
-                    throw new InvalidOperationException("Selected Khata customer was not found.");
-                customerSyncId = Convert.ToString(value, CultureInfo.InvariantCulture);
+                await using var reader = await customer.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("Selected customer account was not found.");
+                customerSyncId = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var storedCustomerType = reader.IsDBNull(1) ? "Khata" : reader.GetString(1);
+                if (!string.Equals(storedCustomerType, customerType, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Selected account is {storedCustomerType}, not {customerType}. Refresh customer list and select the matching account.");
             }
 
             var saleDate = (request.SaleDate ?? DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -248,6 +255,7 @@ public sealed record SaleCheckoutRequest(
     double? PartialReceivedAmount,
     double DiscountValue,
     bool IsPercentageDiscount,
+    string CustomerType = "Walk-in",
     string CashierName = "Local Windows User",
     string? CashierUid = null,
     DateTime? SaleDate = null);
