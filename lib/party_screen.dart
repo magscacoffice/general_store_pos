@@ -363,11 +363,7 @@ class _PartyScreenState extends State<PartyScreen> {
                 );
               },
             ),
-      floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
-        onPressed: _showAddPartyDialog,
-        icon: const Icon(Icons.person_add),
-        label: Text(isCustomer ? 'Add Customer' : 'Add Supplier'),
-      ) : FloatingActionButton(
+      floatingActionButton: FloatingActionButton(
         onPressed: _showAddPartyDialog,
         backgroundColor: isCustomer ? Colors.orange : Colors.indigo,
         child: const Icon(Icons.person_add),
