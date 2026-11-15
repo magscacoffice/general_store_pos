@@ -1,5 +1,3 @@
-import 'windows/desktop_app_bar.dart';
-import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -170,73 +168,7 @@ class _SaleReturnScreenState extends State<SaleReturnScreen> {
                 Expanded(
                   child: _items.isEmpty
                       ? const Center(child: Text('Is invoice mein returnable item details nahi milin.'))
-                      : Platform.isWindows
-                          ? Scrollbar(
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: SingleChildScrollView(
-                                  child: DataTable(
-                                    headingRowHeight: 42,
-                                    dataRowMinHeight: 58,
-                                    dataRowMaxHeight: 68,
-                                    columns: const [
-                                      DataColumn(label: Text('Product')),
-                                      DataColumn(label: Text('Sold'), numeric: true),
-                                      DataColumn(label: Text('Returned'), numeric: true),
-                                      DataColumn(label: Text('Available'), numeric: true),
-                                      DataColumn(label: Text('Return Qty')),
-                                      DataColumn(label: Text('Condition')),
-                                      DataColumn(label: Text('Unit Rate'), numeric: true),
-                                    ],
-                                    rows: _items.map((item) {
-                                      final id = (item['id'] as num).toInt();
-                                      final available = (item['returnable_quantity'] as num?)?.toInt() ?? 0;
-                                      return DataRow(cells: [
-                                        DataCell(SizedBox(width: 220, child: Text(item['product_name']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                                        DataCell(Text('${item['quantity'] ?? 0}')),
-                                        DataCell(Text('${item['returned_quantity'] ?? 0}')),
-                                        DataCell(Text('$available')),
-                                        DataCell(SizedBox(
-                                          width: 100,
-                                          child: TextField(
-                                            controller: _quantities[id],
-                                            enabled: available > 0,
-                                            keyboardType: TextInputType.number,
-                                            onChanged: (_) => setState(() {}),
-                                            decoration: InputDecoration(
-                                              hintText: 'Max $available',
-                                              isDense: true,
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                            ),
-                                          ),
-                                        )),
-                                        DataCell(SizedBox(
-                                          width: 140,
-                                          child: DropdownButtonFormField<String>(
-                                            value: _conditions[id],
-                                            isDense: true,
-                                            decoration: const InputDecoration(
-                                              border: OutlineInputBorder(),
-                                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(value: 'saleable', child: Text('Resalable')),
-                                              DropdownMenuItem(value: 'damaged', child: Text('Damaged')),
-                                            ],
-                                            onChanged: available == 0 ? null : (value) {
-                                              if (value != null) setState(() => _conditions[id] = value);
-                                            },
-                                          ),
-                                        )),
-                                        DataCell(Text('Rs. ${(item['sale_price'] as num?)?.toStringAsFixed(2) ?? '0.00'}')),
-                                      ]);
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
+                      : ListView.builder(
                               padding: const EdgeInsets.symmetric(horizontal: 12),
                               itemCount: _items.length,
                               itemBuilder: (context, index) {

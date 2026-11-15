@@ -1,5 +1,3 @@
-import 'windows/desktop_app_bar.dart';
-import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -91,58 +89,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
         onPressed: _addReminderDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: Platform.isWindows
-          ? reminders.isEmpty
-              ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
-              : Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Card(
-                    margin: EdgeInsets.zero,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text('Reminder Register', style: Theme.of(context).textTheme.titleLarge)),
-                              Text('${reminders.length} reminders', style: Theme.of(context).textTheme.bodySmall),
-                              IconButton(tooltip: 'Refresh', onPressed: _loadReminders, icon: const Icon(Icons.refresh)),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        Expanded(
-                          child: Scrollbar(
-                            thumbVisibility: true,
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                              headingRowHeight: 42,
-                              dataRowMinHeight: 40,
-                              dataRowMaxHeight: 52,
-                              columns: const [
-                                DataColumn(label: Text('Reminder')),
-                                DataColumn(label: Text('Details')),
-                                DataColumn(label: Text('Date')),
-                                DataColumn(label: Text('Status')),
-                              ],
-                              rows: reminders.map((item) => DataRow(cells: [
-                                DataCell(SizedBox(width: 220, child: Text('${item['title'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                                DataCell(SizedBox(width: 360, child: Text('${item['details'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis))),
-                                DataCell(Text('${item['date'] ?? ''}')),
-                                DataCell(Text(item['is_done'] == 1 || item['is_done'] == true ? 'Completed' : 'Pending')),
-                              ])).toList(),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-          : reminders.isEmpty
-              ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
-              : ListView.builder(
+      body: reminders.isEmpty
+          ? const Center(child: Text('کوئی ریمائنڈر موجود نہیں ہے۔'))
+          : ListView.builder(
               itemCount: reminders.length,
               itemBuilder: (context, index) {
                 final item = reminders[index];
@@ -161,5 +110,3 @@ class _RemindersScreenState extends State<RemindersScreen> {
               },
             ),
     );
-  }
-}
