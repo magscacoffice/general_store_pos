@@ -614,6 +614,21 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private async void BackupRestore_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await PersistActiveBillAsync();
+            var window = new BackupRestoreWindow { Owner = this };
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Backup & Restore", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        FocusScanner();
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
