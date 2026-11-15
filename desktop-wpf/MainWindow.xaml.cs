@@ -60,12 +60,14 @@ public partial class MainWindow : Window
     private void ScannerBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _searchTimer.Stop();
+        SuggestionsList.ItemsSource = null; // Never let Enter select a stale result from the previous query.
         if (string.IsNullOrWhiteSpace(ScannerBox.Text))
         {
             SuggestionsList.ItemsSource = null;
             SearchStatusText.Text = "Ready for barcode scan.";
             return;
         }
+        SearchStatusText.Text = "Searching products…";
         _searchTimer.Start();
     }
 
