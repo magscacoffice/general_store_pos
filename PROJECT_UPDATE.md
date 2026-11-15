@@ -4,7 +4,7 @@
 > **Strict UI framework rule:** Use **WPF (Windows Presentation Foundation)** only. **Do not use WinUI 3, Windows App SDK, MAUI, a web wrapper, or Flutter Windows.**
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
-> **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
+> **Audited base / integration:** `main` at `2dbbf9ee4e89a29b69726ac33531c0b15c5f13de` (2026-11-15); WPF source and tracker updates are on `integration/wpf-mainline` and Draft PR #5, not yet merged to main.
 > **Planning status:** Native WPF and Android Flutter billing now both include distinct Walk-in/Khata/Wholesale account handling, wholesale-rate defaults and per-item Wholesale price editing. WPF Release build/schema tests and Android analysis/regression tests, including Wholesale cash/partial ledger and Drive snapshot round-trip coverage, passed on the latest integration commit (Actions #150 and #266). WPF transaction parity, Drive sync/auth, real-device and physical Windows acceptance remain pending.
 
 ## 1. Non-negotiable compatibility rules
@@ -22,23 +22,23 @@
 
 ## 2. Deep audit — repository inventory
 
-The repository remains a Flutter/Dart Android project with a separate `desktop-wpf/` native Windows client. The Flutter Windows runner and Windows-specific build/release workflow have been retired. Current GitHub Actions workflows cover Android APK builds, POS sync/invoice tests, and the native WPF build.
+The Android client remains Flutter/Dart. The current-main-based integration branch adds the separate native `desktop-wpf/` Windows client and `desktop-wpf.Tests/`; this branch is pending Draft PR #5 and is not yet merged. The Flutter Windows runner and Windows-specific build/release workflow have been retired. Current GitHub Actions validate Android source/tests, POS sync/invoice tests and native WPF build/schema/transaction tests without publishing release artifacts.
 
-### 2.1 Flutter screens and proposed WPF counterparts
+### 2.1 Flutter screens and current WPF implementation / remaining targets
 
-| Existing Flutter file / feature | WPF counterpart (proposed) | Responsibilities to preserve |
+| Existing Flutter file / feature | WPF implementation or remaining target | Responsibilities to preserve |
 |---|---|---|
-| `main.dart`, `auth_gate.dart`, `login_screen.dart` | `App.xaml`, `App.xaml.cs`, `Views/LoginWindow.xaml`, `ViewModels/LoginViewModel.cs`, `Services/AccessService.cs` | Startup, local/offline access path, existing role/access checks, startup diagnostics and safe initialization |
-| `dashboard_screen.dart` | `Views/ShellWindow.xaml`, `Views/Controls/NavigationSidebar.xaml`, `ViewModels/ShellViewModel.cs` | Store identity, navigation, status area, role-aware navigation, dashboard-hosted cashier workspace |
-| `sales_screen.dart` | `Views/Controls/PosBillingView.xaml`, `ViewModels/PosBillingViewModel.cs` | Barcode/search input, active/pending bills, customer selection, cart, quantity/price edits, discounts, checkout and transaction-safe posting |
-| `inventory_screen.dart` | `Views/InventoryWindow.xaml` or `Views/Controls/InventoryView.xaml` | Product CRUD, barcode uniqueness, purchase/sale price, stock, damaged quantity, active status, stock unit, search and low-stock visibility |
+| `main.dart`, `auth_gate.dart`, `login_screen.dart` | `App.xaml`, `App.xaml.cs`, `MainWindow.xaml`; Login/access/role parity remains pending | Startup shell exists; implement approved local/offline access and role checks without introducing Firebase business sync |
+| `dashboard_screen.dart` | `MainWindow.xaml`, `MainWindow.xaml.cs` | Initial native navigation shell and dashboard-hosted cashier workspace exist; full role-aware navigation/status parity remains pending |
+| `sales_screen.dart` | `MainWindow.xaml`, `MainWindow.xaml.cs`, `Services/SalePostingService.cs` | Native cashier source, pending bills, Walk-in/Khata/Wholesale, discounts, price edits and transactional posting implemented; broader parity acceptance remains pending |
+| `inventory_screen.dart` | `InventoryWindow.cs`, `Services/InventoryService.cs` | Product CRUD/search, barcode uniqueness, retail/wholesale rates, stock, damaged quantity, active status and stock unit source implemented |
 | `scanner_screen.dart` | `Views/ScannerWindow.xaml`, `Services/BarcodeScannerService.cs` | Camera scanner parity where a supported Windows camera path exists; keyboard-wedge scanner workflow and optional serial/COM scanner adapter |
-| `purchase_screen.dart` | `Views/PurchasesWindow.xaml` | Product lookup, supplier selection, purchase quantities/costs, invoice totals and purchase posting |
+| `purchase_screen.dart` | `PurchasesWindow.cs`, `Services/PurchaseService.cs` | Searchable purchase/stock entry source implemented; invoice/ledger/stock integration tests remain pending |
 | `supplier_invoice_capture_screen.dart` | `Views/SupplierInvoiceReviewWindow.xaml` (Windows scope gated) | Existing invoice review/conversion/posting rules; mobile camera/ML Kit capture stays Android-only unless a separately approved Windows document-input design is added |
 | `party_screen.dart` | `Views/PartiesWindow.xaml` | Customer/supplier lists, create/edit, contact details and account balances |
-| `customer_khata_screen.dart` | `Views/CustomerKhataWindow.xaml` | Outstanding customer balances, due lists, receipts and account summary |
+| `customer_khata_screen.dart` | `KhataWindow.cs`, `Services/KhataService.cs` | Customer balance/ledger/receipt source implemented; broader parity tests remain pending |
 | `customer_history_screen.dart` | `Views/CustomerStatementWindow.xaml` | Per-customer sales/receipts/ledger history, date-range statement and PDF/export |
-| `history_screen.dart` | `Views/SalesHistoryWindow.xaml`, `Views/SaleDetailsWindow.xaml` | Sales DataGrid, invoice details, reprint, sale return entry and return history navigation |
+| `history_screen.dart` | `SalesHistoryWindow.cs` | Sales history search and invoice detail source implemented; full reprint/return navigation acceptance remains pending |
 | `sales_report_screen.dart` | `Views/SalesReportsWindow.xaml` | Date filters, daily/period summaries, totals and report groupings |
 | `profit_loss_screen.dart` | `Views/ProfitLossWindow.xaml` | Existing income/cost/expense and profit calculations |
 | `expense_screen.dart` | `Views/ExpensesWindow.xaml` | Expense create/list and totals |
@@ -46,7 +46,7 @@ The repository remains a Flutter/Dart Android project with a separate `desktop-w
 | `return_history_screen.dart` | `Views/ReturnHistoryWindow.xaml` | Return list, details and audit trail |
 | `reminders_screen.dart` | `Views/RemindersWindow.xaml` | Create, view and complete reminders |
 | `salesmen_management_screen.dart` | `Views/StaffManagementWindow.xaml` | Existing admin/role-gated staff management; preserve current auth dependency and do not silently replace it with a new identity model |
-| `printer_screen.dart` | `Views/PrinterInvoiceWindow.xaml`, `Services/WindowsPrinterService.cs`, `Services/EscPosReceiptBuilder.cs` | Printer selection/persistence, 80mm receipt generation/printing, invoice preview, PDF save/share/export and existing receipt content |
+| `printer_screen.dart` | `PrinterInvoiceWindow.cs`, `Services/PrinterSettingsService.cs` | Printer queue selection/persistence, 80mm ESC/POS test/receipt source, invoice preview and PDF save/open implemented; physical BC-86AC acceptance pending |
 | `backup_screen.dart` | `Views/BackupRestoreWindow.xaml`, `Services/BackupService.cs` | Database backup, restore, staged database activation, validation and safety checks |
 | `cloud_sync_screen.dart` | `Views/CloudSyncWindow.xaml`, `ViewModels/CloudSyncViewModel.cs` | Google Drive connection, sync now, progress/status, conflict review and explicit resolution |
 | `drive_sync_service.dart` | `Services/DriveSyncService.cs` | OAuth, secure token storage, snapshot hashing, upload/download, Windows-master sync, conflict/retry rules and auto-sync |
