@@ -554,3 +554,13 @@ Future improvements: add new ideas here when the owner requests them.
 - Added `PendingBillService` for reading, saving and deleting pending bills in the existing `pending_bills` table using the Flutter-compatible JSON payload shape. Dashboard bill creation/switching/autosave/restore integration and cross-version payload tests remain pending.
 - Corrected the WPF cashier XAML root layout and compiler issues found by GitHub Actions. Latest Windows .NET 10 WPF restore, Release build and publish steps passed on commit `d17eb0f085feb59adb21f136b9997814fff14ee0`. The workflow also uploaded its configured CI package; no separate manual/PDF deliverable has been created.
 - Outstanding: wire and test checkout/pending-bill workflows; complete the rest of the WPF modules and parity tests; remove obsolete Flutter Windows presentation/window-management branches; validate Drive sync, auth/roles, printer, backups, updates and physical Windows acceptance. Do not mark the WPF client production-ready until these checks pass.
+
+
+### WPF cashier integration progress — 2026-11-15
+
+- Added customer lookup from the existing `parties` table and connected the dashboard cashier customer selector. Walk-in remains the default; no Wholesale option or new customer/payment type was introduced.
+- Connected fixed and percentage discount input, subtotal/net-total preview, Cash/Credit/Partial selection for Khata customers, and the WPF checkout action to `SalePostingService`. The sale service uses the existing v18 tables and transaction rules; UI/runtime database parity tests are still pending.
+- Connected pending-bill save/restore/switch/delete to the existing `pending_bills` table. Cart changes and cashier settings are autosaved; scanner focus is restored after product add, bill switch and checkout. Physical scanner testing remains pending.
+- Added `DatabaseSafetyService`: before WPF first writes, it creates a separate SQLite online backup, verifies schema v18 + `PRAGMA integrity_check` + SHA-256, and records a marker. A different staged active database filename requires its own verified backup. No live database is replaced or migrated.
+- The integrated cashier UI compiled and published successfully on commit `e191dbe1cf90a28a4eff3dbb22e775657b24b30a`. Backup-safety gate and restored-database marker hardening are on commit `45bb26c897aa131af4b9aa10a88ed372f50a67da`; its CI result is pending.
+- Remaining: run the latest CI, create automated schema/transaction parity tests, physically test Windows scanner and 80mm printer, wire receipt hand-off, and complete all other WPF modules plus legacy Flutter Windows presentation cleanup. No production checklist item is checked off solely because a service or UI was added.
