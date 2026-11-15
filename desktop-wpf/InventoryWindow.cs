@@ -36,7 +36,7 @@ public sealed class InventoryWindow : Window
     private UIElement BuildLayout()
     {
         var root = new DockPanel { Margin = new Thickness(20) };
-        var header = new DockPanel { Margin = new Thickness(0,0,0,14) };
+        var header = new DockPanel { Margin = new Thickness(0,0,0,14), LastChildFill = false };
         var title = new StackPanel();
         title.Children.Add(new TextBlock { Text="Inventory", FontSize=25, FontWeight=FontWeights.Bold, Foreground=System.Windows.Media.Brushes.DarkSlateGray });
         title.Children.Add(new TextBlock { Text="Search, add, edit and manage products. Stock and history deletion rules are enforced.", Margin=new Thickness(0,4,0,0), Foreground=System.Windows.Media.Brushes.DimGray });
@@ -63,11 +63,9 @@ public sealed class InventoryWindow : Window
         _grid.Columns.Add(new DataGridTextColumn { Header="Cost", Binding=new System.Windows.Data.Binding("PurchasePrice"){StringFormat="N2"}, Width=90 });
         _grid.Columns.Add(new DataGridTextColumn { Header="Sale Price", Binding=new System.Windows.Data.Binding("SalePrice"){StringFormat="N2"}, Width=95 });
         _grid.Columns.Add(new DataGridTextColumn { Header="Status", Binding=new System.Windows.Data.Binding("Status"), Width=80 });
-        _grid.ScrollViewerCanContentScroll = true;
+        ScrollViewer.SetCanContentScroll(_grid, true);
         _grid.SetValue(VirtualizingPanel.IsVirtualizingProperty,true);
         _grid.SetValue(VirtualizingPanel.VirtualizationModeProperty,VirtualizationMode.Recycling);
-        root.Children.Add(_grid);
-
         var footer = new DockPanel { Margin = new Thickness(0,10,0,0) };
         footer.Children.Add(_status);
         var actions = new StackPanel { Orientation=Orientation.Horizontal };
@@ -77,6 +75,7 @@ public sealed class InventoryWindow : Window
         actions.Children.Add(edit); actions.Children.Add(toggle); actions.Children.Add(delete);
         DockPanel.SetDock(actions,Dock.Right); footer.Children.Add(actions);
         DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
+        DockPanel.SetDock(_grid,Dock.Top); root.Children.Add(_grid);
         return root;
     }
 
