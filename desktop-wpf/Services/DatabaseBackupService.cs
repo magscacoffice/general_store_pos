@@ -44,6 +44,16 @@ public sealed class DatabaseBackupService
 
         await PosDatabaseSchemaVerifier.VerifyAsync(currentDatabasePath, cancellationToken);
         await PosDatabaseSchemaVerifier.VerifyAsync(selectedBackupPath, cancellationToken);
+        var sidecarPath = selectedBackupPath + ".sha256";
+        if (File.Exists(sidecarPath))
+        {
+            var expectedHash = (await File.ReadAllTextAsync(sidecarPath, cancellationToken)).Trim();
+            var actualHash = await ComputeSha256Async(selectedBackupPath, cancellationToken);
+            if (expectedHash.Length != 64 ||
+                !CryptographicOperations.FixedTimeEquals(
+                    Convert.FromHexString(expectedHash), Convert.FromHexString(actualHash)))
+                throw new InvalidDataException("Selected backup SHA-256 verification failed. Active database was not changed.");
+        }
 
         // A fresh, verified backup of the current database is mandatory before pointer change.
         await CreateBackupAsync(currentDatabasePath, Path.Combine(dataDirectory, "Backups"), cancellationToken);
@@ -69,7 +79,7 @@ public sealed class DatabaseBackupService
     {
         var directory = Path.Combine(dataDirectory, "Backups");
         if (!Directory.Exists(directory)) return [];
-        return Directory.EnumerateFiles(directory, "khan_baba_pos_backup_*.db")
+        return Directory.EnumerateFiles(directory, "*.db")
             .Select(path => new FileInfo(path))
             .OrderByDescending(file => file.LastWriteTimeUtc)
             .Select(file => new BackupFileInfo(file.FullName, file.Name, file.Length, file.LastWriteTime))
