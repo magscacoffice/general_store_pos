@@ -1,5 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
+using System.Diagnostics;
+using System.Text;
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using KhanBabaPos.Wpf.Services;
@@ -75,6 +79,8 @@ public sealed class CustomerLedgerWindow:Window
     private readonly KhataService _service;
     private readonly ObservableCollection<KhataEntry> _entries;
     private readonly TextBlock _balanceText=new();
+    private readonly DatePicker _from=new(){SelectedDate=DateTime.Today,Width=130};
+    private readonly DatePicker _to=new(){SelectedDate=DateTime.Today,Width=130};
     private double _balance;
     public CustomerLedgerWindow(KhataCustomer customer,IReadOnlyList<KhataEntry> entries,KhataService service){
         _customer=customer;_balance=customer.Balance;_service=service;_entries=new ObservableCollection<KhataEntry>(entries);
@@ -98,13 +104,132 @@ public sealed class CustomerLedgerWindow:Window
         grid.Columns.Add(new DataGridTextColumn{Header="Debit",Binding=new System.Windows.Data.Binding("Debit"){StringFormat="N2"},Width=100});
         grid.Columns.Add(new DataGridTextColumn{Header="Credit",Binding=new System.Windows.Data.Binding("Credit"){StringFormat="N2"},Width=100});
         grid.Columns.Add(new DataGridTextColumn{Header="Balance",Binding=new System.Windows.Data.Binding("RunningBalance"){StringFormat="N2"},Width=110});
-        var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
+        var footer=new StackPanel{Margin=new Thickness(0,12,0,0)};
+        var period=new WrapPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,0,8)};
+        period.Children.Add(new TextBlock{Text="Statement From",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,6,0)});
+        period.Children.Add(_from);
+        period.Children.Add(new TextBlock{Text="To",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12,0,6,0)});
+        period.Children.Add(_to);
+        var periodPdf=new Button{Content="Save Period Statement PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(10,0,0,0)};
+        periodPdf.Click+=async(_,_)=>await ExportPeriodStatementAsync();period.Children.Add(periodPdf);
+        footer.Children.Add(period);
+        var actions=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right};
+        var copy=new Button{Content="Copy Full Ledger",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)};
+        copy.Click+=(_,_)=>CopyLedger();actions.Children.Add(copy);
+        var ledgerPdf=new Button{Content="Save Full Ledger PDF",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)};
+        ledgerPdf.Click+=async(_,_)=>await SaveLedgerPdfAsync();actions.Children.Add(ledgerPdf);
         var receipt=new Button{Content="Record Receipt",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)};
-        receipt.Click+=async(_,_)=>await ReceiptAsync();footer.Children.Add(receipt);
-        var close=new Button{Content="Close",Padding=new Thickness(14,8,14,8)};close.Click+=(_,_)=>Close();footer.Children.Add(close);
+        receipt.Click+=async(_,_)=>await ReceiptAsync();actions.Children.Add(receipt);
+        var close=new Button{Content="Close",Padding=new Thickness(14,8,14,8)};close.Click+=(_,_)=>Close();actions.Children.Add(close);
+        footer.Children.Add(actions);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
         root.Children.Add(grid);Content=root;return root;
     }
+    private string BuildLedgerText()
+    {
+        var text = new StringBuilder();
+        text.AppendLine("KHAN BABA GENERAL STORE");
+        text.AppendLine("CUSTOMER KHATA LEDGER");
+        text.AppendLine($"Customer: {_customer.Name}");
+        text.AppendLine($"Phone: {_customer.Phone}");
+        text.AppendLine($"Generated: {DateTime.Now:dd/MM/yyyy HH:mm}");
+        text.AppendLine($"Outstanding Balance: Rs. {_balance:N2}");
+        text.AppendLine(new string('-', 100));
+        text.AppendLine("Date / Time | Description | Debit | Credit | Balance");
+        foreach (var entry in _entries)
+            text.AppendLine($"{entry.Date} | {entry.Description} | {entry.Debit:N2} | {entry.Credit:N2} | {entry.RunningBalance:N2}");
+        text.AppendLine(new string('-', 100));
+        text.AppendLine($"Current Outstanding: Rs. {_balance:N2}");
+        return text.ToString();
+    }
+
+    private void CopyLedger()
+    {
+        Clipboard.SetText(BuildLedgerText());
+        MessageBox.Show("Full customer ledger copied. Paste it into WhatsApp or another sharing app.",
+            "Khata Statement", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private async Task SaveLedgerPdfAsync()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "PDF document (*.pdf)|*.pdf",
+            DefaultExt = ".pdf",
+            AddExtension = true,
+            FileName = $"KhanBaba_Khata_{_customer.Id}.pdf",
+            Title = "Save Full Customer Ledger"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            await File.WriteAllBytesAsync(dialog.FileName, PdfReceiptBuilder.Build(BuildLedgerText()));
+            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Ledger PDF export failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task ExportPeriodStatementAsync()
+    {
+        if (_from.SelectedDate is null || _to.SelectedDate is null || _from.SelectedDate > _to.SelectedDate)
+        {
+            MessageBox.Show("Select a valid From and To date range.", "Khata Statement",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var lines = await _service.GetStatementAsync(_customer.Id, _from.SelectedDate.Value, _to.SelectedDate.Value);
+            if (lines.Count == 0)
+            {
+                MessageBox.Show("Selected period mein koi sale ya return record nahi mila.", "Khata Statement",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var text = new StringBuilder();
+            text.AppendLine("KHAN BABA GENERAL STORE");
+            text.AppendLine("CUSTOMER ITEM STATEMENT");
+            text.AppendLine($"Customer: {_customer.Name}");
+            text.AppendLine($"Phone: {_customer.Phone}");
+            text.AppendLine($"Period: {_from.SelectedDate:dd/MM/yyyy} to {_to.SelectedDate:dd/MM/yyyy}");
+            text.AppendLine(new string('-', 100));
+            text.AppendLine("Date | Bill | Type | Product | Qty | Rate | Net Amount | Payment / Note");
+            var totalSales = 0d;
+            var totalReturns = 0d;
+            foreach (var line in lines)
+            {
+                if (line.EntryType == "Sale") totalSales += line.Amount;
+                else totalReturns += -line.Amount;
+                text.AppendLine($"{line.Date} | #{line.BillId:D6} | {line.EntryType} | {line.ProductName} | {line.Quantity} {line.StockUnit} | {line.Rate:N2} | {line.Amount:N2} | {line.PaymentType} {line.Note}");
+            }
+            text.AppendLine(new string('-', 100));
+            text.AppendLine($"Net sales: Rs. {totalSales:N2}");
+            text.AppendLine($"Returns/refunds: Rs. {totalReturns:N2}");
+            text.AppendLine($"Net item total: Rs. {lines.Sum(x => x.Amount):N2}");
+
+            var dialog = new SaveFileDialog
+            {
+                Filter = "PDF document (*.pdf)|*.pdf",
+                DefaultExt = ".pdf",
+                AddExtension = true,
+                FileName = $"KhanBaba_Khata_{_customer.Id}_{_from.SelectedDate:yyyyMMdd}_{_to.SelectedDate:yyyyMMdd}.pdf",
+                Title = "Save Selected-Period Customer Item Statement"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            await File.WriteAllBytesAsync(dialog.FileName, PdfReceiptBuilder.Build(text.ToString()));
+            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Period statement export failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private async Task ReceiptAsync(){
         var input=ReceiptInputWindow.Show(this,_customer with { Balance=_balance });if(input is null)return;
         try{
