@@ -537,7 +537,8 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Removed the dedicated Windows theme, tray and update-notification services; Flutter startup no longer enters a Windows-only application path. The old desktop navigation helper is now a no-op shim for remaining shared-screen references.
 - [x] Removed Windows desktop-navigation helper usage from shared Flutter screens. Android Flutter startup and Android build/test workflows are retained.
 - [x] Removed the retired Flutter Windows presentation branches and malformed AppBar action block from `dashboard_screen.dart`; Android dashboard navigation and update/sync actions remain. (Commit `62756f8`; follow-up unused import cleanup `dc0562f`.)
-- [ ] Continue auditing and removing the remaining legacy `Platform.isWindows` presentation branches and window-management code from other shared Dart files. Preserve platform-specific data-path, printer messaging, and Drive-sync behaviour where required; all Windows UI belongs in `desktop-wpf/`.
+- [x] Removed the Flutter Windows AppBar title-bar styling, desktop back-navigation helper, and related presentation-only settings from 16 shared Flutter screens; Android styling/navigation is now the only retained UI path in those AppBars. Commits `4fdd5b1`, `b4aab02`, `2a6ea9d`, `87e1a1a`.
+- [ ] Continue removing remaining Flutter Windows-only screen layouts, window lifecycle hooks, scanner/printer UI branches and obsolete `PosWindows` calls. Preserve Android workflows and the shared Drive-sync/database logic that is still used by Android.
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
 
 
@@ -560,3 +561,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android analyzer and Flutter test suite pass with the isolated MaterialApp shell widget test (validation-only run `43716339983` / test run `43716185881`; no APK or release artifact was published).
 - [x] Expanded the WPF SQLite v18 verifier to check `user_version`, `sqlite_master` table presence, `quick_check`, required columns, primary-key definitions, key default values, required unique constraints and `foreign_key_check`; Windows build passed in run `43716339961`.
 - [ ] Add and run a representative SQLite v18 fixture test to prove the verifier accepts the real Flutter schema and rejects altered/missing constraints without modifying the database.
+
+
+## Work log — 2026-11-15 (continued)
+
+- Removed the retired Windows-specific AppBar colours, title-bar heights, back-navigation helper and other simple presentation-only properties from 16 Flutter screens in four grouped commits (`4fdd5b1`, `b4aab02`, `2a6ea9d`, `87e1a1a`). Android AppBar behaviour is retained.
+- Updated the WPF README to describe the expanded read-only schema verifier accurately.
+- Android validation passed on earlier commits in this cleanup series; the latest grouped commit's Android analyzer/test and POS regression workflows are still running. No APK, EXE or release artifacts are published.
