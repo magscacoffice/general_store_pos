@@ -107,7 +107,7 @@ The repository remains a Flutter/Dart Android project with a separate `desktop-w
 
 ### 3.3 Proposed data access design
 
-- [ ] Target framework: `net10.0-windows` WPF (confirm the Windows build runner supports the selected .NET SDK before pinning it).
+- [x] Target framework: `net10.0-windows` WPF; confirmed the Windows GitHub Actions runner restores and builds this target successfully.
 - [ ] EF Core SQLite for entity mapping/query composition, plus explicit parameterized SQL for operations whose exact transaction semantics must match the Flutter implementation.
 - [ ] Map the existing tables in-place; do not create a second business database or a new schema namespace.
 - [ ] Preserve SQLite integer primary keys, nullable foreign keys, REAL money fields, TEXT date representation, sync IDs and exact legacy column casing.
@@ -536,7 +536,8 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Removed the Flutter Windows native runner directory and the Flutter Windows build/release workflow.
 - [x] Removed the dedicated Windows theme, tray and update-notification services; Flutter startup no longer enters a Windows-only application path. The old desktop navigation helper is now a no-op shim for remaining shared-screen references.
 - [x] Removed Windows desktop-navigation helper usage from shared Flutter screens. Android Flutter startup and Android build/test workflows are retained.
-- [ ] Finish auditing and removing any remaining legacy `Platform.isWindows` presentation branches and window-management code from shared Dart files where they are no longer needed. These branches are not a supported Windows client and must not be reactivated; all Windows UI work belongs in `desktop-wpf/`.
+- [x] Removed the retired Flutter Windows presentation branches and malformed AppBar action block from `dashboard_screen.dart`; Android dashboard navigation and update/sync actions remain. (Commit `62756f8`; follow-up unused import cleanup `dc0562f`.)
+- [ ] Continue auditing and removing the remaining legacy `Platform.isWindows` presentation branches and window-management code from other shared Dart files. Preserve platform-specific data-path, printer messaging, and Drive-sync behaviour where required; all Windows UI belongs in `desktop-wpf/`.
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
 
 
@@ -547,3 +548,14 @@ Future improvements: add new ideas here when the owner requests them.
 - Latest Android analysis/test and WPF validation runs are pending at the time of this log. The earlier Android release run for 62756f8 was started before artifact publishing was disabled; the available GitHub integration does not expose a workflow-cancel action.
 - SQLite v18 audit confirms 17 tables and the key uniqueness/composite-primary-key declarations in the Flutter onCreate DDL. The WPF verifier currently checks version and column presence only; it still needs integrity, primary-key, nullability/default, and unique-index verification before database compatibility can be considered complete.
 - Remaining work is not marked complete: remove only obsolete Flutter Windows UI/window-management branches (preserve shared platform-specific data/sync behaviour), finish WPF implementation and tests, run CI checks, and obtain physical Windows/printer acceptance.
+
+
+## Verified completed work — 2026-11-15
+
+- [x] Android CI no longer publishes APK files or GitHub Releases automatically. The workflow runs source analysis and tests only; release publishing remains intentionally disabled until every pending project task is complete.
+- [x] Native WPF CI no longer publishes or uploads EXE/build artifacts; it performs restore/build validation only.
+- [x] WPF .NET 10 target support confirmed by a successful Windows runner build (workflow run `43715783750`, commit `3af3005`).
+- [x] Fixed the Android dashboard syntax error and removed retired Flutter Windows dashboard-only presentation/actions. The mobile dashboard remains the supported Flutter UI.
+- [x] Added an injectable home widget to `KhanBabaPOSApp` and changed the widget test to exercise the MaterialApp shell without requiring Firebase initialization or a live membership backend. The real production home remains `UpdateAwareHome(AuthGate())`.
+- [ ] Android full test suite must pass after the widget-test harness correction; no release artifact is produced by this validation.
+- [ ] Expanded WPF SQLite v18 verification (integrity check, table existence, primary keys, default values, unique constraints and foreign-key check) must pass its next Windows CI build and still needs a representative v18 database fixture test.
