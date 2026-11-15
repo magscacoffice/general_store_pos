@@ -41,6 +41,7 @@ public sealed class PendingBillService
     {
         var path = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
+        await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, cancellationToken);
         await using var connection = await OpenAsync(path, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT bill_id, label, payload, updated_at FROM pending_bills ORDER BY updated_at DESC;";

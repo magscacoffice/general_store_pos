@@ -28,7 +28,10 @@ public static class DatabaseSafetyService
             {
                 var marker = JsonSerializer.Deserialize<BackupMarker>(
                     await File.ReadAllTextAsync(markerPath, cancellationToken));
-                if (marker is not null && Path.GetFileName(marker.FileName) == marker.FileName)
+                if (marker is not null &&
+                    marker.SourceFileName == Path.GetFileName(databasePath) &&
+                    marker.SchemaVersion == PosDatabaseSchemaVerifier.Version &&
+                    Path.GetFileName(marker.FileName) == marker.FileName)
                 {
                     var existingBackup = Path.Combine(dataDirectory, "Backups", marker.FileName);
                     if (File.Exists(existingBackup) &&
@@ -70,7 +73,7 @@ public static class DatabaseSafetyService
         if (!await VerifyBackupAsync(backupPath, sha256, cancellationToken))
             throw new IOException("Pre-WPF backup verification failed. Database write was blocked.");
 
-        var markerContent = JsonSerializer.Serialize(new BackupMarker(fileName, sha256, PosDatabaseSchemaVerifier.Version));
+        var markerContent = JsonSerializer.Serialize(new BackupMarker(Path.GetFileName(databasePath), fileName, sha256, PosDatabaseSchemaVerifier.Version));
         var temporaryMarker = markerPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         await File.WriteAllTextAsync(temporaryMarker, markerContent, cancellationToken);
         File.Move(temporaryMarker, markerPath, overwrite: true);
@@ -112,5 +115,5 @@ public static class DatabaseSafetyService
         return Convert.ToHexString(hash);
     }
 
-    private sealed record BackupMarker(string FileName, string Sha256, int SchemaVersion);
+    private sealed record BackupMarker(string SourceFileName, string FileName, string Sha256, int SchemaVersion);
 }
