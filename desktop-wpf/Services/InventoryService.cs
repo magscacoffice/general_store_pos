@@ -88,7 +88,7 @@ public sealed class InventoryService
     public async Task UpdateAsync(int id, ProductMutation p, string databasePath, CancellationToken ct = default)
     {
         Validate(p);
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
         await using var db = await OpenAsync(path, false, ct);
