@@ -476,6 +476,7 @@ public sealed class PosDatabaseSchemaException(string message) : Exception(messa
 public static class PosDatabaseSchemaVerifier
 {
     public const int Version = 18;
+
     private static readonly IReadOnlyDictionary<string, string[]> Tables = new Dictionary<string, string[]>
     {
         ["products"] = ["id", "name", "barcode", "price", "purchasePrice", "wholesalePrice", "damaged_quantity", "quantity", "is_active", "stock_unit"],
@@ -496,15 +497,183 @@ public static class PosDatabaseSchemaVerifier
         ["drive_sync_tombstones"] = ["id", "entity_type", "entity_key", "deleted_at", "source_device_id"],
         ["drive_sync_ignored_tombstones"] = ["source_device_id", "entity_type", "entity_key"],
     };
+
+    private static readonly IReadOnlyDictionary<string, string[]> PrimaryKeys = new Dictionary<string, string[]>
+    {
+        ["products"] = ["id"], ["sales"] = ["id"], ["parties"] = ["id"],
+        ["expenses"] = ["id"], ["reminders"] = ["id"], ["purchases"] = ["id"],
+        ["sale_items"] = ["id"], ["sync_queue"] = ["id"], ["khata_transactions"] = ["id"],
+        ["sale_returns"] = ["id"], ["sale_return_items"] = ["id"], ["khata_reminder_log"] = ["id"],
+        ["pending_bills"] = ["bill_id"], ["drive_sync_conflicts"] = ["id"],
+        ["drive_sync_aliases"] = ["source_device_id", "remote_sync_id"],
+        ["drive_sync_tombstones"] = ["id"],
+        ["drive_sync_ignored_tombstones"] = ["source_device_id", "entity_type", "entity_key"],
+    };
+
+    private static readonly (string Table, string[] Columns)[] UniqueConstraints =
+    [
+        ("products", ["barcode"]),
+        ("sync_queue", ["collection_name", "document_id"]),
+        ("khata_reminder_log", ["party_id", "oldest_due_date"]),
+        ("drive_sync_conflicts", ["source_device_id", "snapshot_hash", "entity_type", "entity_key"]),
+        ("drive_sync_tombstones", ["entity_type", "entity_key"]),
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string> ExpectedDefaults = new Dictionary<string, string>
+    {
+        ["products.purchasePrice"] = "0.0",
+        ["products.wholesalePrice"] = "0.0",
+        ["products.damaged_quantity"] = "0",
+        ["products.is_active"] = "1",
+        ["sales.discount"] = "0.0",
+        ["sales.final_amount"] = "0.0",
+        ["sales.payment_type"] = "Cash",
+        ["sales.customer_type"] = "Walk-in",
+        ["sales.received_amount"] = "0.0",
+        ["sales.balance_due"] = "0.0",
+        ["parties.customer_type"] = "Khata",
+        ["parties.balance"] = "0.0",
+        ["reminders.is_done"] = "0",
+        ["purchases.conversion_factor"] = "1",
+        ["sync_queue.operation"] = "set",
+        ["sync_queue.attempts"] = "0",
+        ["sale_return_items.condition"] = "saleable",
+        ["drive_sync_conflicts.status"] = "pending",
+        ["drive_sync_tombstones.source_device_id"] = "local",
+    };
+
+    private static string NormalizeDefault(string? value) =>
+        (value ?? string.Empty).Trim().Trim('(', ')', '\'', '"', ' ');
+
+    private static async Task<object?> ScalarAsync(SqliteConnection connection, string sql, CancellationToken token)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return await command.ExecuteScalarAsync(token);
+    }
+
     public static async Task VerifyAsync(string path, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(path)) throw new FileNotFoundException("Existing POS database not found; no empty database will be created.", path);
-        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        if (!File.Exists(path))
+            throw new FileNotFoundException("Existing POS database not found; no empty database will be created.", path);
+
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString());
         await connection.OpenAsync(cancellationToken);
-        await using (var command = connection.CreateCommand()) { command.CommandText = "PRAGMA user_version;"; var version = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)); if (version != Version) throw new PosDatabaseSchemaException($"Database schema version {version} is unsupported; expected {Version}. No migration was attempted."); }
-        var missing = new List<string>();
-        foreach (var table in Tables) { var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase); await using var command = connection.CreateCommand(); command.CommandText = $"PRAGMA table_info(\"{table.Key}\");"; await using var reader = await command.ExecuteReaderAsync(cancellationToken); while (await reader.ReadAsync(cancellationToken)) columns.Add(reader.GetString(1)); if (columns.Count == 0) { missing.Add("table " + table.Key); continue; } foreach (var column in table.Value) if (!columns.Contains(column)) missing.Add(table.Key + "." + column); }
-        if (missing.Count > 0) throw new PosDatabaseSchemaException("SQLite v18 schema mismatch. Missing: " + string.Join(", ", missing));
+
+        var version = Convert.ToInt32(await ScalarAsync(connection, "PRAGMA user_version;", cancellationToken));
+        if (version != Version)
+            throw new PosDatabaseSchemaException($"Database schema version {version} is unsupported; expected {Version}. No migration was attempted.");
+
+        var integrity = Convert.ToString(await ScalarAsync(connection, "PRAGMA quick_check;", cancellationToken));
+        if (!string.Equals(integrity, "ok", StringComparison.OrdinalIgnoreCase))
+            throw new PosDatabaseSchemaException("SQLite quick_check failed: " + integrity);
+
+        var problems = new List<string>();
+        foreach (var table in Tables)
+        {
+            await using (var exists = connection.CreateCommand())
+            {
+                exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
+                exists.Parameters.AddWithValue("$name", table.Key);
+                if (Convert.ToInt32(await exists.ExecuteScalarAsync(cancellationToken)) != 1)
+                {
+                    problems.Add("missing table " + table.Key);
+                    continue;
+                }
+            }
+
+            var columns = new Dictionary<string, (string Type, int NotNull, int PrimaryKey, string? Default)>(StringComparer.OrdinalIgnoreCase);
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = $"PRAGMA table_info(\"{table.Key}\");";
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    columns[reader.GetString(1)] = (
+                        reader.GetString(2),
+                        reader.GetInt32(3),
+                        reader.GetInt32(5),
+                        reader.IsDBNull(4) ? null : reader.GetString(4));
+                }
+            }
+
+            foreach (var column in table.Value)
+                if (!columns.ContainsKey(column))
+                    problems.Add($"missing column {table.Key}.{column}");
+
+            if (!PrimaryKeys.TryGetValue(table.Key, out var expectedKey))
+                continue;
+            var actualKey = columns
+                .Where(x => x.Value.PrimaryKey > 0)
+                .OrderBy(x => x.Value.PrimaryKey)
+                .Select(x => x.Key)
+                .ToArray();
+            if (!actualKey.SequenceEqual(expectedKey, StringComparer.OrdinalIgnoreCase))
+                problems.Add($"primary key mismatch on {table.Key}: expected ({string.Join(", ", expectedKey)}), found ({string.Join(", ", actualKey)})");
+        }
+
+        foreach (var expected in ExpectedDefaults)
+        {
+            var split = expected.Key.Split('.', 2);
+            if (split.Length != 2 || !Tables.ContainsKey(split[0])) continue;
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA table_info(\"{split[0]}\");";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var actual = (string?)null;
+            while (await reader.ReadAsync(cancellationToken))
+                if (string.Equals(reader.GetString(1), split[1], StringComparison.OrdinalIgnoreCase))
+                {
+                    actual = reader.IsDBNull(4) ? null : reader.GetString(4);
+                    break;
+                }
+            if (!string.Equals(NormalizeDefault(actual), NormalizeDefault(expected.Value), StringComparison.OrdinalIgnoreCase))
+                problems.Add($"default mismatch on {expected.Key}: expected {expected.Value}, found {actual ?? "<none>"}");
+        }
+
+        foreach (var expected in UniqueConstraints)
+        {
+            var found = false;
+            await using var list = connection.CreateCommand();
+            list.CommandText = $"PRAGMA index_list(\"{expected.Table}\");";
+            await using var indexes = await list.ExecuteReaderAsync(cancellationToken);
+            var indexNames = new List<string>();
+            while (await indexes.ReadAsync(cancellationToken))
+                if (indexes.GetInt32(2) == 1) indexNames.Add(indexes.GetString(1));
+            await indexes.DisposeAsync();
+
+            foreach (var indexName in indexNames)
+            {
+                var actualColumns = new List<string>();
+                await using var info = connection.CreateCommand();
+                info.CommandText = $"PRAGMA index_info(\"{indexName}\");";
+                await using var reader = await info.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                    if (!reader.IsDBNull(2)) actualColumns.Add(reader.GetString(2));
+                if (actualColumns.SequenceEqual(expected.Columns, StringComparer.OrdinalIgnoreCase))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                problems.Add($"missing unique constraint on {expected.Table}({string.Join(", ", expected.Columns)})");
+        }
+
+        await using (var foreignKeys = connection.CreateCommand())
+        {
+            foreignKeys.CommandText = "PRAGMA foreign_key_check;";
+            await using var reader = await foreignKeys.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+                problems.Add("foreign_key_check reported one or more violations");
+        }
+
+        if (problems.Count > 0)
+            throw new PosDatabaseSchemaException("SQLite v18 schema mismatch: " + string.Join("; ", problems));
     }
 }
 
