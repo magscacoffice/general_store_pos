@@ -24,6 +24,7 @@ public sealed class SalePostingService
 
         var databasePath = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
+        await DatabaseSafetyService.EnsureVerifiedBackupAsync(databasePath, cancellationToken);
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = databasePath,

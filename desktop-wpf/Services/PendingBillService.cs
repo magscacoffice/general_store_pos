@@ -19,6 +19,7 @@ public sealed class PendingBillService
             throw new InvalidOperationException("Pending bill ID is required.");
         var path = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
+        await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, cancellationToken);
         await using var connection = await OpenAsync(path, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
