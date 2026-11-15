@@ -67,11 +67,11 @@ public sealed class SalesHistoryWindow : Window
         _grid.SetValue(VirtualizingPanel.IsVirtualizingProperty,true);
         _grid.SetValue(VirtualizingPanel.VirtualizationModeProperty,VirtualizationMode.Recycling);
         ScrollViewer.SetCanContentScroll(_grid,true);
-        root.Children.Add(_grid);
         var footer=new DockPanel{Margin=new Thickness(0,10,0,0)};
         footer.Children.Add(_status);
         var view=Button("View Bill");view.Click+=(_,_)=>OpenSelected();DockPanel.SetDock(view,Dock.Right);footer.Children.Add(view);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
+        root.Children.Add(_grid);
         return root;
     }
 
@@ -116,10 +116,10 @@ public sealed class SaleDetailsWindow : Window
         grid.Columns.Add(new DataGridTextColumn{Header="Unit",Binding=new System.Windows.Data.Binding("StockUnit"),Width=70});
         grid.Columns.Add(new DataGridTextColumn{Header="Rate",Binding=new System.Windows.Data.Binding("SalePrice"){StringFormat="N2"},Width=95});
         grid.Columns.Add(new DataGridTextColumn{Header="Amount",Binding=new System.Windows.Data.Binding("LineTotal"){StringFormat="N2"},Width=105});
-        root.Children.Add(grid);
         var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
         var close=new Button{Content="Close",Padding=new Thickness(14,8,14,8)};close.Click+=(_,_)=>Close();
         footer.Children.Add(close);DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
+        root.Children.Add(grid);
         Content=root;
     }
 }
