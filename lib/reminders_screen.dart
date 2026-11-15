@@ -82,11 +82,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('وصولی اور ریمائنڈرز'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
         onPressed: _addReminderDialog,

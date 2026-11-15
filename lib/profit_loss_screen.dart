@@ -76,11 +76,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     final profit = data['profit'] ?? 0;
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Profit / Loss'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],

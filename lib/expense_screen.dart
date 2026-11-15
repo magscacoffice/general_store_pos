@@ -143,11 +143,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Rozmarra Kharchay (Expenses)'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.red,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
       ),
       body: Platform.isWindows
           ? _buildDesktopExpenses()
