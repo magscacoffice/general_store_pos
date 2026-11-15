@@ -69,6 +69,7 @@ public sealed class SalesHistoryWindow : Window
         ScrollViewer.SetCanContentScroll(_grid,true);
         var footer=new DockPanel{Margin=new Thickness(0,10,0,0)};
         footer.Children.Add(_status);
+        var processReturn=Button("Process Return");processReturn.Click+=async(_,_)=>await ProcessReturnSelected();DockPanel.SetDock(processReturn,Dock.Right);footer.Children.Add(processReturn);
         var view=Button("View Bill");view.Click+=(_,_)=>OpenSelected();DockPanel.SetDock(view,Dock.Right);footer.Children.Add(view);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
         root.Children.Add(_grid);
