@@ -614,11 +614,34 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private async Task FlushActiveBillBeforeRestoreAsync()
+    {
+        if (CartLines.Count == 0)
+        {
+            await _pendingBills.DeleteAsync(_activeBillId);
+            return;
+        }
+
+        var snapshot = new PendingBillSnapshot(
+            _activeBillId,
+            BillLabel(_activeBillId),
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            CartLines.Select(x => new PendingBillLine(x.Barcode, x.Name, x.Price, x.Quantity,
+                x.PurchasePrice, x.StockUnit)).ToList(),
+            SelectedCustomerId,
+            SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
+            PaymentModeBox.SelectedItem?.ToString() ?? "Cash",
+            DiscountValue,
+            IsPercentageDiscount,
+            PartialAmountBox.Text);
+        await _pendingBills.SaveAsync(snapshot);
+    }
+
     private async void BackupRestore_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            await PersistActiveBillAsync();
+            await FlushActiveBillBeforeRestoreAsync();
             var window = new BackupRestoreWindow { Owner = this };
             window.ShowDialog();
         }
