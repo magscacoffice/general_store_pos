@@ -307,9 +307,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ),
-      body: Platform.isWindows
-          ? _buildDesktopSalesTable()
-          : _sales.isEmpty
+      body: _sales.isEmpty
               ? const Center(child: Text('No sales records found yet.'))
               : ListView.builder(
               itemCount: _sales.length,

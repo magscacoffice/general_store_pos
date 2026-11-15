@@ -325,9 +325,7 @@ class _BackupScreenState extends State<BackupScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      body: Platform.isWindows
-          ? _buildWindowsBackupPanel()
-          : Padding(
+      body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -337,7 +335,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 padding: EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    Icon(Icons.backup, size: Platform.isWindows ? 24 : 60, color: Colors.teal),
+                    Icon(Icons.backup, size: 60, color: Colors.teal),
                     SizedBox(height: 15),
                     Text(
                       'Database Backup & Restore',

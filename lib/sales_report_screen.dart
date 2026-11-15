@@ -392,9 +392,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Platform.isWindows
-              ? _buildDesktopReport(sales)
-              : RefreshIndicator(
+          : RefreshIndicator(
               onRefresh: _loadSales,
               child: ListView(
                 padding: const EdgeInsets.all(16),

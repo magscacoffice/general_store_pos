@@ -313,9 +313,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      body: Platform.isWindows
-          ? _buildDesktopCustomerHistory(balance)
-          : Column(
+      body: Column(
         children: [
           Card(
             margin: const EdgeInsets.all(12),
