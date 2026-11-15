@@ -539,6 +539,14 @@ public sealed class PosDatabaseSchemaVerifierTests
 
             var from = DateTime.Today;
             var to = DateTime.Today;
+            var statement = await new KhataService().GetStatementAsync(customerId, from, to, path);
+            Assert.Equal(2, statement.Count);
+            Assert.Equal("Sale", statement[0].EntryType);
+            Assert.Equal(2, statement[0].Quantity);
+            Assert.Equal("Return", statement[1].EntryType);
+            Assert.Equal(-1, statement[1].Quantity);
+            Assert.Equal(16.2, statement.Sum(x => x.Amount), 2);
+
             var report = await new SalesReportService().GetAsync(from, to, path);
             Assert.Equal(16.2, report.Sales, 2);
             Assert.Equal(80, report.Purchases, 2);
