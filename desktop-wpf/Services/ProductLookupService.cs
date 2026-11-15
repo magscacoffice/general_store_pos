@@ -48,7 +48,7 @@ public sealed class ProductLookupService
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT id, name, barcode, price, COALESCE(purchasePrice, 0),
-                   quantity, COALESCE(stock_unit, 'pcs')
+                   COALESCE(wholesalePrice, 0), quantity, COALESCE(stock_unit, 'pcs')
             FROM products
             WHERE barcode = $barcode AND COALESCE(is_active, 1) = 1
             LIMIT 1;
