@@ -17,12 +17,15 @@ public sealed class SaleReturnService
   while(await rd.ReadAsync(ct))rows.Add(new ReturnableSaleItem(rd.GetInt32(0),rd.GetString(1),rd.IsDBNull(2)?(int?)null:rd.GetInt32(2),rd.GetString(3),rd.GetString(4),rd.GetInt32(5),rd.GetDouble(6),rd.GetDouble(7),rd.GetInt32(8)));
   return rows;
  }
- public async Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,CancellationToken ct=default)
+ public Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,CancellationToken ct=default) =>
+  RecordAsync(saleId,reason,refundMethod,items,PosDatabasePath.Resolve(requireExisting:true),ct);
+
+ public async Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,string databasePath,CancellationToken ct=default)
  {
   if(items.Count==0)throw new InvalidOperationException("Return ke liye kam az kam aik item select karein.");
   if(string.IsNullOrWhiteSpace(reason))throw new InvalidOperationException("Return reason likhna zaroori hai.");
   if(refundMethod is not ("Cash" or "Khata"))throw new InvalidOperationException("Refund method Cash ya Khata hona chahiye.");
-  var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
+  var path=databasePath;await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);
   int? customerId;string saleSync,payment;double subtotal,discount,receivedRaw,finalRaw;
   await using(var sale=db.CreateCommand()){
