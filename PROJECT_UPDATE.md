@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
-> **Planning status:** Native WPF cashier, inventory, Walk-in/Khata/Wholesale account handling, sales history, purchases, returns, reports, expenses, reminders, profit/loss and printer/invoice source have been integrated onto the current `main` baseline. WPF Release build and schema tests pass; Android Wholesale parity, transaction integration tests, sync/auth and physical Windows acceptance remain pending.
+> **Planning status:** Native WPF and Android Flutter billing now both include distinct Walk-in/Khata/Wholesale account handling, wholesale-rate defaults and per-item Wholesale price editing. WPF Release build/schema tests and Android analysis/regression tests have passed on earlier integration commits; the expanded Wholesale Drive snapshot round-trip test is running on the latest commit. WPF transaction parity, Drive sync/auth, real-device and physical Windows acceptance remain pending.
 
 ## 1. Non-negotiable compatibility rules
 
@@ -270,8 +270,8 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 ## 9. Step-by-step file generation and execution order
 
 1. [ ] **Plan and schema freeze:** complete the DDL/onUpgrade extraction; record table columns, indexes, defaults, unique constraints, sync payload shapes and current calculation fixtures.
-2. [ ] **WPF scaffold:** create solution/projects, target framework, build configuration, logging, DI/host startup, app manifest and basic ShellWindow. Keep it isolated from Flutter folders.
-3. [ ] **Domain models:** create Product, Sale, SaleItem, Party, Purchase, Expense, Reminder, KhataTransaction, SaleReturn, SaleReturnItem, PendingBill, sync entities and enums/value objects using explicit legacy column mapping.
+2. [x] **WPF scaffold:** create the isolated .NET 10 WPF project, app startup, main cashier shell, build configuration and WPF CI validation. Logging/DI/host lifecycle and final app manifest remain part of startup hardening.
+3. [x] **Domain models:** add explicit schema-v18 entity/table/column mappings for the existing POS tables. Additional sync value objects and transaction parity fixtures remain pending.
 4. [ ] **SQLite infrastructure:** implement database path resolver + `.active_database`, schema-v18 compatibility check, EF Core mappings, raw SQL transaction layer, repository interfaces and backup-before-first-write safeguard.
 5. [ ] **Calculation parity:** port invoice unit conversion, discount, sale totals, cost, stock, payment received/balance, profit/loss and return calculations; add golden tests against Flutter fixtures.
 6. [ ] **Application services:** product/inventory, pending bills, sales/checkout, parties/Khata, purchases, expenses/reminders, reports and returns.
@@ -283,7 +283,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 12. [ ] **Backup/restore and Drive sync:** database-safe restore, OAuth, snapshot protocol, conflict resolution, auto-sync and retry/status UI.
 13. [ ] **Window lifecycle and updates:** tray, multiple bill windows if parity requires, update checker, verified package download and safe restart.
 14. [ ] **Automated parity and regression:** schema fixture tests, calculation parity, transaction atomicity, sync round-trip/conflict tests, printer byte-layout tests and WPF view-model tests.
-15. [ ] **CI and release:** add WPF build/test/package workflow; retain Android APK workflow; publish a separate Windows WPF artifact/release channel and verify update migration.
+15. [x] **CI validation:** add WPF .NET 10 build/schema-test workflow and Android Flutter analysis/test workflow on pull requests; retain the Android release workflow separately. [ ] Windows packaging/release channel and update-migration verification remain pending.
 16. [ ] **Manual acceptance:** test on the target Windows laptop at 980×650, 1280×720, maximized/restored, scanner, BC-86AC printer, offline mode, Drive conflict and database restore.
 17. [ ] **Cutover:** Flutter Windows retirement has already been explicitly approved and the Flutter Windows runner/build workflow have been removed. Make WPF the supported Windows client only after its full acceptance checklist passes; do not recreate a Flutter Windows rollback path.
 
@@ -296,7 +296,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 - [ ] Scanner workflow works without global keyboard capture; focus and manual keyboard use remain safe.
 - [ ] 80mm receipts print correctly on the actual BC-86AC with no clipping/overlap and correct cutter behaviour.
 - [ ] Backup/restore and Drive sync pass recovery/conflict tests without data loss.
-- [ ] Windows WPF CI build and tests pass; Android Flutter CI remains green.
+- [x] Windows WPF CI build/schema tests and Android Flutter analysis/tests passed in Actions runs #147, #149, #265; expanded Wholesale snapshot round-trip regression is being rechecked in runs #150 and #266.
 - [ ] Physical cashier acceptance is signed off by the owner before Windows cutover.
 
 ## 11. Audit limitations and open verification items
@@ -358,7 +358,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [x] Integrated dashboard-hosted WPF cashier source: scanner-ready focus, exact barcode lookup, product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
 - [x] Integrated WPF inventory window and service: searchable product list, product add/edit, active/inactive state, protected delete rules and virtualized DataGrid.
 - [x] Added separate Walk-in / Khata / Wholesale customer-type selection, matching account filtering and pending-bill persistence.
-- [x] Added Wholesale account creation in WPF Parties, persisted product wholesale rates in Inventory, and used saved wholesale rate by default when adding a cart item.
+- [x] Added Wholesale account creation and existing-account reclassification in WPF Parties, persisted product wholesale rates in Inventory, and used saved wholesale rate by default when adding a cart item.
 - [x] Enabled per-item manual rate editing for Wholesale bills only; rate validation never allows a sale price below purchase cost.
 - [x] WPF sale posting now stores the selected customer type and supports Cash, Credit and Partial Wholesale payments. Cash/partial receipts are posted against the same customer's Khata ledger and balance in the same transaction.
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
@@ -372,11 +372,12 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [x] Integrated transactional sale-posting source with stock deduction, discount handling, payment modes and ledger updates.
 - [x] Integrated searchable purchase/stock entry, expense register, reminders, customer/supplier list and profit/loss views.
 - [x] Integrated sale-return/refund source with stock restoration and transaction handling.
-- [x] .NET 10 WPF Release restore/build and the existing SQLite v18 schema verifier tests passed on the integrated source after correcting the disposable test fixture to disable SQLite connection pooling (Actions runs #130 and #131).
+- [x] .NET 10 WPF Release restore/build and the existing SQLite v18 schema verifier tests passed on the integrated source after correcting the disposable test fixture to disable SQLite connection pooling (Actions runs #130, #131, #147 and #149).
 - [ ] Add and run automated integration tests against a disposable copy of the real SQLite v18 database for sales, purchases, returns/refunds, Khata/Wholesale receipts and ledger, stock and backup safety.
 - [ ] Verify all transaction totals, discount (including percentage), received amounts, customer balances, payment history and stock movements against Android behaviour. Do not alter the existing discount feature.
-- [ ] Restore Android Flutter Wholesale parity: current Android billing selector exposes only Walk-in/Khata, and the current DBHelper sale path normalizes every selected account to Khata. Preserve Walk-in, Khata and Wholesale as distinct customer types; Wholesale must support Cash/Credit/Partial, saved wholesale product rate defaults, manual per-item rates, and receipts/ledger history against the same customer account. Do not remove Wholesale or make it cash-only.
-- [ ] Review party/sync paths before enabling Wholesale on Android: customer creation and remote-party import currently default customer_type to Khata; preserve the supplied customer_type in local saves and Drive sync. Provide a safe way to reclassify existing accounts because an earlier schema upgrade converted Wholesale values to Khata and those historical classifications cannot be inferred automatically.
+- [x] Restored Android Flutter Wholesale parity in billing: Walk-in/Khata/Wholesale are distinct; Wholesale supports Cash/Credit/Partial, saved wholesale product rate defaults, manual per-item rate edits, scanner defaults, and receipts/ledger history against the same account. Existing discount/percentage behaviour is unchanged.
+- [x] Updated Android party creation/reclassification, sale transaction validation and Drive snapshot import/export paths to preserve customer_type instead of forcing every account to Khata. Existing accounts previously converted by the old schema upgrade can be reclassified from the customer account screen; the app does not guess their former type.
+- [ ] Complete on-device Android acceptance for Wholesale creation, manual/default pricing, cash/credit/partial receipts, outstanding balance and Drive snapshot restore. Keep real user data backed up before reclassifying any existing account.
 
 ### [Windows] Printer and invoice
 
@@ -401,8 +402,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 - [x] Flutter Windows runner and its Windows build/release workflow were retired on main; Android Flutter remains the supported Flutter client.
 - [x] Transplanted the reviewed WPF application source from the diverged feature branch onto a fresh integration branch based on current main. The main-branch schema foundation, schema tests, README baseline and CI workflow were preserved.
-- [ ] Run WPF .NET 10 restore/build and schema tests on the integrated branch; fix any compile/test regressions before merge.
-- [ ] Review and reconcile the old draft PR #4; do not merge the old diverged branch directly.
+- [x] Run WPF .NET 10 restore/build and schema tests on the integrated branch; Actions runs #130, #131, #147 and #149 passed. The latest expanded regression run is being checked separately.
+- [x] Review and reconcile the old draft PR #4: closed the diverged draft and replaced it with current-main-based Draft PR #5. Do not merge the old branch directly.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
 - [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
@@ -485,6 +486,11 @@ Future improvements: add new ideas here when the owner requests them.
 
 <!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. -->
 
+- [x] **Native WPF implementation transplanted safely onto current main baseline** — 31 WPF source files integrated without overwriting current-main SQLite v18 foundation, schema tests, Android source or Drive sync code. Current-main-based Draft PR #5 opened; old diverged PR #4 closed.
+- [x] **WPF Wholesale billing source** — distinct Walk-in/Khata/Wholesale type selector, account filtering/creation/reclassification, saved wholesale product rates, default rate application, Wholesale-only manual item-rate editing, and Cash/Credit/Partial receipt/ledger posting implemented.
+- [x] **Android Wholesale parity source** — customer-type selector and account filtering, Wholesale account creation/reclassification, wholesale price in inventory, scanner/default rates, Wholesale-only per-item manual rates, and sale/ledger/sync preservation implemented. Existing discount feature left unchanged.
+- [x] **Android Wholesale regression coverage added** — covers Wholesale partial and full-cash receipts, outstanding balance, same-account ledger history, type mismatch rejection and snapshot round-trip. Latest expanded run is tracked below; do not treat it as passed until Actions #266 completes.
+
 - [x] **Backup restore database-lock fix** — restore process ko alternate restored database file aur `.active_database` marker use karne ke liye update kiya gaya. User ne restore successful hone ki tasdeeq ki. Commit: `ad235ff873cd620a775f8a3fe3a51e8359b61878`.
 - [x] **Windows Google OAuth client-secret handling code** — Windows auth-code exchange aur refresh-token requests mein `GOOGLE_WINDOWS_CLIENT_SECRET` support add ki gayi aur Windows workflow mein Dart define wire kiya gaya. Commit: `1c9fe93cb66e7367666227db63545721901cf4e2`. **Note:** Code change complete hai; Windows app mein real sign-in/token-refresh validation abhi pending hai (upar Pending Updates dekhein).
 - [x] **Android Build #150 APK compilation/release** — APK successfully compile aur GitHub release par publish hui. Commit: `16187c3`; release: `v1.0.0-build150`. **Note:** Is build ki final FCM notification step fail hui thi; notification workflow ko complete na samjhein.
@@ -507,6 +513,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Work Log
 
+| Date | Work summary | Commit / Build | Status |
+| 2026-11-15 | Integrated current-main-based WPF source and restored Walk-in/Khata/Wholesale support across WPF and Android. Added party reclassification, saved wholesale rates, editable Wholesale unit rates, same-account cash/partial receipt ledger handling and regression tests. | Integration branch commits through `85db064`; Draft PR #5 | WPF build/schema and Android analysis/tests passed on #147/#149/#265; expanded round-trip tests #150/#266 pending. No release artifacts created. |
 | Date | Work summary | Commit / Build | Status |
 |---|---|---|---|
 | 2026-11-15 | Compared current Windows desktop source with project tracker; fixed a Windows build blocker found in the previous push (unsupported Window.getSize call). The native runner's 1280×720 initial size is retained, and Dart now only sets the 980×650 minimum. | This correction commit | Windows build previously failed at lib/main.dart:256; corrected source now queued for CI rebuild. Physical desktop checks remain pending |
