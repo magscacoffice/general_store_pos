@@ -622,7 +622,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
     final content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
@@ -673,7 +672,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
                         },
                       ),
               ),
-            ],
             const SizedBox(height: 8),
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
