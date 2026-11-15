@@ -328,7 +328,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: _isLoading: _isLoading
+      body: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _visibleProducts.isEmpty
                   ? const Center(child: Text('No products found. Add some!'))
