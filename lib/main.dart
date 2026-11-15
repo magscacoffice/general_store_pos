@@ -253,12 +253,9 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
               ? 'Khan Baba POS - Dashboard'
               : 'Khan Baba POS - New Sale';
           nativeWindow.minimumSize = const Size(980, 650).toNative();
-          final currentSize = await nativeWindow.getSize();
-          if (currentSize.width < 980 || currentSize.height < 650) {
-            nativeWindow.setSize(const Size(1240, 740).toNative(), false);
-            nativeWindow.center();
-          }
-          // Existing normal/maximized geometry is left to native Windows controls.
+          // The native runner creates the initial window at 1280×720.
+          // Do not query or reset its geometry here: Windows owns maximize,
+          // restore, and the user's chosen window position/size.
           nativeWindow.addListener((event) {
             if (event is WindowCloseRequestedEvent && !_allowCloseForRestore) {
               if (widget.windowType == PosWindows.dashboard &&
