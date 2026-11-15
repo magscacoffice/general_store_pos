@@ -162,7 +162,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'name': nameController.text.trim(),
                       'phone': phoneController.text.trim(),
                       'type': widget.type,
-                      'customer_type': selectedCustomerType,
+                      if (widget.type == 'customer') 'customer_type': selectedCustomerType,
                       'balance': 0.0,
                     });
                     _loadParties();
