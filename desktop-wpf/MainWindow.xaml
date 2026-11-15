@@ -55,7 +55,7 @@
                     <Button Content="▣   New Sale" Background="#2D594B" Foreground="White" BorderBrush="#527667" FontWeight="SemiBold" Click="NewSale_Click"/>
                     <Button Content="▤   Inventory" Click="Inventory_Click"/>
                     <Button Content="▧   Sales History" Click="SalesHistory_Click"/>
-                    <Button Content="▥   Purchases" Click="ComingSoon_Click"/>
+                    <Button Content="▥   Purchases" Click="Purchases_Click"/>
                     <Button Content="◫   Customer Khata" Click="Khata_Click"/>
                     <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="▣   Expenses" Click="Expenses_Click"/>
