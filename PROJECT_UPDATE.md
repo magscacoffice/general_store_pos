@@ -27,6 +27,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 <!-- Add new tasks below this line. Keep each task specific. -->
 
 ### [Windows] Printer & Invoice screen — desktop UI/UX redesign (2026-11-15)
+  7. **Remember the selected printer:** Once the user successfully connects/selects a printer, persist that printer as the preferred/default printer in local app settings. On subsequent app launches, restore the saved printer automatically and attempt to reconnect/reuse it so the user does not have to select the same printer every time. Show a clear status if the saved printer is unavailable or disconnected, and allow the user to choose another printer. Do not silently switch to a different printer or claim it is connected when it is not. Preserve platform-specific printer identifiers and existing Android/Windows connection flows; verify persistence across app restarts on both platforms where supported.
+
 
 - [ ] **Refactor the Printer & Invoice screen for a polished Windows desktop POS experience.** Review the existing Flutter screen and the user's supplied visual reference before implementation. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
 
