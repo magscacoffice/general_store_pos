@@ -57,7 +57,7 @@
                     <Button Content="▧   Sales History" Click="SalesHistory_Click"/>
                     <Button Content="▥   Purchases" Click="ComingSoon_Click"/>
                     <Button Content="◫   Customer Khata" Click="Khata_Click"/>
-                    <Button Content="▦   Reports" Click="ComingSoon_Click"/>
+                    <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="⚙   Settings" Click="ComingSoon_Click"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,20,0,4">
