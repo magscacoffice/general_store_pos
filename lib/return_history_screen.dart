@@ -145,9 +145,7 @@ class _ReturnHistoryScreenState extends State<ReturnHistoryScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Platform.isWindows
-              ? _buildDesktopReturns()
-              : _returns.isEmpty
+          : _returns.isEmpty
               ? const Center(child: Text('Abhi koi return record nahi hai.'))
               : RefreshIndicator(
                   onRefresh: _load,

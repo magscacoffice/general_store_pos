@@ -283,9 +283,7 @@ class _PartyScreenState extends State<PartyScreen> {
         backgroundColor: (isCustomer ? Colors.orange : Colors.indigo),
         foregroundColor: Colors.white,
       ),
-      body: Platform.isWindows
-          ? _buildDesktopParties(isCustomer)
-          : _parties.isEmpty
+      body: _parties.isEmpty
           ? Center(
               child: Text(
                 isCustomer ? 'No customers found.' : 'No suppliers found.',

@@ -147,9 +147,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
       ),
-      body: Platform.isWindows
-          ? _buildDesktopExpenses()
-          : _expenses.isEmpty
+      body: _expenses.isEmpty
               ? const Center(child: Text('No expenses recorded yet.'))
               : ListView.builder(
                   itemCount: _expenses.length,

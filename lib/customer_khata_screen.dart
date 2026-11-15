@@ -192,9 +192,7 @@ class _CustomerKhataScreenState extends State<CustomerKhataScreen> {
       backgroundColor: Colors.teal,
       foregroundColor: Colors.white,
     ),
-    body: Platform.isWindows
-        ? _buildDesktopKhata()
-        : RefreshIndicator(
+    body: RefreshIndicator(
       onRefresh: _load,
       child: customers.isEmpty
           ? ListView(
