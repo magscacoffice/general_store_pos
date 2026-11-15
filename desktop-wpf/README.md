@@ -5,7 +5,8 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 ## Integrated implementation
 
 - Dashboard-hosted cashier workspace with scanner-ready focus, exact barcode lookup, product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
-- Transactional sale posting, inventory CRUD/search, purchase entry, stock movements and protected product deletion.
+- Separate Walk-in, Khata and Wholesale customer types; Wholesale accounts support Cash/Credit/Partial payments, saved wholesale-rate defaults and editable per-item rates with purchase-cost validation.
+- Transactional sale posting, inventory CRUD/search (including wholesale price), purchase entry, stock movements and protected product deletion.
 - Customer/supplier list, customer Khata ledger and receipt posting, sales history and invoice details.
 - Sale returns/refunds, sales reports, expenses, reminders and profit/loss views.
 - Windows printer queue discovery and preferred-printer settings, 80mm ESC/POS receipt builder, raw spooler output, test print, invoice/receipt preview and PDF save/open.
@@ -26,4 +27,4 @@ Use only a verified disposable copy of a real schema-v18 database for integratio
 
 ## Still required before production cutover
 
-Automated integrated build/tests, disposable-database transaction parity, Windows runtime/visual acceptance, Google Drive sync/authentication/role parity, and physical SpeedX SP60D / Black Copper BC-86AC hardware acceptance remain pending. A successful CI build does not complete those checks. No release/package should be produced until the project tracker is complete and owner acceptance is recorded.
+The integrated .NET 10 Release build and current SQLite v18 schema tests pass in GitHub Actions. Android Flutter Wholesale parity, broader disposable-database transaction tests, Windows runtime/visual acceptance, Google Drive sync/authentication/role parity, and physical SpeedX SP60D / Black Copper BC-86AC hardware acceptance remain pending. A successful CI build does not complete those checks. No release/package should be produced until the project tracker is complete and owner acceptance is recorded.
