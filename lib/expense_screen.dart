@@ -166,11 +166,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     );
                   },
                 ),
-      floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
-        onPressed: _showAddExpenseDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
-      ) : FloatingActionButton(
+      floatingActionButton: FloatingActionButton(
         onPressed: _showAddExpenseDialog,
         backgroundColor: Colors.red,
         child: const Icon(Icons.money_off),
