@@ -356,6 +356,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ### [Windows] Native WPF cashier and inventory
 
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
+- [ ] Pass WPF inventory barcode/CRUD regression tests for exact lookup, duplicate create/update, tombstones and protected delete (latest Actions run #245 is pending).
 - [ ] Validate immediate duplicate-barcode warning using Android camera scanning and the WPF keyboard-wedge scanner on real devices.
 - [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
 - [ ] Complete responsive visual/interaction acceptance at 980×650, 1280×720, maximized and resized states.
@@ -433,7 +434,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Completed Updates
 
-<!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. -->
+<!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. Completed items are moved here so the Pending Updates section contains only unfinished work. -->
 
 - [x] **WPF cashier and inventory source** — dashboard-hosted billing, scanner focus, exact barcode lookup/product suggestions, repeat-scan quantity increments, pending bills/autosave, searchable inventory, add/edit/active status and protected delete source implemented.
 - [x] **WPF transaction and business screens** — sales history/invoice details, Khata ledger/receipts, sale posting, purchases, returns/refunds, expenses, reminders, reports and profit/loss source integrated. Disposable SQLite v18 tests passed for sale, purchase, return, receipt, report and profit/loss flows.
@@ -449,15 +450,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] **Flutter Windows retirement and WPF branch integration** — Flutter Windows runner/workflow retired; WPF source transplanted onto current-main-based integration branch; old diverged PR #4 closed and current-main Draft PR #5 opened.
 - [x] **WPF CI and regression suite** — .NET 10 Release build plus schema, sale, purchase, return, Khata, report, profit/loss and backup/restore tests passed in Actions #169, #181, #186, #198, #205 and #226; Android validation/regression passed in #266, #285, #292 and #307.
 
-- [x] **Native WPF implementation transplanted safely onto current main baseline** — 31 WPF source files integrated without overwriting current-main SQLite v18 foundation, schema tests, Android source or Drive sync code. Current-main-based Draft PR #5 opened; old diverged PR #4 closed.
-- [x] **WPF Wholesale billing source** — distinct Walk-in/Khata/Wholesale type selector, account filtering/creation/reclassification, saved wholesale product rates, default rate application, Wholesale-only manual item-rate editing, and Cash/Credit/Partial receipt/ledger posting implemented.
-- [x] **Android Wholesale parity source** — customer-type selector and account filtering, Wholesale account creation/reclassification, wholesale price in inventory, scanner/default rates, Wholesale-only per-item manual rates, and sale/ledger/sync preservation implemented. Existing discount feature left unchanged.
-- [x] **Android Wholesale regression coverage added** — covers Wholesale partial and full-cash receipts, outstanding balance, same-account ledger history, type mismatch rejection and snapshot round-trip. Latest expanded regression and Drive snapshot round-trip tests passed in Actions #266.
+### Historical completed updates before the native WPF migration
 
-- [x] **Backup restore database-lock fix** — restore process ko alternate restored database file aur `.active_database` marker use karne ke liye update kiya gaya. User ne restore successful hone ki tasdeeq ki. Commit: `ad235ff873cd620a775f8a3fe3a51e8359b61878`.
-- [x] **Windows Google OAuth client-secret handling code** — Windows auth-code exchange aur refresh-token requests mein `GOOGLE_WINDOWS_CLIENT_SECRET` support add ki gayi aur Windows workflow mein Dart define wire kiya gaya. Commit: `1c9fe93cb66e7367666227db63545721901cf4e2`. **Note:** Code change complete hai; Windows app mein real sign-in/token-refresh validation abhi pending hai (upar Pending Updates dekhein).
-- [x] **Android Build #150 APK compilation/release** — APK successfully compile aur GitHub release par publish hui. Commit: `16187c3`; release: `v1.0.0-build150`. **Note:** Is build ki final FCM notification step fail hui thi; notification workflow ko complete na samjhein.
-- [x] **PROJECT_UPDATE.md tracking file created** — Khan Baba POS repo ke `main` branch par project update log create kiya gaya. Commit: `2c2409275da6a2518a1ca6b676605867e130a25d`.
+- [x] **Flutter backup restore database-lock fix** — historical Flutter client fix using an alternate restored database file and the active-database marker. Native WPF now has its own separately tested backup/restore implementation. Commit: ad235ff873cd620a775f8a3fe3a51e8359b61878.
+- [x] **Flutter Windows OAuth client-secret handling** — historical code added GOOGLE_WINDOWS_CLIENT_SECRET support to the retired Flutter Windows auth flow. This is not a native WPF Drive OAuth implementation; WPF sync/auth remains pending. Commit: 1c9fe93cb66e7367666227db63545721901cf4e2.
+- [x] **Android Build #150 APK compilation/release** — historical APK published as v1.0.0-build150 (commit 16187c3). Its final FCM notification step failed. No new APK/EXE/release artifacts are being created while current pending tasks remain.
+- [x] **PROJECT_UPDATE.md tracking file created** — original tracker created on main (commit 2c2409275da6a2518a1ca6b676605867e130a25d).
 
 ## Important Project Rules
 
@@ -468,7 +466,7 @@ Future improvements: add new ideas here when the owner requests them.
 5. Preserve the existing discount and percentage behaviour unless explicitly instructed otherwise.
 6. For cart item sale-price edits, enforce the purchase-cost floor where that rule applies.
 7. Keep Windows POS local/offline; do not add Firebase to the Windows build unless explicitly requested.
-8. Prefer one consolidated final commit/push after the requested work and review, rather than frequent small commits.
+8. Prefer one consolidated final commit/push after the requested work and review, rather than frequent small commits. Squash the integration PR when it is approved for merge.
 9. The user may choose to skip automated testing and test manually. Clearly report which checks were and were not run; never claim an unrun test passed.
 10. Do not mark an item complete until the code change is actually made. Include commit/build details when known.
 11. If an update is unclear or conflicts with a previous requirement, ask one concise clarification before making a risky change.
