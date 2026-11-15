@@ -1,0 +1,17 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using KhanBabaPos.Wpf.Services;
+namespace KhanBabaPos.Wpf;
+public sealed class ProfitLossWindow:Window
+{
+ readonly ProfitLossService service=new();readonly TextBlock revenue=new(),cost=new(),expenses=new(),profit=new(),status=new();
+ public ProfitLossWindow(){Title="Profit / Loss | Khan Baba POS";Width=1080;Height=680;MinWidth=900;MinHeight=540;WindowStartupLocation=WindowStartupLocation.CenterOwner;Background=Brushes.WhiteSmoke;Content=Layout();Loaded+=async(_,_)=>await LoadAsync();}
+ UIElement Layout(){var root=new DockPanel{Margin=new Thickness(22)};var header=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,16)};var title=new StackPanel();title.Children.Add(new TextBlock{Text="Profit / Loss",FontSize=25,FontWeight=FontWeights.Bold,Foreground=Brushes.DarkSlateGray});title.Children.Add(new TextBlock{Text="All-time financial summary from saved sales, returns, item costs and expenses.",Foreground=Brushes.DimGray,Margin=new Thickness(0,4,0,0)});header.Children.Add(title);var refresh=Btn("Refresh");refresh.Click+=async(_,_)=>await LoadAsync();DockPanel.SetDock(refresh,Dock.Right);header.Children.Add(refresh);DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
+ var cards=new UniformGrid{Columns=2,Rows=2};cards.Children.Add(Metric("Sales Revenue",revenue));cards.Children.Add(Metric("Cost of Sold Items",cost));cards.Children.Add(Metric("Recorded Expenses",expenses));cards.Children.Add(Metric("Estimated Profit / Loss",profit));DockPanel.SetDock(cards,Dock.Top);root.Children.Add(cards);
+ var note=new Border{Background=Brushes.White,BorderBrush=new SolidColorBrush(Color.FromRgb(220,229,224)),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(16),Margin=new Thickness(0,16,0,0)};note.Child=new TextBlock{Text="Important: Existing old sales do not have item-cost snapshots, so this report cannot calculate their actual cost. Profit figures become more reliable for sales recorded after this update. Existing expenses are included.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.DimGray};DockPanel.SetDock(note,Dock.Top);root.Children.Add(note);DockPanel.SetDock(status,Dock.Bottom);status.Margin=new Thickness(0,10,0,0);root.Children.Add(status);return root;}
+ static Border Metric(string label,TextBlock value){value.FontSize=23;value.FontWeight=FontWeights.Bold;var p=new StackPanel();p.Children.Add(new TextBlock{Text=label,Foreground=Brushes.DimGray,Margin=new Thickness(0,0,0,6)});p.Children.Add(value);return new Border{Background=Brushes.White,BorderBrush=new SolidColorBrush(Color.FromRgb(220,229,224)),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(10),Padding=new Thickness(20),Margin=new Thickness(0,0,12,12),Child=p};}
+ static Button Btn(string s)=>new(){Content=s,Padding=new Thickness(12,8,12,8),Margin=new Thickness(8,0,0,0)};
+ async Task LoadAsync(){try{var x=await service.GetAsync();revenue.Text=$"Rs. {x.Revenue:N2}";cost.Text=$"Rs. {x.Cost:N2}";expenses.Text=$"Rs. {x.Expenses:N2}";profit.Text=$"Rs. {x.Profit:N2}";profit.Foreground=x.Profit>=0?Brushes.SeaGreen:Brushes.Firebrick;status.Text=x.Profit>=0?"Estimated profit":"Estimated loss";}catch(Exception e){status.Text="Profit/loss report failed: "+e.Message;}}
+}

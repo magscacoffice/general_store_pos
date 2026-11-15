@@ -1,0 +1,28 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using KhanBabaPos.Wpf.Services;
+namespace KhanBabaPos.Wpf;
+public sealed class PartiesWindow:Window
+{
+ readonly PartyService service=new();readonly ObservableCollection<PartyRow> customers=[],suppliers=[];
+ readonly DataGrid customerGrid=new(){AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeight=36,EnableRowVirtualization=true};
+ readonly DataGrid supplierGrid=new(){AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeight=36,EnableRowVirtualization=true};
+ readonly TextBlock status=new(){Foreground=Brushes.DimGray};readonly TabControl tabs=new();
+ public PartiesWindow(){Title="Parties | Khan Baba POS";Width=1100;Height=720;MinWidth=900;MinHeight=560;WindowStartupLocation=WindowStartupLocation.CenterOwner;Background=Brushes.WhiteSmoke;Configure(customerGrid,customers,true);Configure(supplierGrid,suppliers,false);Content=Layout();Loaded+=async(_,_)=>{await LoadAsync("customer");await LoadAsync("supplier");};}
+ void Configure(DataGrid grid,ObservableCollection<PartyRow> source,bool customer){grid.ItemsSource=source;grid.Columns.Add(new DataGridTextColumn{Header="Name",Binding=new System.Windows.Data.Binding("Name"),Width=new DataGridLength(1,DataGridLengthUnitType.Star)});grid.Columns.Add(new DataGridTextColumn{Header="Phone",Binding=new System.Windows.Data.Binding("Phone"),Width=170});grid.Columns.Add(new DataGridTextColumn{Header=customer?"Outstanding":"Balance",Binding=new System.Windows.Data.Binding("Balance"){StringFormat="N2"},Width=150});grid.Columns.Add(new DataGridTextColumn{Header="Account Type",Binding=new System.Windows.Data.Binding("Type"),Width=110});grid.SetValue(VirtualizingPanel.IsVirtualizingProperty,true);grid.SetValue(VirtualizingPanel.VirtualizationModeProperty,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(grid,true);}
+ UIElement Layout(){var root=new DockPanel{Margin=new Thickness(20)};var header=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,14)};var title=new StackPanel();title.Children.Add(new TextBlock{Text="Customer & Supplier Accounts",FontSize=25,FontWeight=FontWeights.Bold,Foreground=Brushes.DarkSlateGray});title.Children.Add(new TextBlock{Text="Maintain party contact details and review outstanding balances.",Foreground=Brushes.DimGray,Margin=new Thickness(0,4,0,0)});header.Children.Add(title);var refresh=Btn("Refresh");refresh.Click+=async(_,_)=>{await LoadAsync("customer");await LoadAsync("supplier");};DockPanel.SetDock(refresh,Dock.Right);header.Children.Add(refresh);DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
+ var customerTab=new TabItem{Header="Customers"};customerTab.Content=TabContent(customerGrid,"customer");var supplierTab=new TabItem{Header="Suppliers"};supplierTab.Content=TabContent(supplierGrid,"supplier");tabs.Items.Add(customerTab);tabs.Items.Add(supplierTab);DockPanel.SetDock(status,Dock.Bottom);status.Margin=new Thickness(0,8,0,0);root.Children.Add(status);root.Children.Add(tabs);return root;}
+ UIElement TabContent(DataGrid grid,string type){var dock=new DockPanel{Margin=new Thickness(4)};var toolbar=new DockPanel{Margin=new Thickness(0,0,0,10)};var add=Btn(type=="customer"?"Add Customer":"Add Supplier");add.Click+=async(_,_)=>await AddAsync(type);DockPanel.SetDock(add,Dock.Right);toolbar.Children.Add(add);DockPanel.SetDock(toolbar,Dock.Top);dock.Children.Add(toolbar);dock.Children.Add(grid);return dock;}
+ static Button Btn(string s)=>new(){Content=s,Padding=new Thickness(12,8,12,8),Margin=new Thickness(8,0,0,0)};
+ async Task LoadAsync(string type){try{var data=await service.GetAsync(type);var target=type=="customer"?customers:suppliers;target.Clear();foreach(var x in data)target.Add(x);status.Text=$"{customers.Count} customer(s) • {suppliers.Count} supplier(s)";}catch(Exception e){status.Text=$"{type} accounts load failed: {e.Message}";}}
+ async Task AddAsync(string type){var dialog=new PartyAddDialog(type=="customer"?"Add Customer":"Add Supplier"){Owner=this};if(dialog.ShowDialog()!=true)return;try{await service.AddAsync(dialog.PartyName,dialog.Phone,type);await LoadAsync(type);status.Text=type=="customer"?"Customer saved.":"Supplier saved.";}catch(Exception e){MessageBox.Show(e.Message,"Party could not be saved",MessageBoxButton.OK,MessageBoxImage.Warning);}}
+}
+internal sealed class PartyAddDialog:Window
+{
+ readonly TextBox name=new(){Padding=new Thickness(8),MinWidth=280};readonly TextBox phone=new(){Padding=new Thickness(8),MinWidth=280};
+ public string PartyName=>name.Text.Trim();public string Phone=>phone.Text.Trim();
+ public PartyAddDialog(string caption){Title=caption;Width=420;Height=280;WindowStartupLocation=WindowStartupLocation.CenterOwner;ResizeMode=ResizeMode.NoResize;var p=new StackPanel{Margin=new Thickness(20)};p.Children.Add(new TextBlock{Text="Name *"});p.Children.Add(name);p.Children.Add(new TextBlock{Text="Phone number",Margin=new Thickness(0,12,0,4)});p.Children.Add(phone);var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,18,0,0)};var cancel=new Button{Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};cancel.Click+=(_,_)=>DialogResult=false;var save=new Button{Content="Save",Padding=new Thickness(12,7,12,7)};save.Click+=(_,_)=>{if(string.IsNullOrWhiteSpace(name.Text)){MessageBox.Show("Name is required.");return;}DialogResult=true;};actions.Children.Add(cancel);actions.Children.Add(save);p.Children.Add(actions);Content=p;}
+}
