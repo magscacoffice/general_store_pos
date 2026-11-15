@@ -45,7 +45,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
 
         var path = Path.Combine(Path.GetTempPath(), "khan-baba-schema-" + Guid.NewGuid().ToString("N") + ".db");
-        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ToString());
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
         await connection.OpenAsync();
         foreach (var statement in statements)
         {
