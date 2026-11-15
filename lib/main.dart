@@ -17,7 +17,11 @@ Future<void> main() async {
 }
 
 class KhanBabaPOSApp extends StatelessWidget {
-  const KhanBabaPOSApp({super.key});
+  /// Optional home override keeps the MaterialApp shell testable without
+  /// initializing Firebase or contacting the store-membership services.
+  final Widget? home;
+
+  const KhanBabaPOSApp({super.key, this.home});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +32,7 @@ class KhanBabaPOSApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const UpdateAwareHome(child: AuthGate()),
+      home: home ?? const UpdateAwareHome(child: AuthGate()),
     );
   }
 }
