@@ -537,3 +537,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Removed Windows desktop-navigation helper usage from shared Flutter screens. Android Flutter startup and Android build/test workflows are retained.
 - [ ] Finish auditing and removing any remaining legacy `Platform.isWindows` presentation branches and window-management code from shared Dart files where they are no longer needed. These branches are not a supported Windows client and must not be reactivated; all Windows UI work belongs in `desktop-wpf/`.
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
+
+
+## WPF implementation progress — 2026-11-15
+
+- [x] Added the first native WPF cashier shell in `desktop-wpf/MainWindow.xaml` with a desktop sidebar, responsive 980×650 minimum window, dashboard-hosted New Sale area, cart grid and summary.
+- [x] Added a read-only product lookup service against the existing SQLite v18 database. Queries are parameterized; schema verification runs before reads; no schema migration or business-data writes occur.
+- [x] Added foreground scanner/search behaviour: scanner field is focused at startup and after add; exact barcode adds the product; repeated scan increments its cart quantity; name search suggestions support Up/Down and Enter.
+- [ ] This is a foundation milestone only. Checkout, discount calculation, received/balance posting, stock deduction, persistent pending bills, customer selection/Khata, purchases, inventory CRUD, reports, returns, backup/restore, printer, Drive sync, authentication/role parity, automated business parity tests and physical Windows acceptance remain pending.
+- [ ] Run the WPF Windows CI build and inspect all XAML/runtime interactions before merging. The current cart is temporary and must not be mistaken for a saved sale.
