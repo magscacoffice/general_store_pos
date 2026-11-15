@@ -538,7 +538,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Removed Windows desktop-navigation helper usage from shared Flutter screens. Android Flutter startup and Android build/test workflows are retained.
 - [x] Removed the retired Flutter Windows presentation branches and malformed AppBar action block from `dashboard_screen.dart`; Android dashboard navigation and update/sync actions remain. (Commit `62756f8`; follow-up unused import cleanup `dc0562f`.)
 - [x] Removed the Flutter Windows AppBar title-bar styling, desktop back-navigation helper, and related presentation-only settings from 16 shared Flutter screens; Android styling/navigation is now the only retained UI path in those AppBars. Commits `4fdd5b1`, `b4aab02`, `2a6ea9d`, `87e1a1a`.
-- [ ] Continue removing remaining Flutter Windows-only screen layouts, window lifecycle hooks, scanner/printer UI branches and obsolete `PosWindows` calls. Preserve Android workflows and the shared Drive-sync/database logic that is still used by Android.
+- [x] Remove Flutter Windows-only AppBar styling/navigation helpers from 16 shared Flutter screens; Android AppBar behaviour retained (commits `4fdd5b1`, `b4aab02`, `2a6ea9d`, `87e1a1a`).
+- [x] Remove obsolete Windows-only body layouts from the eight audited shared screens: expense, party, history, customer Khata, return history, sales report, customer history, and the dashboard; Android workflows retained (commits `37018d7`, `1a0c5af`, plus earlier dashboard commits).
+- [x] Remove retired Windows printer-screen presentation branches while retaining Android USB/Bluetooth printer workflows (commits `0f8dc05`, `122e5c0`).
+- [x] Remove retired Windows scanner-screen presentation branches while retaining Android camera scanning and generic mobile scanner guidance (commit `a92d02b`).
+- [x] Remove Windows-only FAB variants from expense, reminders, party and inventory screens (commits `4f87791`, `a0413ef`, `dd2a929`, `9a51794`).
+- [ ] Audit and remove remaining Flutter Windows-only layouts/window lifecycle hooks in reminders, profit/loss, purchases, inventory, sale returns, backup, cloud sync and sales. Preserve Android workflows and shared Drive-sync/database logic; do not delete shared data/sync paths.
+
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
 
 
@@ -568,3 +574,11 @@ Future improvements: add new ideas here when the owner requests them.
 - Removed the retired Windows-specific AppBar colours, title-bar heights, back-navigation helper and other simple presentation-only properties from 16 Flutter screens in four grouped commits (`4fdd5b1`, `b4aab02`, `2a6ea9d`, `87e1a1a`). Android AppBar behaviour is retained.
 - Updated the WPF README to describe the expanded read-only schema verifier accurately.
 - Android validation passed on earlier commits in this cleanup series; the latest grouped commit's Android analyzer/test and POS regression workflows are still running. No APK, EXE or release artifacts are published.
+
+
+## Verified validation and cleanup update — 2026-11-15
+
+- Android validation-only workflow passed on latest `main` commit `9a517947895be59a9dd57ede7bb4dce44684d6c5` (run `43717393043`).
+- POS sync and invoice conversion regression tests passed on the same commit (run `43717393051`).
+- These runs did not publish APK, EXE, or release artifacts.
+- The latest scanner/printer and four FAB cleanup commits are now recorded above as completed. Remaining Flutter Windows branches are still explicitly pending; the Windows-master Drive sync and database path branches are shared data behaviour and must not be removed merely because they mention Windows.
