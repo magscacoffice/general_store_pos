@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'salesmen_management_screen.dart';
-import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
