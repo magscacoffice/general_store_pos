@@ -582,12 +582,6 @@ class SalesScreenState extends State<SalesScreen> {
       _usbBarcodeController.clear();
     });
     await _persistActiveBill();
-    if (Platform.isWindows) {
-      final window = WindowManager.instance.getCurrent();
-      window?.show();
-      window?.focus();
-      _usbBarcodeFocusNode.requestFocus();
-    }
   }
 
   Future<void> _handleUnifiedProductInput(String rawInput) async {
