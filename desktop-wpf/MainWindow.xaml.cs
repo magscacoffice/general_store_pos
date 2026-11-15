@@ -386,6 +386,9 @@ public partial class MainWindow : Window
         DiscountValueBox.Text = bill.OverallDiscount.ToString(CultureInfo.InvariantCulture);
         PartialAmountBox.Text = bill.ReceivedAmount;
         _suppressPersistence = false;
+        _suppressPendingSelection = true;
+        PendingBillsBox.SelectedValue = bill.BillId;
+        _suppressPendingSelection = false;
         RefreshTotals();
         FocusScanner();
     }
