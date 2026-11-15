@@ -151,9 +151,9 @@ public sealed class ProductEditorWindow : Window
         Background=System.Windows.Media.Brushes.WhiteSmoke;
         var panel=new StackPanel { Margin=new Thickness(22) };
         panel.Children.Add(new TextBlock { Text=Title, FontSize=23, FontWeight=FontWeights.Bold, Margin=new Thickness(0,0,0,14) });
-        AddField(panel,"Product name *",_name);
         AddField(panel,"Barcode *",_barcode);
         panel.Children.Add(_barcodeStatus);
+        AddField(panel,"Product name *",_name);
         AddField(panel,"Stock quantity *",_quantity);
         AddField(panel,"Stock unit *",_unit);
         AddField(panel,"Purchase price",_purchase);
@@ -172,6 +172,8 @@ public sealed class ProductEditorWindow : Window
         buttons.Children.Add(cancel);buttons.Children.Add(_saveButton);panel.Children.Add(buttons);
         _barcode.TextChanged += (_, _) => { _barcodeTimer.Stop(); _barcodeTimer.Start(); };
         _barcodeTimer.Tick += async (_, _) => { _barcodeTimer.Stop(); await CheckBarcodeAsync(); };
+        Closed += (_, _) => _barcodeTimer.Stop();
+        Loaded += (_, _) => { if (_existingId is null) _barcode.Focus(); };
         Content=new ScrollViewer { Content=panel, VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     }
 
