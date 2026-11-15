@@ -31,10 +31,13 @@ public sealed class InventoryService
         return result;
     }
 
-    public async Task CreateAsync(ProductMutation p, CancellationToken ct = default)
+    public Task CreateAsync(ProductMutation p, CancellationToken ct = default) =>
+        CreateAsync(p, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task CreateAsync(ProductMutation p, string databasePath, CancellationToken ct = default)
     {
         Validate(p);
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
         await using var db = await OpenAsync(path, false, ct);
@@ -63,7 +66,10 @@ public sealed class InventoryService
         catch { tx.Rollback(); throw; }
     }
 
-    public async Task UpdateAsync(int id, ProductMutation p, CancellationToken ct = default)
+    public Task UpdateAsync(int id, ProductMutation p, CancellationToken ct = default) =>
+        UpdateAsync(id, p, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task UpdateAsync(int id, ProductMutation p, string databasePath, CancellationToken ct = default)
     {
         Validate(p);
         var path = PosDatabasePath.Resolve(requireExisting: true);
@@ -97,9 +103,12 @@ public sealed class InventoryService
         catch { tx.Rollback(); throw; }
     }
 
-    public async Task SetActiveAsync(int id, bool active, CancellationToken ct = default)
+    public Task SetActiveAsync(int id, bool active, CancellationToken ct = default) =>
+        SetActiveAsync(id, active, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task SetActiveAsync(int id, bool active, string databasePath, CancellationToken ct = default)
     {
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
         await using var db = await OpenAsync(path, false, ct);
@@ -111,9 +120,12 @@ public sealed class InventoryService
             throw new InvalidOperationException("Product not found.");
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    public Task DeleteAsync(int id, CancellationToken ct = default) =>
+        DeleteAsync(id, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task DeleteAsync(int id, string databasePath, CancellationToken ct = default)
     {
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
         await using var db = await OpenAsync(path, false, ct);
