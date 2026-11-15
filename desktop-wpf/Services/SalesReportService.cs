@@ -3,10 +3,13 @@ using KhanBabaPos.Wpf.Data;
 namespace KhanBabaPos.Wpf.Services;
 public sealed class SalesReportService
 {
- public async Task<SalesReportSnapshot> GetAsync(DateTime from,DateTime to,CancellationToken ct=default)
+ public Task<SalesReportSnapshot> GetAsync(DateTime from,DateTime to,CancellationToken ct=default) =>
+  GetAsync(from,to,PosDatabasePath.Resolve(requireExisting:true),ct);
+
+ public async Task<SalesReportSnapshot> GetAsync(DateTime from,DateTime to,string databasePath,CancellationToken ct=default)
  {
   if(from.Date>to.Date)throw new InvalidOperationException("From date cannot be later than To date.");
-  var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
+  var path=databasePath;await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
   await using var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=path,Mode=SqliteOpenMode.ReadOnly,Pooling=false}.ToString());await db.OpenAsync(ct);
   var days=new SortedDictionary<string,DailySalesReport>(StringComparer.Ordinal);
   await using(var cmd=db.CreateCommand())
