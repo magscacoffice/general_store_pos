@@ -316,7 +316,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 |---|---|---|---|
 | 2026-11-15 | Audited repository tree, Flutter screen/service inventory, SQLite v18 DDL and Windows data path; documented WPF-only migration architecture and staged plan. | `ee4bb4d` | Plan recorded. |
 | 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No live database changed. | `05ff9ec` | Source committed; CI and schema parity tests pending. |
-| 2026-11-15 | Retired the Flutter Windows target: removed the complete native `windows/` runner and `build-windows.yml`, removed the Windows-only startup path, tray/theme/update services and update prompt, and removed desktop navigation helper usage from shared Flutter screens. Android Flutter remains the supported Flutter client; WPF is the only Windows application direction. | `583a9926c8390783bfbdf199fd8441362ba084d8` | Source committed. Android APK and POS tests are running for this commit; verify their final results before declaring validation complete. |
+| 2026-11-15 | Retired the Flutter Windows target: removed the complete native `windows/` runner and `build-windows.yml`, removed the Windows-only startup path, tray/theme/update services and update prompt, and replaced desktop navigation helper implementations with no-op compatibility shims so they render no Windows-specific controls. Android Flutter remains the supported Flutter client; WPF is the only Windows application direction. | `583a9926c8390783bfbdf199fd8441362ba084d8` | Source committed. Android APK and POS tests are running for this commit; verify their final results before declaring validation complete. |
 
 ---
 
@@ -533,7 +533,7 @@ Future improvements: add new ideas here when the owner requests them.
 ## Flutter Windows retirement (2026-11-15)
 
 - [x] Removed the Flutter Windows native runner directory and the Flutter Windows build/release workflow.
-- [x] Removed the dedicated Windows theme, tray, update-notification and desktop-navigation implementations; Flutter startup no longer enters a Windows-only application path.
+- [x] Removed the dedicated Windows theme, tray and update-notification services; Flutter startup no longer enters a Windows-only application path. The old desktop navigation helper is now a no-op shim for remaining shared-screen references.
 - [x] Removed Windows desktop-navigation helper usage from shared Flutter screens. Android Flutter startup and Android build/test workflows are retained.
 - [ ] Finish auditing and removing any remaining legacy `Platform.isWindows` presentation branches and window-management code from shared Dart files where they are no longer needed. These branches are not a supported Windows client and must not be reactivated; all Windows UI work belongs in `desktop-wpf/`.
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
