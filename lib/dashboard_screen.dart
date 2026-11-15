@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'salesmen_management_screen.dart';
 import 'dart:async';
@@ -39,14 +38,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         automaticallyImplyLeading: false,
         title: const Text('خان بابا جنرل سٹور'),
         centerTitle: false,
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF202B36) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         elevation: 0,
-        toolbarHeight: Platform.isWindows ? 48 : 56,
+        toolbarHeight: 56,
         actions: [
-            ),
-          if (!Platform.isWindows)
-            IconButton(
+          IconButton(
               tooltip: 'Check for Android updates',
               icon: const Icon(Icons.system_update_alt),
               onPressed: () => PosUpdateService.checkAndPrompt(
@@ -62,17 +59,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               MaterialPageRoute(builder: (_) => const CloudSyncScreen()),
             ),
           ),
-          if (Platform.isWindows) ...[
-            FilledButton.icon(
-              onPressed: () => unawaited(
-                _dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
-                    Future<void>.value(),
-              ),
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text('New Sale'),
-            ),
-            const SizedBox(width: 8),
-          ],
           if (!DBHelper.localOnlyMode) ...[
             IconButton(
               tooltip: 'Sync store data',
@@ -99,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 950 && !Platform.isWindows) {
+          if (constraints.maxWidth < 950) {
             return _buildCompactDashboard(context, constraints.maxWidth);
           }
           return Row(
@@ -237,25 +223,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: ListTile(
         selected: selected,
         selectedTileColor: Colors.teal.withValues(alpha: 0.09),
-        dense: Platform.isWindows,
-        minTileHeight: Platform.isWindows ? 38 : 48,
+        dense: false,
+        minTileHeight: 48,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-        leading: Icon(icon, size: Platform.isWindows ? 18 : 24, color: selected ? Colors.teal : Colors.blueGrey),
+        leading: Icon(icon, size: 24, color: selected ? Colors.teal : Colors.blueGrey),
         title: Text(title, style: TextStyle(
           fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-          fontSize: Platform.isWindows ? 12 : 13,
+          fontSize: 13,
         )),
         onTap: () {
-          if (Platform.isWindows && targetScreen is SalesScreen) {
-            unawaited(_dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
-                Future<void>.value());
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => targetScreen),
-            );
-          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => targetScreen),
+          );
         },
       ),
     );
@@ -268,65 +249,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color color,
     Widget targetScreen,
   ) {
-    final isWindows = Platform.isWindows;
     return Card(
-      elevation: 0,
+      elevation: 1,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(isWindows ? 5 : 10),
-        side: isWindows
-            ? const BorderSide(color: Color(0xFFDCE2E8))
-            : BorderSide.none,
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: InkWell(
         onTap: () {
-          if (isWindows && targetScreen is SalesScreen) {
-            unawaited(_dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
-                Future<void>.value());
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => targetScreen),
-            );
-          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => targetScreen),
+          );
         },
-        borderRadius: BorderRadius.circular(isWindows ? 5 : 10),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isWindows ? 12 : 16,
-            vertical: isWindows ? 9 : 16,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 38, color: color),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-          child: isWindows
-              ? Row(
-                  children: [
-                    Icon(icon, size: 20, color: color),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right, size: 16, color: Color(0xFF89939D)),
-                  ],
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 38, color: color),
-                    const SizedBox(height: 10),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
         ),
       ),
     );
