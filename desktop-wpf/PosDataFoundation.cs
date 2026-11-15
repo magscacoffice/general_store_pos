@@ -1,3 +1,4 @@
+using System.IO;
 // Initial WPF data foundation. Maps Flutter SQLite schema v18; no schema writes or migrations.
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;

@@ -157,7 +157,7 @@ public sealed class SalePostingService
                     stockUpdate.Parameters.AddWithValue("$quantity", line.Quantity);
                     stockUpdate.Parameters.AddWithValue("$id", line.ProductId);
                     if (await stockUpdate.ExecuteNonQueryAsync(cancellationToken) != 1)
-                        throw new InvalidOperationException($"Stock update failed for {line.ProductName}. Please retry.");
+                        throw new InvalidOperationException($"Stock update failed for {line.Name}. Please retry.");
 
                     await using var saleItem = connection.CreateCommand();
                     saleItem.Transaction = transaction;
