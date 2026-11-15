@@ -1457,7 +1457,8 @@ class SalesScreenState extends State<SalesScreen> {
                         spacing: 0,
                         children: [
                           IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                          IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                          if (selectedSaleType == 'Wholesale')
+                            IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
                           IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
                             setState(() => cart.removeAt(index));
                             unawaited(_persistActiveBill());
