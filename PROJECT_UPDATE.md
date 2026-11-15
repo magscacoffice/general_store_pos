@@ -317,7 +317,8 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 | 2026-11-15 | Audited repository tree, Flutter screen/service inventory, SQLite v18 DDL and Windows data path; documented WPF-only migration architecture and staged plan. | `ee4bb4d` | Plan recorded. |
 | 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No live database changed. | `05ff9ec` | Source committed; CI and schema parity tests pending. |
 | 2026-11-15 | Retired the Flutter Windows target: removed the complete native `windows/` runner and `build-windows.yml`, removed the Windows-only startup path, tray/theme/update services and update prompt, and replaced desktop navigation helper implementations with no-op compatibility shims so they render no Windows-specific controls. Android Flutter remains the supported Flutter client; WPF is the only Windows application direction. | `583a9926c8390783bfbdf199fd8441362ba084d8` | Source committed. Android APK and POS tests are running for this commit; verify their final results before declaring validation complete. |
-| 2026-11-15 | Transplanted 31 reviewed WPF application source files onto `integration/wpf-mainline`, based on current `main`. Preserved main's newer SQLite v18 foundation/schema tests, WPF workflow, Android source and sync changes; left tracker/README reconciliation for this integration commit. | `1e835c8` | Integrated source branch created; CI and functional acceptance pending. |
+| 2026-11-15 | Transplanted 31 reviewed WPF application source files onto `integration/wpf-mainline`, based on current `main`. Preserved main's newer SQLite v18 foundation/schema tests, WPF workflow, Android source and sync changes. | `1e835c8` | Integrated source branch created. |
+| 2026-11-15 | Added WPF Walk-in/Khata/Wholesale account handling, editable/default wholesale pricing and same-account cash/credit/partial receipt posting; fixed exact barcode lookup column mapping. Reconciled the completed work and remaining acceptance gates in this tracker. | `3d19aeb` | .NET 10 Release build passed; WPF regression tests running in Actions #254 at time of update. |
 
 ---
 
@@ -435,6 +436,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 <!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. Completed items are moved here so the Pending Updates section contains only unfinished work. -->
 
+- [x] **WPF Wholesale account workflow** — added separate Walk-in/Khata/Wholesale selection, customer-account type filtering and creation/reclassification, saved wholesale-rate defaults, editable per-item wholesale rates with purchase-cost floor, and Cash/Credit/Partial posting to the same account/ledger. Existing fixed and percentage discount handling remains unchanged; transaction tests cover receipts, balances, payment history, stock deduction and account-type mismatch rollback.
+- [x] **WPF exact barcode lookup compatibility** — fixed the exact-scan query to return the wholesale-price column in the same order expected by the product mapper; this prevents a runtime reader-index failure on barcode scans after adding wholesale pricing.
 - [x] **WPF cashier and inventory source** — dashboard-hosted billing, scanner focus, exact barcode lookup/product suggestions, repeat-scan quantity increments, pending bills/autosave, searchable inventory, add/edit/active status and protected delete source implemented.
 - [x] **WPF transaction and business screens** — sales history/invoice details, Khata ledger/receipts, sale posting, purchases, returns/refunds, expenses, reminders, reports and profit/loss source integrated. Disposable SQLite v18 tests passed for sale, purchase, return, receipt, report and profit/loss flows.
 - [x] **WPF printer/invoice source** — saved printer selection, compact queue list, 80mm ESC/POS receipt/test print, preview, PDF save/open and receipt configuration implemented. Physical BC-86AC acceptance remains pending.
@@ -572,7 +575,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added an injectable home widget to `KhanBabaPOSApp` and changed the widget test to exercise the MaterialApp shell without requiring Firebase initialization or a live membership backend. The real production home remains `UpdateAwareHome(AuthGate())`.
 - [x] Android analyzer and Flutter test suite pass with the isolated MaterialApp shell widget test (validation-only run `43716339983` / test run `43716185881`; no APK or release artifact was published).
 - [x] Expanded the WPF SQLite v18 verifier to check `user_version`, `sqlite_master` table presence, `quick_check`, required columns, primary-key definitions, key default values, required unique constraints and `foreign_key_check`; Windows build passed in run `43716339961`.
-- [ ] Add and run a representative SQLite v18 fixture test to prove the verifier accepts the real Flutter schema and rejects altered/missing constraints without modifying the database.
+- [x] Added and ran a representative SQLite v18 fixture test proving the verifier accepts the Flutter schema and rejects altered/missing constraints without modifying the database (latest fixture suite in WPF validation).
 
 
 ## Work log — 2026-11-15 (continued)
