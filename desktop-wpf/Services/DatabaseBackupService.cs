@@ -49,13 +49,13 @@ public sealed class DatabaseBackupService
 
         var stagedName = $"khan_baba_pos_restored_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.db";
         var stagedPath = Path.Combine(dataDirectory, stagedName);
+        var sourceHashBefore = await ComputeSha256Async(selectedBackupPath, cancellationToken);
         await CopyDatabaseAsync(selectedBackupPath, stagedPath, cancellationToken);
         await PosDatabaseSchemaVerifier.VerifyAsync(stagedPath, cancellationToken);
-        var stagedHash = await ComputeSha256Async(stagedPath, cancellationToken);
-        var sourceHash = await ComputeSha256Async(selectedBackupPath, cancellationToken);
+        var sourceHashAfter = await ComputeSha256Async(selectedBackupPath, cancellationToken);
         if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(stagedHash), Convert.FromHexString(sourceHash)))
-            throw new IOException("Restored database hash did not match the selected backup.");
+                Convert.FromHexString(sourceHashBefore), Convert.FromHexString(sourceHashAfter)))
+            throw new IOException("Selected backup changed while restore was being staged.");
 
         var pointer = Path.Combine(dataDirectory, ".active_database");
         var temporaryPointer = pointer + "." + Guid.NewGuid().ToString("N") + ".tmp";
