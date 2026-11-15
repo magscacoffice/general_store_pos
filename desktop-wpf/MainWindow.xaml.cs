@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
-        CartLines.CollectionChanged += (_, _) => RefreshTotals();
+        CartLines.CollectionChanged += (_, args) =>\n        {\n            if (args.NewItems is not null)\n                foreach (CartLine line in args.NewItems) line.PropertyChanged += CartLine_PropertyChanged;\n            if (args.OldItems is not null)\n                foreach (CartLine line in args.OldItems) line.PropertyChanged -= CartLine_PropertyChanged;\n            RefreshTotals();\n        };
         _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
         _searchTimer.Tick += async (_, _) => { _searchTimer.Stop(); await SearchProductsAsync(ScannerBox.Text.Trim()); };
     }
@@ -97,7 +97,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { SearchStatusText.Text = "Scan lookup failed: " + ex.Message; }
     }
 
-    private void SuggestionsList_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+    private void SuggestionsList_SelectionChanged(object sender, SelectionChangedEventArgs e) { }\n\n    private void SuggestionsList_KeyDown(object sender, KeyEventArgs e)\n    {\n        if (e.Key == Key.Enter && SuggestionsList.SelectedItem is ProductLookup selected)\n        { AddProduct(selected); e.Handled = true; }\n        else if (e.Key == Key.Escape) { FocusScanner(); e.Handled = true; }\n    }\n\n    private void SuggestionsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)\n    {\n        if (SuggestionsList.SelectedItem is ProductLookup selected) AddProduct(selected);\n    }\n\n    private void CartLine_PropertyChanged(object? sender, PropertyChangedEventArgs e) => RefreshTotals();
 
     private void AddProduct(ProductLookup product)
     {
