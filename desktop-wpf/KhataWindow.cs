@@ -44,9 +44,9 @@ public sealed class KhataWindow:Window
         _grid.SetValue(VirtualizingPanel.IsVirtualizingProperty,true);
         _grid.SetValue(VirtualizingPanel.VirtualizationModeProperty,VirtualizationMode.Recycling);
         ScrollViewer.SetCanContentScroll(_grid,true);
-        root.Children.Add(_grid);
         var footer=new DockPanel{Margin=new Thickness(0,10,0,0)};footer.Children.Add(_status);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
+        root.Children.Add(_grid);
         return root;
     }
 
@@ -75,8 +75,9 @@ public sealed class CustomerLedgerWindow:Window
     private readonly KhataService _service;
     private readonly ObservableCollection<KhataEntry> _entries;
     private readonly TextBlock _balanceText=new();
+    private double _balance;
     public CustomerLedgerWindow(KhataCustomer customer,IReadOnlyList<KhataEntry> entries,KhataService service){
-        _customer=customer;_service=service;_entries=new ObservableCollection<KhataEntry>(entries);
+        _customer=customer;_balance=customer.Balance;_service=service;_entries=new ObservableCollection<KhataEntry>(entries);
         Title=$"Khata Ledger | {customer.Name}";Width=980;Height=680;MinWidth=760;MinHeight=520;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;Background=System.Windows.Media.Brushes.WhiteSmoke;
         Content=BuildLayout();
@@ -85,24 +86,29 @@ public sealed class CustomerLedgerWindow:Window
         var root=new DockPanel{Margin=new Thickness(20)};
         var header=new StackPanel{Margin=new Thickness(0,0,0,14)};
         header.Children.Add(new TextBlock{Text=_customer.Name,FontSize=23,FontWeight=FontWeights.Bold});
-        header.Children.Add(new TextBlock{Text=$"Phone: {_customer.Phone}    Outstanding: Rs. {_customer.Balance:N2}",Margin=new Thickness(0,5,0,0)});
+        header.Children.Add(new TextBlock{Text=$"Phone: {_customer.Phone}",Margin=new Thickness(0,5,0,0)});
+        _balanceText.Text=$"Outstanding: Rs. {_balance:N2}";
+        _balanceText.Margin=new Thickness(0,4,0,0);
+        header.Children.Add(_balanceText);
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,ItemsSource=_entries,RowHeight=36};
         grid.Columns.Add(new DataGridTextColumn{Header="Date",Binding=new System.Windows.Data.Binding("Date"),Width=160});
         grid.Columns.Add(new DataGridTextColumn{Header="Type",Binding=new System.Windows.Data.Binding("Type"),Width=140});
         grid.Columns.Add(new DataGridTextColumn{Header="Amount",Binding=new System.Windows.Data.Binding("Amount"){StringFormat="N2"},Width=130});
         grid.Columns.Add(new DataGridTextColumn{Header="Note",Binding=new System.Windows.Data.Binding("Note"),Width=new DataGridLength(1,DataGridLengthUnitType.Star)});
-        root.Children.Add(grid);
         var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
         var receipt=new Button{Content="Record Receipt",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)};
         receipt.Click+=async(_,_)=>await ReceiptAsync();footer.Children.Add(receipt);
         var close=new Button{Content="Close",Padding=new Thickness(14,8,14,8)};close.Click+=(_,_)=>Close();footer.Children.Add(close);
-        DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);Content=root;return root;
+        DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
+        root.Children.Add(grid);Content=root;return root;
     }
     private async Task ReceiptAsync(){
-        var input=ReceiptInputWindow.Show(this,_customer);if(input is null)return;
+        var input=ReceiptInputWindow.Show(this,_customer with { Balance=_balance });if(input is null)return;
         try{
             await _service.RecordReceiptAsync(_customer.Id,input.Value.Amount,input.Value.Note);
+            _balance=Math.Max(0,_balance-input.Value.Amount);
+            _balanceText.Text=$"Outstanding: Rs. {_balance:N2}";
             var latest=await _service.GetLedgerAsync(_customer.Id);_entries.Clear();foreach(var entry in latest)_entries.Add(entry);
             MessageBox.Show("Receipt saved; customer balance reduced.","Khata",MessageBoxButton.OK,MessageBoxImage.Information);
         }catch(Exception ex){MessageBox.Show(ex.Message,"Receipt could not be saved",MessageBoxButton.OK,MessageBoxImage.Warning);}
