@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
-> **Planning status:** The native WPF scaffold, SQLite v18 entity mappings, data-path resolver and read-only schema verifier exist. Operational WPF features and acceptance remain incomplete.
+> **Planning status:** Native WPF cashier, inventory, Khata, sales history, purchases, returns, reports, expenses, reminders, profit/loss and printer/invoice source have been integrated onto the current `main` baseline. Automated build/integration checks and physical Windows acceptance remain pending.
 
 ## 1. Non-negotiable compatibility rules
 
@@ -317,6 +317,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 | 2026-11-15 | Audited repository tree, Flutter screen/service inventory, SQLite v18 DDL and Windows data path; documented WPF-only migration architecture and staged plan. | `ee4bb4d` | Plan recorded. |
 | 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No live database changed. | `05ff9ec` | Source committed; CI and schema parity tests pending. |
 | 2026-11-15 | Retired the Flutter Windows target: removed the complete native `windows/` runner and `build-windows.yml`, removed the Windows-only startup path, tray/theme/update services and update prompt, and replaced desktop navigation helper implementations with no-op compatibility shims so they render no Windows-specific controls. Android Flutter remains the supported Flutter client; WPF is the only Windows application direction. | `583a9926c8390783bfbdf199fd8441362ba084d8` | Source committed. Android APK and POS tests are running for this commit; verify their final results before declaring validation complete. |
+| 2026-11-15 | Transplanted 31 reviewed WPF application source files onto `integration/wpf-mainline`, based on current `main`. Preserved main's newer SQLite v18 foundation/schema tests, WPF workflow, Android source and sync changes; left tracker/README reconciliation for this integration commit. | `1e835c8` | Integrated source branch created; CI and functional acceptance pending. |
 
 ---
 
@@ -350,31 +351,55 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Pending Updates
 
-<!-- Add new tasks below this line. Keep each task specific. -->
+<!-- Source implementation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
 
-### [Windows] Printer & Invoice — WPF implementation (Flutter Windows UI task superseded)
-  7. **Remember the selected printer:** Once the user successfully connects/selects a printer, persist that printer as the preferred/default printer in local app settings. On subsequent app launches, restore the saved printer automatically and attempt to reconnect/reuse it so the user does not have to select the same printer every time. Show a clear status if the saved printer is unavailable or disconnected, and allow the user to choose another printer. Do not silently switch to a different printer or claim it is connected when it is not. Preserve Android printer identifiers and implement a native WPF printer identifier for Windows; verify persistence across app restarts on both supported clients.
+### [Windows] Native WPF cashier and inventory
 
+- [x] Integrated dashboard-hosted WPF cashier source: scanner-ready focus, exact barcode lookup, product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
+- [x] Integrated WPF inventory window and service: searchable product list, product add/edit, active/inactive state, protected delete rules and virtualized DataGrid.
+- [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
+- [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
+- [ ] Complete responsive visual/interaction acceptance at 980×650, 1280×720, maximized and resized states.
 
-- [ ] **Implement Printer & Invoice in native WPF.** Flutter Windows UI redesign is retired; preserve printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours in WPF. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
+### [Windows] Khata, sales history and transaction workflows
 
-  1. **Back navigation:** Fix the broken vertically stacked “Return” label beside the back arrow. Use a standard AppBar/leading back button or a clean horizontal Row with a back icon and “Back”/“Return” label.
-  2. **Action hierarchy:** Make **Thermal Receipt** the single dominant filled primary action. Style **Invoice Preview**, **Share Bill**, and **Share PDF** as lower-emphasis tonal/outlined secondary actions. Group print actions separately from sharing/export actions; keep **Save PDF to Device** clearly available without competing visually with the primary print action. Remove competing teal/green/purple high-emphasis styling.
-  3. **Receipt preview:** Remove the raw receipt text from the middle of the configuration form. Place it in a clearly titled, neatly bordered **Receipt Preview** card/panel, preferably in a responsive desktop split layout beside the settings/printer area. Give the preview a constrained, independently scrollable viewport where needed; ensure it remains readable and does not cause overflow.
-  4. **Printer list:** Replace oversized full-width printer rows with compact desktop-friendly cards/rows containing a printer icon, printer name, clear Connected/Disconnected status badge, and a distinct Connect action. Use a subtle hover/focus treatment. Avoid excessive dead space on wide screens; preserve the existing connect/disconnect functionality.
-  5. **Configuration grouping and spacing:** Place Paper (80 mm), Header/Total Size, and Margins controls inside a consistent rounded surface card with clear labels and aligned fields. Use consistent page padding (approximately 16–24 px), spacing, alignment, and responsive breakpoints across the screen.
-  6. **Responsive/desktop acceptance:** Verify at the project's supported minimum window size (980×650), a typical 1280×720 window, maximized, and resized states. Check that controls, printer cards, preview, and action groups remain aligned and usable without clipping or overflow; confirm keyboard focus and mouse hover states.
+- [x] Integrated WPF sales history search/date filters and read-only invoice details.
+- [x] Integrated customer Khata customer search, balance list, ledger and receipt-posting source.
+- [x] Integrated transactional sale-posting source with stock deduction, discount handling, payment modes and ledger updates.
+- [x] Integrated searchable purchase/stock entry, expense register, reminders, customer/supplier list and profit/loss views.
+- [x] Integrated sale-return/refund source with stock restoration and transaction handling.
+- [ ] Run automated integration tests against a disposable copy of the real SQLite v18 database for sales, purchases, returns/refunds, Khata receipts/ledger, stock and backup safety.
+- [ ] Verify all transaction totals, discount (including percentage), received amounts, customer balances, payment history and stock movements against Android behaviour. Do not alter the existing discount feature.
+- [ ] Confirm the current Android customer/payment rules remain intact, including Walk-in, Khata and Wholesale as distinct customer types and cash/credit/partial payments where applicable. Do not remove Wholesale or make it cash-only.
 
-- [ ] **Implementation and verification:** Make the Windows changes in the actual WPF source, not only a mockup or documentation. Reuse existing business services and callbacks wherever possible. Run applicable .NET build/tests and report checks that could not be run. Do not mark complete until source implementation is reviewed and Windows visual/interaction acceptance is recorded. Physical printer output verification remains a separate hardware check.
+### [Windows] Printer and invoice
 
+- [x] Integrated WPF printer/invoice source: Windows printer queue discovery, saved preferred printer, 80mm ESC/POS receipt builder, raw spooler output, test print, invoice/receipt preview, PDF save/open and receipt configuration.
+- [x] Integrated compact printer list with queue availability and explicit Connect/Select action; unavailable saved printers are not silently replaced.
+- [ ] Verify saved-printer restoration and unavailable-queue behaviour across Windows application restarts.
+- [ ] Verify PDF save/open/share on the target Windows PC.
+- [ ] Physically test Black Copper BC-86AC 80mm USB printer: alignment, margins, header/total sizing, final-line clipping, cutter and paper feed.
+- [ ] Record responsive visual/interaction acceptance, keyboard focus, hover, clipping and independent preview scrolling.
 
-### Windows New Sale and Inventory — WPF parity requirements (Flutter Windows implementation retired)
+### [Windows] Data safety, authentication and sync
 
-- [ ] Implement the dashboard-hosted WPF cashier workspace with scanner-ready focus, product suggestions, Up/Down/Enter navigation, repeat-scan quantity increment, and pending-bill handling.
-- [ ] Implement the WPF inventory DataGrid with responsive sizing, lazy/virtualized rows where appropriate, interactive scrolling, and loading/error states.
-- [ ] Validate scanner responsiveness and inventory performance on the target Windows computer.
+- [x] Preserved current-main SQLite v18 entity/schema foundation, read-only schema verifier, database path resolver and existing schema compatibility tests during WPF source integration.
+- [x] Preserved the current-main WPF CI workflow and Android validation workflow; preserved main-branch database/schema changes rather than overwriting them with the older feature branch.
+- [ ] Complete full version-18 schema/constraint and Flutter transaction-method audit before production write enablement.
+- [ ] Complete verified backup/restore safety integration tests on disposable database copies; never test against the live store database.
+- [ ] Implement and verify Windows Google Drive snapshot sync using the existing Windows-master protocol, including upload/download direction, conflicts, retries, status and offline behaviour. No Firebase/Firestore business-data sync.
+- [ ] Complete Windows authentication, existing role/access parity and safe update flow; verify OAuth configuration without committing secrets.
+- [ ] Complete Windows startup, recovery and restore-pointer validation without creating or replacing the live database.
 
+### [Windows] Flutter Windows retirement and final cutover
 
+- [x] Flutter Windows runner and its Windows build/release workflow were retired on main; Android Flutter remains the supported Flutter client.
+- [x] Transplanted the reviewed WPF application source from the diverged feature branch onto a fresh integration branch based on current main. The main-branch schema foundation, schema tests, README baseline and CI workflow were preserved.
+- [ ] Run WPF .NET 10 restore/build and schema tests on the integrated branch; fix any compile/test regressions before merge.
+- [ ] Review and reconcile the old draft PR #4; do not merge the old diverged branch directly.
+- [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
+- [ ] Owner signs off physical cashier acceptance before Windows cutover.
+- [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
 
 ## New notes from user (2026-11-13)
 
