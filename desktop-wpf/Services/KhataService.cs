@@ -59,10 +59,13 @@ public sealed class KhataService
         result.Reverse();return result;
     }
 
-    public async Task RecordReceiptAsync(int partyId,double amount,string note,CancellationToken ct=default)
+    public Task RecordReceiptAsync(int partyId,double amount,string note,CancellationToken ct=default) =>
+        RecordReceiptAsync(partyId,amount,note,PosDatabasePath.Resolve(requireExisting:true),ct);
+
+    public async Task RecordReceiptAsync(int partyId,double amount,string note,string databasePath,CancellationToken ct=default)
     {
         if(!double.IsFinite(amount)||amount<=0)throw new InvalidOperationException("Receipt amount zero se zyada hona chahiye.");
-        var path=PosDatabasePath.Resolve(requireExisting:true);
+        var path=databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
         await using var db=await OpenAsync(path,false,ct);
