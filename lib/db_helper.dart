@@ -241,7 +241,9 @@ class DBHelper {
         saleIds[localId] = syncId;
         final customerId = (row['customer_id'] as num?)?.toInt();
         final customerSyncId = customerId == null ? null : partyIds[customerId];
-        final customerType = customerId == null ? 'Walk-in' : 'Khata';
+        final customerType = customerId == null
+            ? 'Walk-in'
+            : (row['customer_type']?.toString() ?? 'Khata');
         if (newId || row['customer_sync_id'] != customerSyncId ||
             row['customer_type'] != customerType) {
           await txn.update('sales', {
