@@ -584,3 +584,10 @@ Future improvements: add new ideas here when the owner requests them.
 - Sale totals/received/balance reconstruction follows the Flutter legacy-sale fallback rules. Date filters compare the date prefix so both legacy ISO `T` timestamps and WPF space-separated timestamps are included.
 - Sales history + invoice detail UI compiled successfully on commit `544c1b078b451c6d905aa110c03ff59bf8273bc7`; the date-prefix filter correction is on commit `3350df8d6fc610e5900de4a6e03b63cefea823e8` and its CI is pending.
 - Invoice reprint, returns/refunds, printer output and physical acceptance remain pending; the detail view is currently read-only.
+
+
+### WPF customer Khata progress — 2026-11-15
+
+- Added a native Customer Khata window with customer search, outstanding-balance DataGrid, ledger details and receipt entry.
+- Receipt posting mirrors Flutter `recordKhataReceipt`: customer-only validation, positive amount, cannot exceed outstanding balance, balance reduction and a `receipt` ledger row in one transaction. It is protected by the verified pre-write backup gate and uses existing schema-v18 columns.
+- Supplier payment ledger, overdue/WhatsApp reminders, receipt/ledger export and runtime transaction tests remain pending. The current Khata code is committed as `2688771fec313d05dec82415509622dfcfe6b3c8`; its Windows CI result is pending.
