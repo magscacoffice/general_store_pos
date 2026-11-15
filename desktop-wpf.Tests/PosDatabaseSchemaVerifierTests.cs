@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using Xunit;
 using KhanBabaPos.Wpf.Data;
+using KhanBabaPos.Wpf.Services;
 
 namespace KhanBabaPos.Wpf.Tests;
 
@@ -67,6 +68,72 @@ public sealed class PosDatabaseSchemaVerifierTests
     {
         await using var stream = File.OpenRead(path);
         return Convert.ToHexString(await SHA256.HashDataAsync(stream));
+    }
+
+    private static async Task AddProductAsync(string path, string name, string barcode)
+    {
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Pooling = false
+        }.ToString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO products
+                (name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
+            VALUES ($name,$barcode,12,5,10,0,3,1,'pcs');
+            """;
+        command.Parameters.AddWithValue("$name", name);
+        command.Parameters.AddWithValue("$barcode", barcode);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    [Fact]
+    public async Task BackupAndRestoreKeepsCurrentDatabaseAndActivatesVerifiedStagedCopy()
+    {
+        var currentFixture = await CreateFixtureAsync();
+        var restoreFixture = await CreateFixtureAsync();
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "khan-baba-backup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDirectory);
+        var currentPath = Path.Combine(dataDirectory, "khan_baba_pos.db");
+        var selectedBackup = Path.Combine(dataDirectory, "selected_backup.db");
+        try
+        {
+            File.Copy(currentFixture, currentPath);
+            File.Copy(restoreFixture, selectedBackup);
+            await AddProductAsync(currentPath, "Current Database", "CURRENT-1");
+            await AddProductAsync(selectedBackup, "Restore Source", "RESTORE-1");
+            var currentHash = await Sha256Async(currentPath);
+
+            var service = new DatabaseBackupService();
+            var firstBackup = await service.CreateBackupAsync(currentPath, Path.Combine(dataDirectory, "Backups"));
+            Assert.True(File.Exists(firstBackup));
+            Assert.True(File.Exists(firstBackup + ".sha256"));
+
+            var restoredPath = await service.RestoreAsync(currentPath, selectedBackup, dataDirectory);
+            Assert.True(File.Exists(currentPath));
+            Assert.Equal(currentHash, await Sha256Async(currentPath));
+            Assert.Equal(Path.GetFileName(restoredPath), (await File.ReadAllTextAsync(Path.Combine(dataDirectory, ".active_database"))).Trim());
+            await PosDatabaseSchemaVerifier.VerifyAsync(restoredPath);
+
+            await using var restored = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = restoredPath, Pooling = false }.ToString());
+            await restored.OpenAsync();
+            await using var query = restored.CreateCommand();
+            query.CommandText = "SELECT name FROM products ORDER BY id;";
+            await using var reader = await query.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("Restore Source", reader.GetString(0));
+            Assert.False(await reader.ReadAsync());
+
+            Assert.True(DatabaseBackupService.ListBackups(dataDirectory).Count >= 2);
+        }
+        finally
+        {
+            File.Delete(currentFixture);
+            File.Delete(restoreFixture);
+            if (Directory.Exists(dataDirectory)) Directory.Delete(dataDirectory, recursive: true);
+        }
     }
 
     [Fact]
