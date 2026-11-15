@@ -37,7 +37,7 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 | `supplier_invoice_capture_screen.dart` | `Views/SupplierInvoiceReviewWindow.xaml` (Windows scope gated) | Existing invoice review/conversion/posting rules; mobile camera/ML Kit capture stays Android-only unless a separately approved Windows document-input design is added |
 | `party_screen.dart` | `PartiesWindow.cs`, `Services/PartyService.cs` | Customer/supplier list, creation, Khata/Wholesale account classification and reclassification source implemented |
 | `customer_khata_screen.dart` | `KhataWindow.cs`, `Services/KhataService.cs` | Customer balance/ledger/receipt source implemented; broader parity tests remain pending |
-| `customer_history_screen.dart` | WPF customer statement/share window — pending | Port full ledger sharing and selected-period item statement/PDF export; current `KhataWindow` shows ledger and receipts but has no share/export action |
+| `customer_history_screen.dart` | `CustomerLedgerWindow` in `KhataWindow.cs` | Full ledger copy/print-to-PDF and selected-period item statement (sales and returns) source implemented; target Windows PDF/print acceptance pending |
 | `history_screen.dart` | `SalesHistoryWindow.cs` | Sales history search and invoice detail source implemented; full reprint/return navigation acceptance remains pending |
 | `sales_report_screen.dart` | `SalesReportsWindow.cs`, `Services/SalesReportService.cs` | Date filters and report summary source implemented; report parity tests remain pending |
 | `profit_loss_screen.dart` | `ProfitLossWindow.cs`, `Services/ProfitLossService.cs` | Existing income/cost/expense and profit calculation source implemented; parity test remains pending |
@@ -448,9 +448,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ## Khata customer ledger and shareable statements note from user (2026-11-13)
 
 - [x] **Android Khata customer account — shareable complete ledger — code implemented.** The Android customer account flow provides a shareable ledger statement.
-- [ ] **WPF Khata customer account — shareable complete ledger — pending.** Native WPF currently displays the ledger and supports receipts, but does not yet generate/share a PDF or statement file. Add a share/export action with transaction dates, charges, receipts, returns and running/outstanding balance.
+- [x] **WPF Khata customer account — shareable complete ledger — code implemented.** Native WPF ledger includes transaction dates, sale charges, receipts, returns, running/outstanding balance, Copy Full Ledger and Print/Save PDF through the Windows print dialog (choose Microsoft Print to PDF for a file).
+- [ ] **WPF full-ledger PDF/print acceptance — pending.** Verify Unicode customer/product names and Microsoft Print to PDF output on the target Windows PC.
 - [x] **Android Khata customer account — selected-period shareable statement — code implemented.** Full ledger and selected-period item statement are separate options.
-- [ ] **WPF Khata customer account — selected-period shareable statement — pending.** Add custom from/to date filters and a separate item-level statement/PDF export; verify dates, quantities, rates and totals without modifying account balances.
+- [x] **WPF Khata customer account — selected-period shareable statement — code implemented.** Custom from/to filters produce a separate item statement with sale/return rows, dates, bill numbers, quantities, rates, discount-adjusted amounts, refund amounts and totals. Disposable SQLite v18 report test verifies the query returns correct sale/return quantities and net amount.
+- [ ] **WPF period-statement PDF/print acceptance — pending.** Verify date boundaries, Unicode rendering and Microsoft Print to PDF on target Windows.
 
 ## Supplier invoice photo scanning / OCR to purchase-stock entry note from user (2026-11-13)
 
