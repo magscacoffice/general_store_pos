@@ -6,6 +6,22 @@ namespace KhanBabaPos.Wpf.Services;
 
 public sealed class InventoryService
 {
+    public Task<string?> FindBarcodeOwnerAsync(string barcode, int? exceptId = null, CancellationToken ct = default) =>
+        FindBarcodeOwnerAsync(barcode, exceptId, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task<string?> FindBarcodeOwnerAsync(string barcode, int? exceptId, string databasePath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(barcode)) return null;
+        await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, ct);
+        await using var db = await OpenAsync(databasePath, true, ct);
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT name FROM products WHERE barcode=$barcode COLLATE NOCASE AND ($exceptId IS NULL OR id<>$exceptId) LIMIT 1;";
+        cmd.Parameters.AddWithValue("$barcode", barcode.Trim());
+        cmd.Parameters.AddWithValue("$exceptId", exceptId is null ? DBNull.Value : exceptId.Value);
+        var value = await cmd.ExecuteScalarAsync(ct);
+        return value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+    }
+
     public async Task<IReadOnlyList<InventoryProduct>> GetProductsAsync(string search = "", CancellationToken cancellationToken = default)
     {
         var path = PosDatabasePath.Resolve(requireExisting: true);
