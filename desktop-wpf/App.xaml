@@ -1,1 +1,26 @@
-<Application x:Class="KhanBabaPos.Wpf.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml"><Application.Resources><SolidColorBrush x:Key="BrandBrush" Color="#173B32"/><SolidColorBrush x:Key="SurfaceBrush" Color="#F4F6F5"/></Application.Resources></Application>
+<Application x:Class="KhanBabaPos.Wpf.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml">
+  <Application.Resources>
+    <SolidColorBrush x:Key="BrandBrush" Color="#173B32"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#F4F6F5"/>
+    <SolidColorBrush x:Key="ScrollbarTrackBrush" Color="#E7ECE9"/>
+    <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#71857A"/>
+    <Style TargetType="{x:Type ScrollBar}">
+      <Setter Property="Background" Value="{StaticResource ScrollbarTrackBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource ScrollbarThumbBrush}"/>
+      <Setter Property="Width" Value="14"/>
+      <Setter Property="Height" Value="14"/>
+      <Setter Property="Margin" Value="2"/>
+      <Style.Triggers>
+        <Trigger Property="Orientation" Value="Horizontal">
+          <Setter Property="Width" Value="Auto"/>
+          <Setter Property="Height" Value="14"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style TargetType="{x:Type ScrollViewer}">
+      <Setter Property="VerticalScrollBarVisibility" Value="Visible"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="CanContentScroll" Value="True"/>
+    </Style>
+  </Application.Resources>
+</Application>
