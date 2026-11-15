@@ -195,6 +195,7 @@ public sealed class ProductEditorWindow : Window
         try
         {
             var owner = await _service.FindBarcodeOwnerAsync(barcode, _existingId);
+            if (!string.Equals(barcode, _barcode.Text.Trim(), StringComparison.OrdinalIgnoreCase)) return;
             if (owner is null)
             {
                 _barcodeStatus.Text = "Barcode available.";
