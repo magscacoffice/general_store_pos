@@ -174,7 +174,7 @@ public sealed class CustomerLedgerWindow:Window
 
     private async Task ExportPeriodStatementAsync()
     {
-        if (_from.SelectedDate is null || _to.SelectedDate is null || _from.SelectedDate > _to.SelectedDate)
+        if (_from.SelectedDate is null || _to.SelectedDate is null || _from.SelectedDate.Value > _to.SelectedDate.Value)
         {
             MessageBox.Show("Select a valid From and To date range.", "Khata Statement",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
