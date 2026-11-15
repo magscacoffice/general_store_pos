@@ -2,9 +2,9 @@ name: Validate Native WPF POS (No Publish Artifacts)
 
 on:
   push:
-    paths: ['desktop-wpf/**', '.github/workflows/build-wpf.yml']
+    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
   pull_request:
-    paths: ['desktop-wpf/**', '.github/workflows/build-wpf.yml']
+    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
   workflow_dispatch:
 
 permissions:
@@ -20,3 +20,4 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet restore desktop-wpf/KhanBabaPos.Wpf.csproj
       - run: dotnet build desktop-wpf/KhanBabaPos.Wpf.csproj --configuration Release --no-restore
+      - run: dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj --configuration Release
