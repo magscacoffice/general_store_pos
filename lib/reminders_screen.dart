@@ -86,11 +86,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
-      floatingActionButton: Platform.isWindows ? FloatingActionButton.extended(
-        onPressed: _addReminderDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Reminder'),
-      ) : FloatingActionButton(
+      floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.teal,
         onPressed: _addReminderDialog,
         child: const Icon(Icons.add, color: Colors.white),
