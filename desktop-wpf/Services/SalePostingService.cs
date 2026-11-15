@@ -10,11 +10,19 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class SalePostingService
 {
+    public Task<SalePostingResult> CompleteSaleAsync(
+        SaleCheckoutRequest request,
+        CancellationToken cancellationToken = default) =>
+        CompleteSaleAsync(request, PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+
     public async Task<SalePostingResult> CompleteSaleAsync(
         SaleCheckoutRequest request,
+        string databasePath,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(databasePath))
+            throw new ArgumentException("Database path is required.", nameof(databasePath));
         if (request.Items.Count == 0) throw new InvalidOperationException("Cart is empty.");
         if (!double.IsFinite(request.DiscountValue) || request.DiscountValue < 0 ||
             (request.IsPercentageDiscount && request.DiscountValue > 100))
@@ -22,7 +30,6 @@ public sealed class SalePostingService
         if (!request.IsPercentageDiscount && request.DiscountValue > request.Items.Sum(x => x.SalePrice * x.Quantity))
             throw new InvalidOperationException("Fixed discount cannot exceed the bill subtotal.");
 
-        var databasePath = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(databasePath, cancellationToken);
         var connectionString = new SqliteConnectionStringBuilder
