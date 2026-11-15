@@ -579,6 +579,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             var service = new InventoryService();
             var initial = new ProductMutation("New Test Item", "WPF-NEW-1", 4, "pcs", 5, 10, 8);
             await service.CreateAsync(initial, path);
+            Assert.Equal("New Test Item", await service.FindBarcodeOwnerAsync("wpf-new-1", null, path));
 
             await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
             await db.OpenAsync();
@@ -590,8 +591,11 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal(8, reader.GetDouble(1), 2);
             await reader.DisposeAsync();
 
+            Assert.Null(await service.FindBarcodeOwnerAsync("WPF-NEW-1", id, path));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(initial, path));
             await service.UpdateAsync(id, new ProductMutation("Updated Item", "WPF-NEW-2", 7, "pcs", 6, 12, 10), path);
+            Assert.Null(await service.FindBarcodeOwnerAsync("WPF-NEW-1", null, path));
+            Assert.Equal("Updated Item", await service.FindBarcodeOwnerAsync("WPF-NEW-2", null, path));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.UpdateAsync(id, new ProductMutation("Updated Item", "WPF-WH-1", 7, "pcs", 6, 12, 10), path));
             await service.SetActiveAsync(id, false, path);
