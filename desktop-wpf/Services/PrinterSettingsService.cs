@@ -54,3 +54,32 @@ public static class EscPosReceiptBuilder
   B(0x0A,0x0A,0x1D,0x56,0x00);return ms.ToArray();
  }
 }
+
+public static class PdfReceiptBuilder
+{
+ public static byte[] Build(string text)
+ {
+  var lines=(text??string.Empty).Replace("\r",string.Empty).Split('\n');
+  var pages=lines.Chunk(55).ToList();if(pages.Count==0)pages.Add(Array.Empty<string>());
+  var count=pages.Count;var contentStart=3+count;var fontId=3+(2*count);
+  var objects=new List<byte[]>();
+  objects.Add(Encoding.ASCII.GetBytes("<< /Type /Catalog /Pages 2 0 R >>"));
+  var kids=string.Join(" ",Enumerable.Range(0,count).Select(i=>$"{3+i} 0 R"));
+  objects.Add(Encoding.ASCII.GetBytes($"<< /Type /Pages /Kids [{kids}] /Count {count} >>"));
+  for(var i=0;i<count;i++)objects.Add(Encoding.ASCII.GetBytes($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentStart+i} 0 R >>"));
+  foreach(var page in pages)
+  {
+   var body=new StringBuilder("BT\n/F1 9 Tf\n42 800 Td\n12 TL\n");
+   foreach(var line in page){var safe=line.Replace("\\","\\\\").Replace("(","\\(").Replace(")","\\)").Replace("\t"," ");body.Append('(').Append(safe).Append(") Tj T*\n");}
+   body.Append("ET\n");var bytes=Encoding.ASCII.GetBytes(body.ToString());
+   using var stream=new MemoryStream();stream.Write(Encoding.ASCII.GetBytes($"<< /Length {bytes.Length} >>\nstream\n"));stream.Write(bytes);stream.Write(Encoding.ASCII.GetBytes("endstream"));objects.Add(stream.ToArray());
+  }
+  objects.Add(Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>"));
+  using var output=new MemoryStream();output.Write(Encoding.ASCII.GetBytes("%PDF-1.4\n"));var offsets=new List<long>{0};
+  for(var i=0;i<objects.Count;i++){offsets.Add(output.Position);output.Write(Encoding.ASCII.GetBytes($"{i+1} 0 obj\n"));output.Write(objects[i]);output.Write(Encoding.ASCII.GetBytes("\nendobj\n"));}
+  var xref=output.Position;output.Write(Encoding.ASCII.GetBytes($"xref\n0 {objects.Count+1}\n0000000000 65535 f \n"));
+  foreach(var offset in offsets.Skip(1))output.Write(Encoding.ASCII.GetBytes($"{offset:0000000000} 00000 n \n"));
+  output.Write(Encoding.ASCII.GetBytes($"trailer\n<< /Size {objects.Count+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF"));
+  return output.ToArray();
+ }
+}
