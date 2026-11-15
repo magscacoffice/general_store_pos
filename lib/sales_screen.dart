@@ -284,6 +284,17 @@ class SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
+    final purchasePrice = purchasePriceOverride ??
+        (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+    final retailPrice = (product['price'] as num?)?.toDouble() ?? purchasePrice;
+    final wholesalePrice = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
+    final configuredPrice = selectedSaleType == 'Wholesale' && wholesalePrice > 0
+        ? wholesalePrice
+        : retailPrice;
+    return configuredPrice < purchasePrice ? purchasePrice : configuredPrice;
+  }
+
   Future<void> _loadCustomers() async {
     final data = await DBHelper.getParties('customer');
     if (!mounted) return;
@@ -303,7 +314,7 @@ class SalesScreenState extends State<SalesScreen> {
       final createdId = await showDialog<int>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text('Add New Khata Customer'),
+          title: Text('Add New $selectedSaleType Customer'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -366,7 +377,7 @@ class SalesScreenState extends State<SalesScreen> {
                     'name': name,
                     'phone': phoneController.text.trim(),
                     'type': 'customer',
-                    'customer_type': 'Khata',
+                    'customer_type': selectedSaleType,
                     'balance': 0.0,
                   });
                   if (dialogContext.mounted) Navigator.pop(dialogContext, id);
@@ -389,7 +400,7 @@ class SalesScreenState extends State<SalesScreen> {
         setState(() => selectedCustomerId = createdId);
         await _persistActiveBill();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('New Khata customer added and selected.')),
+          SnackBar(content: Text('New $selectedSaleType customer added and selected.')),
         );
       }
     } finally {
@@ -503,8 +514,7 @@ class SalesScreenState extends State<SalesScreen> {
         return;
       }
       final purchasePrice = (selected['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-      final configuredSalePrice = (selected['price'] as num?)?.toDouble() ?? 0.0;
-      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+      final safeSalePrice = _salePriceForProduct(selected);
       setState(() {
         if (existingIndex >= 0) {
           cart[existingIndex]['quantity'] = alreadyInCart + 1;
@@ -564,8 +574,7 @@ class SalesScreenState extends State<SalesScreen> {
       return;
     }
     final purchasePrice = (currentProduct['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-    final configuredSalePrice = (currentProduct['price'] as num?)?.toDouble() ?? 0.0;
-    final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+    final safeSalePrice = _salePriceForProduct(currentProduct);
     setState(() {
       if (existingIndex >= 0) {
         cart[existingIndex]['quantity'] = alreadyInCart + 1;
@@ -618,8 +627,7 @@ class SalesScreenState extends State<SalesScreen> {
       final product = matches.first;
       final stock = (product['quantity'] as num?)?.toInt() ?? 0;
       final purchasePrice = (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-      final configuredSalePrice = (product['price'] as num?)?.toDouble() ?? 0.0;
-      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+      final safeSalePrice = _salePriceForProduct(product);
       final existingIndex = cart.indexWhere(
         (item) => item['barcode']?.toString() == barcode,
       );
@@ -731,8 +739,7 @@ class SalesScreenState extends State<SalesScreen> {
         quantity: quantity,
         unitCost: cost,
       );
-      final salePrice = (product['price'] as num?)?.toDouble() ?? cost;
-      final effectiveSalePrice = salePrice < cost ? cost : salePrice;
+      final effectiveSalePrice = _salePriceForProduct(product, purchasePriceOverride: cost);
       setState(() {
         final index = cart.indexWhere((item) => item['barcode']?.toString() == barcode);
         if (index >= 0) {
@@ -861,6 +868,7 @@ class SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _editSalePrice(int index) async {
+    if (selectedSaleType != 'Wholesale') return;
     final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
     final purchasePrice =
         (cart[index]['purchasePrice'] as num?)?.toDouble() ?? 0.0;
@@ -1269,6 +1277,7 @@ class SalesScreenState extends State<SalesScreen> {
                             items: const [
                               DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
                               DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                              DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
                             ],
                             onChanged: (value) {
                               if (value != null) _setSaleType(value);
@@ -1293,6 +1302,7 @@ class SalesScreenState extends State<SalesScreen> {
                           border: const OutlineInputBorder(),
                         ),
                         items: customers
+                            .where((c) => (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)
                             .map((c) => DropdownMenuItem<int>(
                                   value: (c['id'] as num).toInt(),
                                   child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
@@ -1308,7 +1318,7 @@ class SalesScreenState extends State<SalesScreen> {
                         padding: EdgeInsets.only(top: 6),
                         child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
                       ),
-                    if (selectedSaleType == 'Khata') ...[
+                    if (selectedSaleType == 'Khata' || selectedSaleType == 'Wholesale') ...[
                       const SizedBox(height: 8),
                       const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
@@ -1413,7 +1423,8 @@ class SalesScreenState extends State<SalesScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                                IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                                if (selectedSaleType == 'Wholesale')
+                                  IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _editSalePrice(index)),
                                 IconButton(
                                   tooltip: 'Remove item',
                                   icon: const Icon(Icons.delete_outline, color: Colors.red),
