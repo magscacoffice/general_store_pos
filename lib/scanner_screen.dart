@@ -1,4 +1,3 @@
-import 'windows/desktop_app_bar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,8 +31,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   void initState() {
     super.initState();
-    // mobile_scanner has no Windows implementation; Windows uses HID keyboard scanners.
-    if (!Platform.isWindows) controller = MobileScannerController();
+    controller = MobileScannerController();
     _loadProducts();
   }
 
@@ -385,8 +383,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                if (!Platform.isWindows)
-                  OutlinedButton.icon(
+                OutlinedButton.icon(
                     onPressed: _isReadingProductName
                         ? null
                         : () => _readProductNameFromCamera(nameController, dialogContext),
@@ -513,14 +510,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: desktopReturnButton(),
         toolbarHeight: 56,
         title: const Text('Live Barcode Scanner'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        actions: Platform.isWindows
-            ? const []
-            : [
+        actions: [
                 IconButton(
                   icon: const Icon(Icons.flash_on),
                   onPressed: () => controller?.toggleTorch(),
@@ -535,9 +529,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
       ),
       body: Column(
         children: [
-          // Android/iOS camera scanner. Windows uses USB/Bluetooth HID input below.
-          if (!Platform.isWindows)
-            Expanded(
+          // Android camera scanner.
+          Expanded(
               flex: 2,
               child: Stack(
                 children: [
@@ -590,12 +583,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             }
                           },
                           decoration: InputDecoration(
-                            hintText: Platform.isWindows
-                                ? 'Product name search karein ya USB barcode scan karein...'
-                                : 'USB/Bluetooth scanner: scan barcode here...',
-                            helperText: Platform.isWindows
-                                ? 'Product name type karein aur matching result select karein; scanner Enter par item add hoga.'
-                                : 'Scanner Enter bheje to product auto search hoga',
+                            hintText: 'USB/Bluetooth scanner: scan barcode here...',
+                            helperText: 'Scanner Enter bheje to product auto search hoga',
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
