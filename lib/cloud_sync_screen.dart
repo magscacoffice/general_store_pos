@@ -325,31 +325,11 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
               ),
             ),
           ),
-          if (isWindows) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: Text('Reconciliation required', style: Theme.of(context).textTheme.titleLarge)),
-                Text('${_conflicts.length} pending', style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_conflicts.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(18),
-                  child: Text('No pending conflicts. Windows can publish the approved master data.'),
-                ),
-              )
-            else
-              ..._conflicts.map(_conflictCard),
-          ] else ...[
-            const SizedBox(height: 12),
-            const Text(
-              'Android device data is safely uploaded first. Windows must process and approve the snapshot before its stock and account balances replace local values.',
-              style: TextStyle(color: Colors.black54),
-            ),
-          ],
+          const SizedBox(height: 12),
+          const Text(
+            'Android device data is safely uploaded first. Windows must process and approve the snapshot before its stock and account balances replace local values.',
+            style: TextStyle(color: Colors.black54),
+          ),
         ],
       ),
     );
