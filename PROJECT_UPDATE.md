@@ -479,6 +479,7 @@ Future improvements: add new ideas here when the owner requests them.
 | Date | Work summary | Commit / Build | Status |
 |---|---|---|---|
 | 2026-11-15 | Compared current Windows desktop source with project tracker; fixed a Windows build blocker found in the previous push (unsupported Window.getSize call). The native runner's 1280×720 initial size is retained, and Dart now only sets the 980×650 minimum. | This correction commit | Windows build previously failed at lib/main.dart:256; corrected source now queued for CI rebuild. Physical desktop checks remain pending |
+| 2026-11-15 | Corrected the WPF roadmap to preserve Walk-in/Khata/Wholesale semantics and the already-approved Flutter Windows retirement; clarified WPF README; removed unused Flutter desktop_multi_window/tray_manager/window_manager packages and WindowManager activation code from shared sales code. | `ee6df2b`, `6133c52`, `e056dcb` (plus documentation/dependency commits) | Android build and POS regression workflows are running; remaining Platform.isWindows UI branches still require audit; WPF feature implementation and physical acceptance remain pending |
 |---|---|---|---|
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
 | 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
