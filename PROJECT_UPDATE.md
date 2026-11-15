@@ -313,7 +313,8 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 
 | Date | Work summary | Commit / Build | Status |
 |---|---|---|---|
-| 2026-11-15 | Audited latest `main` tree (244 entries), Flutter screen/service inventory, database v18 DDL and Windows database path; documented WPF-only migration architecture and staged plan before code generation | This documentation update | Plan recorded; no WPF code generated |
+| 2026-11-15 | Audited repository tree, Flutter screen/service inventory, SQLite v18 DDL and Windows data path; documented WPF-only migration architecture and staged plan. | `ee4bb4d` | Plan recorded. |
+| 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No Flutter files or live database changed. | Initial WPF foundation | Source committed; CI and schema parity tests pending. |
 
 ---
 
