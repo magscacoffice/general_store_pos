@@ -456,7 +456,7 @@ class DBHelper {
           ..remove('_deleted')
           ..remove('updated_at')
           ..['sync_id'] = doc.id;
-        values['customer_type'] = 'Khata';
+        values['customer_type'] ??= 'Khata';
         values['balance'] ??= 0.0;
         await _upsertSyncRecord(txn, 'parties', doc.id, values);
       }
@@ -2342,7 +2342,14 @@ class DBHelper {
     final db = await database;
     final saleData = Map<String, dynamic>.from(sale);
     final customerId = saleData['customer_id'];
-    final customerType = customerId == null ? 'Walk-in' : 'Khata';
+    final customerType = saleData['customer_type']?.toString() ??
+        (customerId == null ? 'Walk-in' : 'Khata');
+    if (!const {'Walk-in', 'Khata', 'Wholesale'}.contains(customerType)) {
+      throw Exception('Customer type must be Walk-in, Khata or Wholesale.');
+    }
+    if ((customerType == 'Walk-in') != (customerId == null)) {
+      throw Exception('Walk-in sale must not have a customer account; Khata/Wholesale sale requires a selected customer.');
+    }
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
     final receivedAmount = customerId == null
@@ -2373,6 +2380,23 @@ class DBHelper {
 
     // Check stock and save the sale atomically.
     final saleId = await db.transaction<int>((txn) async {
+      if (customerId != null) {
+        final account = await txn.query(
+          'parties',
+          columns: ['customer_type'],
+          where: 'id = ? AND type = ?',
+          whereArgs: [customerId, 'customer'],
+          limit: 1,
+        );
+        if (account.isEmpty) {
+          throw Exception('Selected customer account was not found.');
+        }
+        final storedType = account.first['customer_type']?.toString() ?? 'Khata';
+        if (storedType != customerType) {
+          throw Exception('Selected account is $storedType, not $customerType. Customer list refresh karein.');
+        }
+      }
+
       // Validate every product before changing any stock.
       for (final entry in quantitiesByBarcode.entries) {
         final barcode = entry.key;
@@ -2748,7 +2772,7 @@ class DBHelper {
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
     final data = Map<String, dynamic>.from(party)..['sync_id'] = _newSyncId();
-    if (data['type'] == 'customer') data['customer_type'] = 'Khata';
+    if (data['type'] == 'customer') data['customer_type'] ??= 'Khata';
     final result = await db.transaction<int>((txn) async {
       final id = await txn.insert('parties', data);
       await _queueRow(txn, 'parties', data);
@@ -2756,6 +2780,32 @@ class DBHelper {
     });
     unawaited(syncPendingChanges());
     return result;
+  }
+
+  static Future<void> updateCustomerType(int id, String customerType) async {
+    if (customerType != 'Khata' && customerType != 'Wholesale') {
+      throw Exception('Customer type must be Khata or Wholesale.');
+    }
+    final db = await database;
+    await db.transaction((txn) async {
+      final existing = await txn.query(
+        'parties',
+        columns: ['id'],
+        where: 'id = ? AND type = ?',
+        whereArgs: [id, 'customer'],
+        limit: 1,
+      );
+      if (existing.isEmpty) throw Exception('Customer account not found.');
+      await txn.update(
+        'parties',
+        {'customer_type': customerType},
+        where: 'id = ? AND type = ?',
+        whereArgs: [id, 'customer'],
+      );
+      final updated = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (updated.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updated.first));
+    });
+    unawaited(syncPendingChanges());
   }
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
