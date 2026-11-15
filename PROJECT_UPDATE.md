@@ -32,24 +32,24 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 | `dashboard_screen.dart` | `MainWindow.xaml`, `MainWindow.xaml.cs` | Initial native navigation shell and dashboard-hosted cashier workspace exist; full role-aware navigation/status parity remains pending |
 | `sales_screen.dart` | `MainWindow.xaml`, `MainWindow.xaml.cs`, `Services/SalePostingService.cs` | Native cashier source, pending bills, Walk-in/Khata/Wholesale, discounts, price edits and transactional posting implemented; broader parity acceptance remains pending |
 | `inventory_screen.dart` | `InventoryWindow.cs`, `Services/InventoryService.cs` | Product CRUD/search, barcode uniqueness, retail/wholesale rates, stock, damaged quantity, active status and stock unit source implemented |
-| `scanner_screen.dart` | `Views/ScannerWindow.xaml`, `Services/BarcodeScannerService.cs` | Camera scanner parity where a supported Windows camera path exists; keyboard-wedge scanner workflow and optional serial/COM scanner adapter |
+| `scanner_screen.dart` | `MainWindow.xaml.cs` keyboard-wedge scanner input; dedicated `ScannerWindow` remains pending | Barcode keyboard input and search are implemented; camera/serial scanner adapter and physical SpeedX SP60D testing remain pending |
 | `purchase_screen.dart` | `PurchasesWindow.cs`, `Services/PurchaseService.cs` | Searchable purchase/stock entry source implemented; invoice/ledger/stock integration tests remain pending |
 | `supplier_invoice_capture_screen.dart` | `Views/SupplierInvoiceReviewWindow.xaml` (Windows scope gated) | Existing invoice review/conversion/posting rules; mobile camera/ML Kit capture stays Android-only unless a separately approved Windows document-input design is added |
-| `party_screen.dart` | `Views/PartiesWindow.xaml` | Customer/supplier lists, create/edit, contact details and account balances |
+| `party_screen.dart` | `PartiesWindow.cs`, `Services/PartyService.cs` | Customer/supplier list, creation, Khata/Wholesale account classification and reclassification source implemented |
 | `customer_khata_screen.dart` | `KhataWindow.cs`, `Services/KhataService.cs` | Customer balance/ledger/receipt source implemented; broader parity tests remain pending |
 | `customer_history_screen.dart` | `Views/CustomerStatementWindow.xaml` | Per-customer sales/receipts/ledger history, date-range statement and PDF/export |
 | `history_screen.dart` | `SalesHistoryWindow.cs` | Sales history search and invoice detail source implemented; full reprint/return navigation acceptance remains pending |
-| `sales_report_screen.dart` | `Views/SalesReportsWindow.xaml` | Date filters, daily/period summaries, totals and report groupings |
-| `profit_loss_screen.dart` | `Views/ProfitLossWindow.xaml` | Existing income/cost/expense and profit calculations |
-| `expense_screen.dart` | `Views/ExpensesWindow.xaml` | Expense create/list and totals |
-| `sale_return_screen.dart` | `Views/SaleReturnWindow.xaml` | Select sale items/quantities, return reason, refund method, item condition, stock restoration and refund posting |
+| `sales_report_screen.dart` | `SalesReportsWindow.cs`, `Services/SalesReportService.cs` | Date filters and report summary source implemented; report parity tests remain pending |
+| `profit_loss_screen.dart` | `ProfitLossWindow.cs`, `Services/ProfitLossService.cs` | Existing income/cost/expense and profit calculation source implemented; parity test remains pending |
+| `expense_screen.dart` | `ExpensesWindow.cs`, `Services/ExpenseService.cs` | Expense create/list and totals source implemented |
+| `sale_return_screen.dart` | `SaleReturnWindow.cs`, `Services/SaleReturnService.cs` | Return/refund transaction source implemented; disposable-database integration tests remain pending |
 | `return_history_screen.dart` | `Views/ReturnHistoryWindow.xaml` | Return list, details and audit trail |
-| `reminders_screen.dart` | `Views/RemindersWindow.xaml` | Create, view and complete reminders |
+| `reminders_screen.dart` | `RemindersWindow.cs`, `Services/ReminderService.cs` | Reminder create/list/complete source implemented |
 | `salesmen_management_screen.dart` | `Views/StaffManagementWindow.xaml` | Existing admin/role-gated staff management; preserve current auth dependency and do not silently replace it with a new identity model |
 | `printer_screen.dart` | `PrinterInvoiceWindow.cs`, `Services/PrinterSettingsService.cs` | Printer queue selection/persistence, 80mm ESC/POS test/receipt source, invoice preview and PDF save/open implemented; physical BC-86AC acceptance pending |
-| `backup_screen.dart` | `Views/BackupRestoreWindow.xaml`, `Services/BackupService.cs` | Database backup, restore, staged database activation, validation and safety checks |
-| `cloud_sync_screen.dart` | `Views/CloudSyncWindow.xaml`, `ViewModels/CloudSyncViewModel.cs` | Google Drive connection, sync now, progress/status, conflict review and explicit resolution |
-| `drive_sync_service.dart` | `Services/DriveSyncService.cs` | OAuth, secure token storage, snapshot hashing, upload/download, Windows-master sync, conflict/retry rules and auto-sync |
+| `backup_screen.dart` | `BackupRestoreWindow.cs`, `Services/DatabaseBackupService.cs` | Verified backup and staged restore with SHA-256, schema validation and atomic active-pointer switch implemented and tested |
+| `cloud_sync_screen.dart` | WPF Cloud Sync window/service — pending | Port the existing Google Drive Windows-master protocol, sync status and conflict review; no Firebase/Firestore business sync |
+| `drive_sync_service.dart` | WPF Drive snapshot service — pending | OAuth, secure token storage, snapshot hashing, upload/download, Windows-master merge, conflict/tombstone rules and auto-sync |
 | `update_manager.dart`, `windows/windows_update_service.dart` | `Services/UpdateService.cs`, `Views/UpdateDialog.xaml` | Stable release detection, checksum verification, staged update and safe restart without touching user data |
 | `windows/system_tray_service.dart`, `windows/pos_windows.dart` | `Services/SystemTrayService.cs`, `Services/WindowCoordinator.cs` | Tray menu, dashboard and cashier window lifecycle, multiple pending bills, minimize/restore and close handling |
 | `windows/desktop_theme.dart`, `windows/desktop_app_bar.dart` | `Themes/Colors.xaml`, `Themes/Controls.xaml`, `Styles/DataGrid.xaml` | Consistent desktop typography, controls, focus/hover states, scrolling and shared visual language |
