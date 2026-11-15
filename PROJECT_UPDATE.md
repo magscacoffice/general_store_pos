@@ -318,6 +318,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 | 2026-11-15 | Added isolated .NET 10 WPF project, entity models and explicit table/column annotations for all 17 schema-v18 tables, EF Core context and key/index/default mappings, Windows data path and active restore pointer resolution, read-only schema verifier, and WPF CI workflow. No live database changed. | `05ff9ec` | Source committed; CI and schema parity tests pending. |
 | 2026-11-15 | Retired the Flutter Windows target: removed the complete native `windows/` runner and `build-windows.yml`, removed the Windows-only startup path, tray/theme/update services and update prompt, and replaced desktop navigation helper implementations with no-op compatibility shims so they render no Windows-specific controls. Android Flutter remains the supported Flutter client; WPF is the only Windows application direction. | `583a9926c8390783bfbdf199fd8441362ba084d8` | Source committed. Android APK build #213 and POS sync/invoice tests #41 passed on this commit; Android remains the only Flutter client. |
 | 2026-11-15 | Added WPF Sales History and invoice details, complete customer Khata sales/receipt/return ledger with atomic receipt posting, date-range sales reports, expense register, reminder register and searchable product stock-purchase entry. Corrected compile issues discovered by Windows CI. | `cf7fd9c` / WPF build #66 | .NET 10 WPF Release restore/build passed. Disposable schema transaction/parity tests, runtime UI validation, printer hardware, Drive/auth/backup/returns and physical Windows acceptance remain pending. |
+| 2026-11-15 | Added WPF searchable purchase/stock entry, expense register, reminders, customer/supplier list, profit/loss, transactional sale returns/refunds, Windows printer queue persistence and compact Connect list, ESC/POS thermal/test print, invoice preview, and direct PDF save/open. | 4361f70 / WPF build #96 | .NET 10 WPF Release build passed. Real SQLite v18 integration, target Windows UI, scanner and BC-86AC hardware acceptance remain pending. |
 
 ---
 
@@ -351,31 +352,31 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Pending Updates
 
-<!-- Add new tasks below this line. Keep each task specific. -->
+<!-- Source implementation is tracked separately from target-device acceptance. Do not mark hardware/UI acceptance complete based on CI build alone. -->
 
-### [Windows] Printer & Invoice — WPF implementation (Flutter Windows UI task superseded)
-  7. **Remember the selected printer:** Once the user successfully connects/selects a printer, persist that printer as the preferred/default printer in local app settings. On subsequent app launches, restore the saved printer automatically and attempt to reconnect/reuse it so the user does not have to select the same printer every time. Show a clear status if the saved printer is unavailable or disconnected, and allow the user to choose another printer. Do not silently switch to a different printer or claim it is connected when it is not. Preserve Android printer identifiers and implement a native WPF printer identifier for Windows; verify persistence across app restarts on both supported clients.
+### [Windows] Printer & Invoice — WPF implementation
 
+- [x] Implemented the native WPF printer/invoice workspace in desktop-wpf/: Windows printer queue discovery, saved preferred printer, saved 80mm/header/total/margin settings, 80mm ESC/POS receipt builder, raw Windows spooler output, test print, invoice preview, receipt preview, bill-text copy, direct PDF file save and open-for-sharing workflow.
+- [x] Implemented a compact printer list with printer icon, queue availability status and a per-row Connect/Select action; unavailable saved queues are shown as unavailable and are not silently replaced.
+- [x] Implemented horizontal Back navigation, a single dominant Thermal Receipt action, secondary actions, separate receipt preview panel and grouped configuration controls.
+- [ ] Verify saved-printer restoration and unavailable-queue behaviour across Windows application restarts on the target PC.
+- [ ] Record visual/interaction acceptance at 980×650, 1280×720, maximized and resized states, including keyboard focus, hover, clipping and independent preview scrolling.
+- [ ] Verify the PDF save/open/share workflow on Windows with the user's preferred PDF viewer and sharing app.
+- [ ] Physically test the Black Copper BC-86AC 80mm USB printer: line alignment, 2mm margins, header/total sizing, final-line clipping, cutter and paper feed. CI cannot verify physical output.
 
-- [ ] **Implement Printer & Invoice in native WPF.** Flutter Windows UI redesign is retired; preserve printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours in WPF. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
+### Windows New Sale and Inventory — WPF parity
 
-  1. **Back navigation:** Fix the broken vertically stacked “Return” label beside the back arrow. Use a standard AppBar/leading back button or a clean horizontal Row with a back icon and “Back”/“Return” label.
-  2. **Action hierarchy:** Make **Thermal Receipt** the single dominant filled primary action. Style **Invoice Preview**, **Share Bill**, and **Share PDF** as lower-emphasis tonal/outlined secondary actions. Group print actions separately from sharing/export actions; keep **Save PDF to Device** clearly available without competing visually with the primary print action. Remove competing teal/green/purple high-emphasis styling.
-  3. **Receipt preview:** Remove the raw receipt text from the middle of the configuration form. Place it in a clearly titled, neatly bordered **Receipt Preview** card/panel, preferably in a responsive desktop split layout beside the settings/printer area. Give the preview a constrained, independently scrollable viewport where needed; ensure it remains readable and does not cause overflow.
-  4. **Printer list:** Replace oversized full-width printer rows with compact desktop-friendly cards/rows containing a printer icon, printer name, clear Connected/Disconnected status badge, and a distinct Connect action. Use a subtle hover/focus treatment. Avoid excessive dead space on wide screens; preserve the existing connect/disconnect functionality.
-  5. **Configuration grouping and spacing:** Place Paper (80 mm), Header/Total Size, and Margins controls inside a consistent rounded surface card with clear labels and aligned fields. Use consistent page padding (approximately 16–24 px), spacing, alignment, and responsive breakpoints across the screen.
-  6. **Responsive/desktop acceptance:** Verify at the project's supported minimum window size (980×650), a typical 1280×720 window, maximized, and resized states. Check that controls, printer cards, preview, and action groups remain aligned and usable without clipping or overflow; confirm keyboard focus and mouse hover states.
+- [x] Implemented dashboard-hosted WPF cashier workspace with scanner-ready focus, product suggestions, Up/Down/Enter navigation, repeat-scan quantity increment and pending-bill persistence.
+- [x] Implemented WPF inventory DataGrid with search, virtualization, scrolling and loading/error handling.
+- [ ] Validate SpeedX SP60D scanner responsiveness and inventory performance on the target Windows computer.
+- [ ] Record visual/interaction acceptance at the supported minimum and typical desktop window sizes.
 
-- [ ] **Implementation and verification:** Make the Windows changes in the actual WPF source, not only a mockup or documentation. Reuse existing business services and callbacks wherever possible. Run applicable .NET build/tests and report checks that could not be run. Do not mark complete until source implementation is reviewed and Windows visual/interaction acceptance is recorded. Physical printer output verification remains a separate hardware check.
+### Implementation and verification
 
-
-### Windows New Sale and Inventory — WPF parity requirements (Flutter Windows implementation retired)
-
-- [ ] Implement the dashboard-hosted WPF cashier workspace with scanner-ready focus, product suggestions, Up/Down/Enter navigation, repeat-scan quantity increment, and pending-bill handling.
-- [ ] Implement the WPF inventory DataGrid with responsive sizing, lazy/virtualized rows where appropriate, interactive scrolling, and loading/error states.
-- [ ] Validate scanner responsiveness and inventory performance on the target Windows computer.
-
-
+- [x] Native WPF source implementation is committed on the draft feature branch; .NET 10 Release restore/build passed in GitHub Actions run #96 on commit 4361f70.
+- [ ] Run integration tests against a disposable copy of the real SQLite v18 database for sale, purchase, return, customer Khata receipt/ledger and backup safety. Do not use the live store database for tests.
+- [ ] Complete target-Windows runtime and visual acceptance. Physical printer/scanner tests remain separate hardware checks.
+- [ ] Keep the pull request in Draft and do not merge or create a release/package until the remaining acceptance items above are complete.
 
 ## New notes from user (2026-11-13)
 
