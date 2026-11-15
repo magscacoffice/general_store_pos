@@ -361,9 +361,10 @@ void main() {
       'name': 'Wholesale Test Account',
       'phone': '03000000001',
       'type': 'customer',
-      'customer_type': 'Wholesale',
+      'customer_type': 'Khata',
       'balance': 0.0,
     });
+    await DBHelper.updateCustomerType(customerId, 'Wholesale');
 
     await DBHelper.completeSale(
       sale: {
@@ -435,6 +436,23 @@ void main() {
         .cast<Map>()
         .singleWhere((party) => party['sync_id'] == customer['sync_id']);
     expect(syncedParty['customer_type'], 'Wholesale');
+
+    await useDatabase(windowsPath);
+    expect(
+      await DBHelper.mergeDriveSnapshot(
+        envelope(snapshot, deviceId: 'android-device', hash: 'wholesale-roundtrip'),
+        sourceDeviceId: 'android-device',
+        snapshotHash: 'wholesale-roundtrip',
+        applyMasterState: true,
+        detectConflicts: false,
+      ),
+      isTrue,
+    );
+    expect((await DBHelper.getParties('customer')).single['customer_type'], 'Wholesale');
+    expect(
+      (await DBHelper.getSales()).every((sale) => sale['customer_type'] == 'Wholesale'),
+      isTrue,
+    );
   });
 
   test('Wholesale sale rejects a Khata account and leaves stock unchanged', () async {
