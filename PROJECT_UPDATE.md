@@ -26,6 +26,20 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Add new tasks below this line. Keep each task specific. -->
 
+### [Windows] Printer & Invoice screen — desktop UI/UX redesign (2026-11-15)
+
+- [ ] **Refactor the Printer & Invoice screen for a polished Windows desktop POS experience.** Review the existing Flutter screen and the user's supplied visual reference before implementation. Keep this task focused on presentation, layout, accessibility, and desktop interaction; preserve existing printer discovery/connection, receipt generation, invoice preview, sharing/export, save-to-device, paper-size, header/total sizing, and margin behaviours. Do not change sales, totals, discounts, invoice data, or other business logic.
+
+  1. **Back navigation:** Fix the broken vertically stacked “Return” label beside the back arrow. Use a standard AppBar/leading back button or a clean horizontal Row with a back icon and “Back”/“Return” label.
+  2. **Action hierarchy:** Make **Thermal Receipt** the single dominant filled primary action. Style **Invoice Preview**, **Share Bill**, and **Share PDF** as lower-emphasis tonal/outlined secondary actions. Group print actions separately from sharing/export actions; keep **Save PDF to Device** clearly available without competing visually with the primary print action. Remove competing teal/green/purple high-emphasis styling.
+  3. **Receipt preview:** Remove the raw receipt text from the middle of the configuration form. Place it in a clearly titled, neatly bordered **Receipt Preview** card/panel, preferably in a responsive desktop split layout beside the settings/printer area. Give the preview a constrained, independently scrollable viewport where needed; ensure it remains readable and does not cause overflow.
+  4. **Printer list:** Replace oversized full-width printer rows with compact desktop-friendly cards/rows containing a printer icon, printer name, clear Connected/Disconnected status badge, and a distinct Connect action. Use a subtle hover/focus treatment. Avoid excessive dead space on wide screens; preserve the existing connect/disconnect functionality.
+  5. **Configuration grouping and spacing:** Place Paper (80 mm), Header/Total Size, and Margins controls inside a consistent rounded surface card with clear labels and aligned fields. Use consistent page padding (approximately 16–24 px), spacing, alignment, and responsive breakpoints across the screen.
+  6. **Responsive/desktop acceptance:** Verify at the project's supported minimum window size (980×650), a typical 1280×720 window, maximized, and resized states. Check that controls, printer cards, preview, and action groups remain aligned and usable without clipping or overflow; confirm keyboard focus and mouse hover states.
+
+- [ ] **Implementation and verification:** Make the changes in the actual Flutter source, not only a mockup or documentation. Reuse existing state/controllers and callbacks wherever possible. Run applicable formatting/analyzer/build checks when available and report any checks that could not be run. Do not mark complete until source implementation is reviewed and Windows visual/interaction acceptance is recorded. Physical printer output verification remains a separate hardware check.
+
+
 ### Windows New Sale and Inventory responsiveness / keyboard navigation (2026-11-14)
 
 - [x] **[Windows] New Sale window opens too slowly — startup path optimized in code.** User reports a noticeable delay after clicking New Sale in the system tray/menu before the separate New Sale window appears. The Windows cashier-window startup no longer waits for Google Drive initialization/status restoration; that work runs only in the Dashboard engine while New Sale uses local SQLite. Separate bill windows and data integrity are preserved. **Physical timing comparison on the target Windows PC remains a manual validation.**
