@@ -57,6 +57,7 @@
                     <Button Content="▧   Sales History" Click="SalesHistory_Click"/>
                     <Button Content="▥   Purchases" Click="Purchases_Click"/>
                     <Button Content="◫   Customer Khata" Click="Khata_Click"/>
+                    <Button Content="♙   Parties" Click="Parties_Click"/>
                     <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="▣   Expenses" Click="Expenses_Click"/>
                     <Button Content="◷   Reminders" Click="Reminders_Click"/>
