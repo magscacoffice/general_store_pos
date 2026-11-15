@@ -18,14 +18,20 @@ import 'customer_khata_screen.dart';
 import 'profit_loss_screen.dart';
 import 'party_screen.dart';
 import 'reminders_screen.dart';
-import 'windows/pos_windows.dart';
 import 'windows/windows_update_service.dart';
 import 'update_manager.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   final String role;
 
   const DashboardScreen({super.key, required this.role});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final GlobalKey<SalesScreenState> _dashboardSaleKey = GlobalKey<SalesScreenState>();
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +73,10 @@ class DashboardScreen extends StatelessWidget {
           ),
           if (Platform.isWindows) ...[
             FilledButton.icon(
-              onPressed: PosWindows.openSale,
+              onPressed: () => unawaited(
+                _dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
+                    Future<void>.value(),
+              ),
               icon: const Icon(Icons.add_shopping_cart),
               label: const Text('New Sale'),
             ),
@@ -99,7 +108,7 @@ class DashboardScreen extends StatelessWidget {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < 950) {
+          if (constraints.maxWidth < 950 && !Platform.isWindows) {
             return _buildCompactDashboard(context, constraints.maxWidth);
           }
           return Row(
@@ -147,7 +156,7 @@ class DashboardScreen extends StatelessWidget {
                               _desktopNavItem(context, 'Customer Khata', Icons.menu_book, const CustomerKhataScreen()),
                               _desktopNavItem(context, 'Reminders / Due Alerts', Icons.notifications_active, const RemindersScreen()),
                               _desktopNavItem(context, 'Profit / Loss', Icons.trending_up, const ProfitLossScreen()),
-                              if (role == 'admin' && !DBHelper.localOnlyMode)
+                              if (widget.role == 'admin' && !DBHelper.localOnlyMode)
                                 _desktopNavItem(context, 'Salesmen / Staff', Icons.manage_accounts, const SalesmenManagementScreen()),
                               _desktopNavItem(context, 'Cloud Sync', Icons.cloud_sync_outlined, const CloudSyncScreen()),
                               _desktopNavItem(context, 'Settings / Backup', Icons.settings, const BackupScreen()),
@@ -168,26 +177,10 @@ class DashboardScreen extends StatelessWidget {
               const VerticalDivider(width: 1, thickness: 1),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Store Overview',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 5),
-                      const Text('Select a workspace to manage your store.',
-                        style: TextStyle(color: Colors.black54)),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: GridView.count(
-                          crossAxisCount: constraints.maxWidth >= 1450 ? 4 : 3,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 2.15,
-                          children: _desktopCards(context),
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: SalesScreen(
+                    key: _dashboardSaleKey,
+                    embeddedInDashboard: true,
                   ),
                 ),
               ),
@@ -235,7 +228,7 @@ class DashboardScreen extends StatelessWidget {
     _buildMenuCard(context, 'Customer Khata', Icons.menu_book, Colors.indigo, const CustomerKhataScreen()),
     _buildMenuCard(context, 'Reminders / Due Alerts', Icons.notifications_active, Colors.red, const RemindersScreen()),
     _buildMenuCard(context, 'Profit / Loss', Icons.trending_up, Colors.deepPurple, const ProfitLossScreen()),
-    if (role == 'admin' && !DBHelper.localOnlyMode)
+    if (widget.role == 'admin' && !DBHelper.localOnlyMode)
       _buildMenuCard(context, 'Salesmen / Staff', Icons.manage_accounts, Colors.cyan, const SalesmenManagementScreen()),
     _buildMenuCard(context, 'Cloud Sync', Icons.cloud_sync_outlined, Colors.lightBlue, const CloudSyncScreen()),
     _buildMenuCard(context, 'Settings / Backup', Icons.settings, Colors.teal, const BackupScreen()),
@@ -264,7 +257,8 @@ class DashboardScreen extends StatelessWidget {
         )),
         onTap: () {
           if (Platform.isWindows && targetScreen is SalesScreen) {
-            unawaited(PosWindows.openSale());
+            unawaited(_dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
+                Future<void>.value());
           } else {
             Navigator.push(
               context,
@@ -296,7 +290,8 @@ class DashboardScreen extends StatelessWidget {
       child: InkWell(
         onTap: () {
           if (isWindows && targetScreen is SalesScreen) {
-            unawaited(PosWindows.openSale());
+            unawaited(_dashboardSaleKey.currentState?.startNewBillFromDashboard() ??
+                Future<void>.value());
           } else {
             Navigator.push(
               context,

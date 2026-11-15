@@ -17,14 +17,19 @@ Future<void> Function()? windowsBeforeDatabaseRestore;
 
 class SalesScreen extends StatefulWidget {
   final String? billId;
+  final bool embeddedInDashboard;
 
-  const SalesScreen({super.key, this.billId});
+  const SalesScreen({
+    super.key,
+    this.billId,
+    this.embeddedInDashboard = false,
+  });
 
   @override
-  State<SalesScreen> createState() => _SalesScreenState();
+  State<SalesScreen> createState() => SalesScreenState();
 }
 
-class _SalesScreenState extends State<SalesScreen> {
+class SalesScreenState extends State<SalesScreen> {
   List<Map<String, dynamic>> cart = [];
   List<Map<String, dynamic>> customers = [];
   int? selectedCustomerId;
@@ -171,7 +176,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _createNewBill() async {
-    if (Platform.isWindows) {
+    if (Platform.isWindows && !widget.embeddedInDashboard) {
       await _persistActiveBill();
       await PosWindows.openSale();
       return;
@@ -202,6 +207,8 @@ class _SalesScreenState extends State<SalesScreen> {
     });
     await _persistActiveBill();
   }
+
+  Future<void> startNewBillFromDashboard() => _createNewBill();
 
   Future<void> _switchBill(String billId) async {
     if (billId == _activeBillId) return;
@@ -1575,7 +1582,7 @@ class _SalesScreenState extends State<SalesScreen> {
           return KeyEventResult.ignored;
         },
         child: Scaffold(
-      appBar: AppBar(
+      appBar: widget.embeddedInDashboard ? null : AppBar(
         automaticallyImplyLeading: !Platform.isWindows,
         title: Text(
           Platform.isWindows ? 'KHAN BABA POS  |  NEW SALE' : 'POS Billing (Quick & Khata)',
@@ -1584,7 +1591,7 @@ class _SalesScreenState extends State<SalesScreen> {
         backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal.shade800,
         foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: [
-          if (Platform.isWindows) ...[
+          if (Platform.isWindows && !widget.embeddedInDashboard) ...[
             IconButton(
               tooltip: 'New Bill - Ctrl+N',
               icon: const Icon(Icons.add_box_outlined),

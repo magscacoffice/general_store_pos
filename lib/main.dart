@@ -124,6 +124,16 @@ class KhanBabaPOSApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
+      scrollBehavior: windowsLocalMode ? const WindowsDesktopScrollBehavior() : null,
+      builder: (context, child) {
+        final app = child ?? const SizedBox.shrink();
+        return windowsLocalMode
+            ? FocusTraversalGroup(
+                policy: OrderedTraversalPolicy(),
+                child: app,
+              )
+            : app;
+      },
       home: windowsLocalMode
           ? WindowsStartupGate(
               windowType: windowsWindowType,
@@ -243,8 +253,12 @@ class _WindowsStartupGateState extends State<WindowsStartupGate> {
               ? 'Khan Baba POS - Dashboard'
               : 'Khan Baba POS - New Sale';
           nativeWindow.minimumSize = const Size(980, 650).toNative();
-          nativeWindow.setSize(const Size(1240, 740).toNative(), false);
-          nativeWindow.center();
+          final currentSize = await nativeWindow.getSize();
+          if (currentSize.width < 980 || currentSize.height < 650) {
+            nativeWindow.setSize(const Size(1240, 740).toNative(), false);
+            nativeWindow.center();
+          }
+          // Existing normal/maximized geometry is left to native Windows controls.
           nativeWindow.addListener((event) {
             if (event is WindowCloseRequestedEvent && !_allowCloseForRestore) {
               if (widget.windowType == PosWindows.dashboard &&

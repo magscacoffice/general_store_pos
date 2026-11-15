@@ -1,4 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+
+/// Desktop pointer scrolling that works naturally with a mouse wheel and
+/// precision touchpad while retaining Flutter's standard desktop behaviour.
+class WindowsDesktopScrollBehavior extends MaterialScrollBehavior {
+  const WindowsDesktopScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
 
 /// Compact, desktop-oriented visual system used only by the Windows edition.
 /// Android keeps its existing Material styling.
