@@ -557,5 +557,6 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF .NET 10 target support confirmed by a successful Windows runner build (workflow run `43715783750`, commit `3af3005`).
 - [x] Fixed the Android dashboard syntax error and removed retired Flutter Windows dashboard-only presentation/actions. The mobile dashboard remains the supported Flutter UI.
 - [x] Added an injectable home widget to `KhanBabaPOSApp` and changed the widget test to exercise the MaterialApp shell without requiring Firebase initialization or a live membership backend. The real production home remains `UpdateAwareHome(AuthGate())`.
-- [ ] Android full test suite must pass after the widget-test harness correction; no release artifact is produced by this validation.
-- [ ] Expanded WPF SQLite v18 verification (integrity check, table existence, primary keys, default values, unique constraints and foreign-key check) must pass its next Windows CI build and still needs a representative v18 database fixture test.
+- [x] Android analyzer and Flutter test suite pass with the isolated MaterialApp shell widget test (validation-only run `43716339983` / test run `43716185881`; no APK or release artifact was published).
+- [x] Expanded the WPF SQLite v18 verifier to check `user_version`, `sqlite_master` table presence, `quick_check`, required columns, primary-key definitions, key default values, required unique constraints and `foreign_key_check`; Windows build passed in run `43716339961`.
+- [ ] Add and run a representative SQLite v18 fixture test to prove the verifier accepts the real Flutter schema and rejects altered/missing constraints without modifying the database.
