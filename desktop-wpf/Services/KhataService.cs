@@ -25,18 +25,38 @@ public sealed class KhataService
         return rows;
     }
 
-    public async Task<IReadOnlyList<KhataEntry>> GetLedgerAsync(int partyId,CancellationToken ct=default)
+    public async Task<IReadOnlyList<KhataEntry>> GetLedgerAsync(int partyId,double currentBalance,CancellationToken ct=default)
     {
         var path=PosDatabasePath.Resolve(requireExisting:true);
         await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
         await using var db=await OpenAsync(path,true,ct);
         await using var cmd=db.CreateCommand();
-        cmd.CommandText="SELECT id,date,type,amount,COALESCE(note,'') FROM khata_transactions WHERE party_id=$id ORDER BY id DESC;";
+        cmd.CommandText="""
+            SELECT * FROM (
+                SELECT s.id AS entry_id,s.date AS date,'sale' AS entry_type,
+                    CASE WHEN COALESCE(s.final_amount,0)>0 OR COALESCE(s.total_amount,0)<=0 THEN COALESCE(s.final_amount,0)
+                         WHEN COALESCE(s.discount,0)>0 THEN MAX(s.total_amount-s.discount,0)
+                         ELSE COALESCE(s.total_amount,0) END AS amount,
+                    ('Bill #'||s.id||' - '||COALESCE((SELECT GROUP_CONCAT(product_name||' x'||quantity,', ') FROM sale_items WHERE sale_id=s.id),'Items unavailable')) AS description
+                FROM sales s WHERE s.customer_id=$id
+                UNION ALL
+                SELECT k.id,k.date,k.type,k.amount,
+                    CASE WHEN k.type='receipt' THEN 'Cash received'||CASE WHEN COALESCE(k.note,'')='' THEN '' ELSE ' - '||k.note END ELSE COALESCE(k.note,k.type) END
+                FROM khata_transactions k WHERE k.party_id=$id AND k.type NOT IN ('credit','return_adjustment')
+                UNION ALL
+                SELECT r.id,r.date,'return_adjustment',r.refund_amount,('Return against Bill #'||r.sale_id||' - '||r.reason)
+                FROM sale_returns r WHERE r.customer_id=$id AND r.refund_method='Khata'
+            ) ORDER BY date ASC,entry_id ASC;
+            """;
         cmd.Parameters.AddWithValue("$id",partyId);
         await using var reader=await cmd.ExecuteReaderAsync(ct);
-        var rows=new List<KhataEntry>();
-        while(await reader.ReadAsync(ct))rows.Add(new KhataEntry(reader.GetInt32(0),reader.GetString(1),reader.GetString(2),reader.GetDouble(3),reader.GetString(4)));
-        return rows;
+        var raw=new List<KhataEntry>();
+        while(await reader.ReadAsync(ct))raw.Add(new KhataEntry(reader.GetInt32(0),reader.GetString(1),reader.GetString(2),reader.GetDouble(3),reader.GetString(4),0));
+        var movement=raw.Sum(x=>x.Type=="sale"?x.Amount:-x.Amount);
+        var running=currentBalance-movement;
+        var result=new List<KhataEntry>(raw.Count);
+        foreach(var row in raw){running+=row.Type=="sale"?row.Amount:-row.Amount;result.Add(row with{RunningBalance=running});}
+        result.Reverse();return result;
     }
 
     public async Task RecordReceiptAsync(int partyId,double amount,string note,CancellationToken ct=default)
@@ -90,4 +110,9 @@ public sealed class KhataService
     }
 }
 public sealed record KhataCustomer(int Id,string Name,string Phone,double Balance);
-public sealed record KhataEntry(int Id,string Date,string Type,double Amount,string Note);
+public sealed record KhataEntry(int Id,string Date,string Type,double Amount,string Description,double RunningBalance)
+{
+ public double Debit=>Type=="sale"?Amount:0;
+ public double Credit=>Type=="sale"?0:Amount;
+ public string TypeLabel=>Type switch{"sale"=>"Credit Sale","receipt"=>"Cash Receipt","return_adjustment"=>"Return Adjustment",_=>Type};
+}

@@ -57,7 +57,7 @@ public sealed class KhataWindow:Window
     }
     private async Task OpenLedgerAsync(){
         if(_grid.SelectedItem is not KhataCustomer customer)return;
-        try{var ledger=await _service.GetLedgerAsync(customer.Id);new CustomerLedgerWindow(customer,ledger,_service){Owner=this}.ShowDialog();await LoadAsync();}
+        try{var ledger=await _service.GetLedgerAsync(customer.Id,customer.Balance);new CustomerLedgerWindow(customer,ledger,_service){Owner=this}.ShowDialog();await LoadAsync();}
         catch(Exception ex){MessageBox.Show(ex.Message,"Ledger unavailable",MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
     private async Task ReceiptAsync(){
@@ -92,10 +92,12 @@ public sealed class CustomerLedgerWindow:Window
         header.Children.Add(_balanceText);
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,ItemsSource=_entries,RowHeight=36};
-        grid.Columns.Add(new DataGridTextColumn{Header="Date",Binding=new System.Windows.Data.Binding("Date"),Width=160});
-        grid.Columns.Add(new DataGridTextColumn{Header="Type",Binding=new System.Windows.Data.Binding("Type"),Width=140});
-        grid.Columns.Add(new DataGridTextColumn{Header="Amount",Binding=new System.Windows.Data.Binding("Amount"){StringFormat="N2"},Width=130});
-        grid.Columns.Add(new DataGridTextColumn{Header="Note",Binding=new System.Windows.Data.Binding("Note"),Width=new DataGridLength(1,DataGridLengthUnitType.Star)});
+        grid.Columns.Add(new DataGridTextColumn{Header="Date / Time",Binding=new System.Windows.Data.Binding("Date"),Width=160});
+        grid.Columns.Add(new DataGridTextColumn{Header="Description",Binding=new System.Windows.Data.Binding("Description"),Width=new DataGridLength(1,DataGridLengthUnitType.Star)});
+        grid.Columns.Add(new DataGridTextColumn{Header="Type",Binding=new System.Windows.Data.Binding("TypeLabel"),Width=140});
+        grid.Columns.Add(new DataGridTextColumn{Header="Debit",Binding=new System.Windows.Data.Binding("Debit"){StringFormat="N2"},Width=100});
+        grid.Columns.Add(new DataGridTextColumn{Header="Credit",Binding=new System.Windows.Data.Binding("Credit"){StringFormat="N2"},Width=100});
+        grid.Columns.Add(new DataGridTextColumn{Header="Balance",Binding=new System.Windows.Data.Binding("RunningBalance"){StringFormat="N2"},Width=110});
         var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
         var receipt=new Button{Content="Record Receipt",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)};
         receipt.Click+=async(_,_)=>await ReceiptAsync();footer.Children.Add(receipt);
@@ -109,7 +111,7 @@ public sealed class CustomerLedgerWindow:Window
             await _service.RecordReceiptAsync(_customer.Id,input.Value.Amount,input.Value.Note);
             _balance=Math.Max(0,_balance-input.Value.Amount);
             _balanceText.Text=$"Outstanding: Rs. {_balance:N2}";
-            var latest=await _service.GetLedgerAsync(_customer.Id);_entries.Clear();foreach(var entry in latest)_entries.Add(entry);
+            var latest=await _service.GetLedgerAsync(_customer.Id,_balance);_entries.Clear();foreach(var entry in latest)_entries.Add(entry);
             MessageBox.Show("Receipt saved; customer balance reduced.","Khata",MessageBoxButton.OK,MessageBoxImage.Information);
         }catch(Exception ex){MessageBox.Show(ex.Message,"Receipt could not be saved",MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
