@@ -7,7 +7,7 @@ This is the isolated native Windows client migration. Windows UI and Windows rel
 - Entity models and explicit column mappings cover all 17 SQLite v18 tables.
 - EF Core SQLite mappings include the known unique indexes and legacy defaults.
 - The data-folder resolver preserves the existing `%LOCALAPPDATA%\\KhanBabaPOS\\Data` location and validates the staged `.active_database` pointer.
-- The schema verifier opens the existing database read-only and refuses unsupported versions or missing required tables/columns.
+- The schema verifier opens the existing database read-only and checks schema version, table/column presence, primary keys, required NOT NULL/default constraints, required unique constraints, SQLite quick-check and foreign-key integrity. It never migrates or writes to the database.
 - No EF migrations, `EnsureCreated`, schema upgrades, or automatic empty database creation are used.
 - The WPF window is still a bootstrap placeholder. Cashier and operational workflows, transaction services, parity tests, and Windows acceptance are not complete.
 
