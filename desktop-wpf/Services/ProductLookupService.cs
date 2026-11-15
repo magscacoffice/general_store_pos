@@ -23,7 +23,7 @@ public sealed class ProductLookupService
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT id, name, barcode, price, COALESCE(purchasePrice, 0),
-                   quantity, COALESCE(stock_unit, 'pcs')
+                   COALESCE(wholesalePrice, 0), quantity, COALESCE(stock_unit, 'pcs')
             FROM products
             WHERE COALESCE(is_active, 1) = 1
               AND (barcode = $barcode OR name LIKE $name)
@@ -64,8 +64,9 @@ public sealed class ProductLookupService
         reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
         reader.GetDouble(3),
         reader.GetDouble(4),
-        reader.GetInt32(5),
-        reader.IsDBNull(6) ? "pcs" : reader.GetString(6));
+        reader.GetDouble(5),
+        reader.GetInt32(6),
+        reader.IsDBNull(7) ? "pcs" : reader.GetString(7));
 
     private static async Task<SqliteConnection> OpenReadOnlyAsync(string path, CancellationToken cancellationToken)
     {
@@ -82,7 +83,7 @@ public sealed class ProductLookupService
 
 public sealed record ProductLookup(
     int Id, string Name, string Barcode, double Price,
-    double PurchasePrice, int Quantity, string StockUnit)
+    double PurchasePrice, double WholesalePrice, int Quantity, string StockUnit)
 {
     public string StockLabel => $"Stock: {Quantity} {StockUnit}";
 }
