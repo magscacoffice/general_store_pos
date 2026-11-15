@@ -110,3 +110,5 @@ class _RemindersScreenState extends State<RemindersScreen> {
               },
             ),
     );
+  }
+}
