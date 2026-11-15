@@ -321,14 +321,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Inventory Management'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       floatingActionButton: Platform.isWindows ? null : FloatingActionButton(
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
+        backgroundColor: Colors.teal,
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),

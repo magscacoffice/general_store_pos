@@ -374,11 +374,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Sales Reports / سیل رپورٹ'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             tooltip: 'Choose custom date range',
@@ -426,14 +424,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         children: [
                           Icon(
                             Icons.payments,
-                            size: Platform.isWindows ? 20 : 38,
+                            size: 38,
                             color: Colors.teal,
                           ),
                           const SizedBox(height: 8),
                           Text(
                             _money(_totalRevenue),
                             style: TextStyle(
-                              fontSize: Platform.isWindows ? 16 : 25,
+                              fontSize: 25,
                               fontWeight: FontWeight.bold,
                               color: Colors.teal,
                             ),

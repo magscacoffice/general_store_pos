@@ -148,14 +148,12 @@ class _SalesmenManagementScreenState extends State<SalesmenManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Salesmen Management'),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
       ),
       body: Scrollbar(
-        thumbVisibility: Platform.isWindows,
+        thumbVisibility: false,
         child: ListView(
           padding: const EdgeInsets.all(16),
         children: [
