@@ -144,11 +144,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      automaticallyImplyLeading: !Platform.isWindows,
-      leading: desktopWorkspaceButton(),
       title: const Text('Purchase / Stock Entry'),
-      backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-      foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+      backgroundColor: Colors.teal,
+      foregroundColor: Colors.white,
       actions: [
         if (!Platform.isWindows)
           IconButton(

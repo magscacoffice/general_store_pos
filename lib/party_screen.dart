@@ -277,13 +277,11 @@ class _PartyScreenState extends State<PartyScreen> {
     bool isCustomer = widget.type == 'customer';
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
-        leading: desktopWorkspaceButton(),
         title: Text(
           isCustomer ? 'Customers (Gahak Khata)' : 'Suppliers (Samaan Waly)',
         ),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : (isCustomer ? Colors.orange : Colors.indigo),
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: (isCustomer ? Colors.orange : Colors.indigo),
+        foregroundColor: Colors.white,
       ),
       body: Platform.isWindows
           ? _buildDesktopParties(isCustomer)
