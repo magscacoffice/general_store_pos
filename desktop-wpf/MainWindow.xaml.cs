@@ -289,7 +289,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var safePrice = Math.Max(product.Price, product.PurchasePrice);
+        var isWholesale = SaleTypeBox.SelectedItem?.ToString() == "Wholesale";
+        var chosenPrice = isWholesale && product.WholesalePrice > 0 ? product.WholesalePrice : product.Price;
+        var safePrice = Math.Max(chosenPrice, product.PurchasePrice);
         if (existing is null)
             CartLines.Add(new CartLine(product.Name, product.Barcode, safePrice, 1,
                 product.PurchasePrice, product.StockUnit, product.Quantity));
@@ -318,7 +320,10 @@ public partial class MainWindow : Window
         DiscountPreviewText.Text = $"Discount: Rs. {CalculatedDiscount:N2}";
         CartCountText.Text = $"{CartLines.Sum(x => x.Quantity)} units • {CartLines.Count} lines";
         CheckoutButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
-        var walkIn = (CustomerBox.SelectedValue as int? ?? 0) == 0;
+        var saleType = SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in";
+        var walkIn = saleType == "Walk-in";
+        if (CartGrid.Columns.Count > 3)
+            CartGrid.Columns[3].IsReadOnly = saleType != "Wholesale";
         PaymentModeBox.IsEnabled = !walkIn;
         if (walkIn && PaymentModeBox.SelectedItem?.ToString() != "Cash")
             PaymentModeBox.SelectedItem = "Cash";
@@ -376,7 +381,7 @@ public partial class MainWindow : Window
                     CartLines.Select(x => new PendingBillLine(x.Barcode, x.Name, x.Price, x.Quantity,
                         x.PurchasePrice, x.StockUnit)).ToList(),
                     SelectedCustomerId,
-                    SelectedCustomerId is null ? "Walk-in" : "Khata",
+                    SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
                     PaymentModeBox.SelectedItem?.ToString() ?? "Cash",
                     DiscountValue,
                     IsPercentageDiscount,
@@ -395,7 +400,7 @@ public partial class MainWindow : Window
     {
         get
         {
-            if (CustomerBox.SelectedValue is int id && id > 0) return id;
+            if (SaleTypeBox.SelectedItem?.ToString() != "Walk-in" && CustomerBox.SelectedValue is int id && id > 0) return id;
             return null;
         }
     }
@@ -422,6 +427,8 @@ public partial class MainWindow : Window
         foreach (var line in bill.Cart)
             CartLines.Add(new CartLine(line.Name, line.Barcode, line.SalePrice, line.Quantity,
                 line.PurchasePrice, line.StockUnit, int.MaxValue));
+        SaleTypeBox.SelectedItem = bill.SelectedSaleType;
+        ApplyCustomerTypeFilter();
         CustomerBox.SelectedValue = bill.SelectedCustomerId ?? 0;
         PaymentModeBox.SelectedItem = bill.CustomerPaymentMode;
         DiscountModeBox.SelectedIndex = bill.IsPercentageDiscount ? 1 : 0;
@@ -507,6 +514,7 @@ public partial class MainWindow : Window
                 partial,
                 discountValue,
                 IsPercentageDiscount,
+                SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
                 "Local Windows User");
             var result = await _sales.CompleteSaleAsync(request);
             await _pendingBills.DeleteAsync(_activeBillId);
