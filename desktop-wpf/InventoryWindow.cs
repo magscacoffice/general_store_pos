@@ -62,6 +62,7 @@ public sealed class InventoryWindow : Window
         _grid.Columns.Add(new DataGridTextColumn { Header="Damaged", Binding=new System.Windows.Data.Binding("DamagedQuantity"), Width=75 });
         _grid.Columns.Add(new DataGridTextColumn { Header="Cost", Binding=new System.Windows.Data.Binding("PurchasePrice"){StringFormat="N2"}, Width=90 });
         _grid.Columns.Add(new DataGridTextColumn { Header="Sale Price", Binding=new System.Windows.Data.Binding("SalePrice"){StringFormat="N2"}, Width=95 });
+        _grid.Columns.Add(new DataGridTextColumn { Header="Wholesale", Binding=new System.Windows.Data.Binding("WholesalePrice"){StringFormat="N2"}, Width=95 });
         _grid.Columns.Add(new DataGridTextColumn { Header="Status", Binding=new System.Windows.Data.Binding("Status"), Width=80 });
         ScrollViewer.SetCanContentScroll(_grid, true);
         _grid.SetValue(VirtualizingPanel.IsVirtualizingProperty,true);
@@ -134,7 +135,7 @@ public sealed class InventoryWindow : Window
 
 public sealed class ProductEditorWindow : Window
 {
-    private readonly TextBox _name=new(), _barcode=new(), _quantity=new(), _unit=new(), _purchase=new(), _sale=new();
+    private readonly TextBox _name=new(), _barcode=new(), _quantity=new(), _unit=new(), _purchase=new(), _sale=new(), _wholesale=new();
     public ProductMutation? Product { get; private set; }
 
     public ProductEditorWindow(InventoryProduct? existing=null)
@@ -150,11 +151,12 @@ public sealed class ProductEditorWindow : Window
         AddField(panel,"Stock unit *",_unit);
         AddField(panel,"Purchase price",_purchase);
         AddField(panel,"Retail sale price *",_sale);
-        if(existing is null){_quantity.Text="0";_unit.Text="pcs";_purchase.Text="0";_sale.Text="0";}
+        AddField(panel,"Wholesale sale price (optional)",_wholesale);
+        if(existing is null){_quantity.Text="0";_unit.Text="pcs";_purchase.Text="0";_sale.Text="0";_wholesale.Text="0";}
         else {
             _name.Text=existing.Name;_barcode.Text=existing.Barcode;_quantity.Text=existing.Quantity.ToString(CultureInfo.InvariantCulture);
             _unit.Text=existing.StockUnit;_purchase.Text=existing.PurchasePrice.ToString(CultureInfo.InvariantCulture);
-            _sale.Text=existing.SalePrice.ToString(CultureInfo.InvariantCulture);
+            _sale.Text=existing.SalePrice.ToString(CultureInfo.InvariantCulture);_wholesale.Text=existing.WholesalePrice.ToString(CultureInfo.InvariantCulture);
             panel.Children.Add(new TextBlock { Text=$"Damaged stock preserved: {existing.DamagedQuantity}", Foreground=System.Windows.Media.Brushes.DimGray, Margin=new Thickness(0,8,0,0) });
         }
         var buttons=new StackPanel { Orientation=Orientation.Horizontal, HorizontalAlignment=HorizontalAlignment.Right, Margin=new Thickness(0,16,0,0) };
@@ -179,9 +181,11 @@ public sealed class ProductEditorWindow : Window
         if(name.Length>17){MessageBox.Show("Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.");return;}
         if(!int.TryParse(_quantity.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out var qty)||qty<0||
            !double.TryParse(_purchase.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var cost)||!double.IsFinite(cost)||cost<0||
-           !double.TryParse(_sale.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var price)||!double.IsFinite(price)||price<0){
+           !double.TryParse(_sale.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var price)||!double.IsFinite(price)||price<0||
+           !double.TryParse(_wholesale.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var wholesale)||!double.IsFinite(wholesale)||wholesale<0||
+           (wholesale>0&&wholesale<cost)){
             MessageBox.Show("Stock aur prices valid non-negative numbers honi chahiye.");return;
         }
-        Product=new ProductMutation(name,barcode,qty,unit,cost,price);DialogResult=true;
+        Product=new ProductMutation(name,barcode,qty,unit,cost,price,wholesale);DialogResult=true;
     }
 }
