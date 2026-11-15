@@ -14,7 +14,7 @@ public sealed class SaleReturnService
    FROM sale_items si WHERE si.sale_id=$sale ORDER BY si.id;
    """;
   cmd.Parameters.AddWithValue("$sale",saleId);await using var rd=await cmd.ExecuteReaderAsync(ct);var rows=new List<ReturnableSaleItem>();
-  while(await rd.ReadAsync(ct))rows.Add(new ReturnableSaleItem(rd.GetInt32(0),rd.GetString(1),rd.IsDBNull(2)?null:rd.GetInt32(2),rd.GetString(3),rd.GetString(4),rd.GetInt32(5),rd.GetDouble(6),rd.GetDouble(7),rd.GetInt32(8)));
+  while(await rd.ReadAsync(ct))rows.Add(new ReturnableSaleItem(rd.GetInt32(0),rd.GetString(1),rd.IsDBNull(2)?(int?)null:rd.GetInt32(2),rd.GetString(3),rd.GetString(4),rd.GetInt32(5),rd.GetDouble(6),rd.GetDouble(7),rd.GetInt32(8)));
   return rows;
  }
  public async Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,CancellationToken ct=default)
@@ -39,7 +39,7 @@ public sealed class SaleReturnService
    if(request.Quantity<=0)continue;
    await using var lookup=db.CreateCommand();lookup.Transaction=(SqliteTransaction)tx;lookup.CommandText="SELECT sync_id,product_id,barcode,product_name,quantity,sale_price,purchase_price FROM sale_items WHERE id=$item AND sale_id=$sale LIMIT 1;";lookup.Parameters.AddWithValue("$item",request.SaleItemId);lookup.Parameters.AddWithValue("$sale",saleId);
    await using var rd=await lookup.ExecuteReaderAsync(ct);if(!await rd.ReadAsync(ct))throw new InvalidOperationException("Selected item original invoice ka hissa nahi hai.");
-   var sync=rd.IsDBNull(0)?null:rd.GetString(0);var product=rd.IsDBNull(1)?null:rd.GetInt32(1);var barcode=rd.GetString(2);var name=rd.GetString(3);var sold=rd.GetInt32(4);var price=rd.GetDouble(5);var cost=rd.GetDouble(6);await rd.DisposeAsync();
+   var sync=rd.IsDBNull(0)?null:rd.GetString(0);var product=rd.IsDBNull(1)?(int?)null:rd.GetInt32(1);var barcode=rd.GetString(2);var name=rd.GetString(3);var sold=rd.GetInt32(4);var price=rd.GetDouble(5);var cost=rd.GetDouble(6);await rd.DisposeAsync();
    await using var returned=db.CreateCommand();returned.Transaction=(SqliteTransaction)tx;returned.CommandText="SELECT COALESCE(SUM(quantity),0) FROM sale_return_items WHERE sale_item_id=$id;";returned.Parameters.AddWithValue("$id",request.SaleItemId);var already=Convert.ToInt32(await returned.ExecuteScalarAsync(ct),CultureInfo.InvariantCulture);
    if(request.Quantity>sold-already)throw new InvalidOperationException("Return quantity sold quantity se zyada hai: "+name);
    var condition=request.Condition=="damaged"?"damaged":"saleable";var line=price*request.Quantity;gross+=line;
