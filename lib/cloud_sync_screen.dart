@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
 import 'drive_sync_service.dart';
-import 'windows/desktop_app_bar.dart';
 
 class CloudSyncScreen extends StatefulWidget {
   const CloudSyncScreen({super.key});
@@ -236,14 +235,11 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isWindows = Platform.isWindows;
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: !isWindows,
-        leading: desktopWorkspaceButton(),
         title: const Text('Cloud Sync'),
-        backgroundColor: isWindows ? const Color(0xFFF7F9FB) : Colors.teal,
-        foregroundColor: isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             tooltip: 'Refresh status',

@@ -1,12 +1,9 @@
-import 'windows/desktop_app_bar.dart';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'package:file_picker/file_picker.dart';
 import 'db_helper.dart';
-import 'windows/pos_windows.dart';
 
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
@@ -73,7 +70,6 @@ class _BackupScreenState extends State<BackupScreen> {
     String? tempPath;
     String? safetyPath;
     var databaseClosed = false;
-    var cashierBillIds = <String>[];
     try {
       final pickedFile = await FilePicker.pickFile(type: FileType.any);
       if (pickedFile == null) return;
@@ -132,11 +128,6 @@ class _BackupScreenState extends State<BackupScreen> {
         await validationDb?.close();
       }
 
-      // Ask every resident cashier window to close its SQLite connection first.
-      // The dashboard then closes its own connection before replacing the file.
-      if (Platform.isWindows) {
-        cashierBillIds = await PosWindows.closeSaleWindowsForRestore();
-      }
       await DBHelper.closeDatabase();
       databaseClosed = true;
 
@@ -213,108 +204,8 @@ class _BackupScreenState extends State<BackupScreen> {
           } catch (_) {}
         }
       }
-      if (Platform.isWindows && cashierBillIds.isNotEmpty) {
-        try {
-          for (final billId in cashierBillIds) {
-            await PosWindows.openSale(billId: billId);
-          }
-        } catch (error) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Restore ke baad New Sale window dobara open nahi ho saki: $error')),
-            );
-          }
-        }
-      }
       if (mounted) setState(() => _isWorking = false);
     }
-  }
-
-  Widget _buildWindowsBackupPanel() {
-    Widget actionCard({
-      required IconData icon,
-      required String title,
-      required String description,
-      required VoidCallback onPressed,
-      required bool restore,
-    }) {
-      return Expanded(
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(height: 14),
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                Expanded(child: Text(description, style: Theme.of(context).textTheme.bodyMedium)),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: restore
-                      ? OutlinedButton.icon(
-                          onPressed: _isWorking ? null : onPressed,
-                          icon: const Icon(Icons.restore),
-                          label: const Text('Restore from File'),
-                        )
-                      : FilledButton.icon(
-                          onPressed: _isWorking ? null : onPressed,
-                          icon: const Icon(Icons.save_alt),
-                          label: const Text('Save Backup'),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Data Protection & Recovery', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 6),
-          Text(
-            'Create a separate copy of your store database or restore a previously saved backup. The current database is preserved as a safety copy during restore.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 18),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                actionCard(
-                  icon: Icons.backup_outlined,
-                  title: 'Create Database Backup',
-                  description: 'Save products, stock, sales, purchases, customers, khata transactions and expenses into a .db backup file. Keep the file on a separate drive or secure location.',
-                  onPressed: _createBackup,
-                  restore: false,
-                ),
-                const SizedBox(width: 14),
-                actionCard(
-                  icon: Icons.settings_backup_restore,
-                  title: 'Restore Database Backup',
-                  description: 'Select a valid Khan Baba POS .db backup. The file is checked before use and the current database is retained as a safety copy.',
-                  onPressed: _restoreBackup,
-                  restore: true,
-                ),
-              ],
-            ),
-          ),
-          if (_isWorking) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(),
-            const SizedBox(height: 6),
-            const Text('Please wait. Do not close the application while this operation is running.'),
-          ],
-        ],
-      ),
-    );
   }
 
   @override

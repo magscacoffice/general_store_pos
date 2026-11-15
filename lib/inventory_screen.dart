@@ -1,5 +1,3 @@
-import 'windows/desktop_app_bar.dart';
-import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'db_helper.dart';
@@ -330,110 +328,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
         onPressed: () => _showAddOrEditProductDialog(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: Platform.isWindows
-          ? Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: [
-                  Row(children: [
-                    Expanded(child: SizedBox(
-                      height: 38,
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _searchQuery = value),
-                        onSubmitted: (value) => setState(() => _searchQuery = value),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          prefixIcon: const Icon(Icons.search, size: 18),
-                          hintText: 'Search product name or barcode',
-                          suffixIcon: IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); },
-                            icon: const Icon(Icons.clear, size: 17),
+      body: _isLoading: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _visibleProducts.isEmpty
+                  ? const Center(child: Text('No products found. Add some!'))
+                  : Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) => setState(() => _searchQuery = value),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search product name or barcode',
+                            suffixIcon: IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              icon: const Icon(Icons.clear),
+                            ),
                           ),
                         ),
                       ),
-                    )),
-                    const SizedBox(width: 8),
-                    SizedBox(height: 38, child: FilledButton.icon(
-                      onPressed: () => setState(() => _searchQuery = _searchController.text),
-                      icon: const Icon(Icons.search, size: 16),
-                      label: const Text('Search'),
-                    )),
-                    const SizedBox(width: 8),
-                    SizedBox(height: 38, child: OutlinedButton.icon(
-                      onPressed: () => _showAddOrEditProductDialog(),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Product'),
-                    )),
-                  ]),
-                  const SizedBox(height: 10),
-                  Expanded(
-                     child: _isLoading
-                         ? const Center(child: CircularProgressIndicator())
-                         : _visibleProducts.isEmpty
-                             ? const Center(child: Text('No matching products found.'))
-                             : Container(
-                                 width: double.infinity,
-                                 decoration: BoxDecoration(
-                                   color: Theme.of(context).colorScheme.surface,
-                                   border: Border.all(color: const Color(0xFFD9E0E6)),
-                                   borderRadius: BorderRadius.circular(5),
-                                 ),
-                                 child: Scrollbar(
-                                   controller: _inventoryVerticalController,
-                                   thumbVisibility: true,
-                                   interactive: true,
-                                   child: ListView.builder(
-                                     controller: _inventoryVerticalController,
-                                     primary: false,
-                                     itemCount: _visibleProducts.length,
-                                     itemBuilder: (context, index) {
-                                       final item = _visibleProducts[index];
-                                       return Card(
-                                         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                         child: ListTile(
-                                           dense: true,
-                                           title: Text(item['name']?.toString() ?? '',
-                                             maxLines: 1, overflow: TextOverflow.ellipsis,
-                                             style: const TextStyle(fontWeight: FontWeight.w600)),
-                                           subtitle: Text(
-                                             'Barcode: ${item['barcode'] ?? '—'} | Stock: ${item['quantity'] ?? 0} ${item['stock_unit'] ?? 'pcs'} | Damaged: ${item['damaged_quantity'] ?? 0}\nPurchase: Rs. ${item['purchasePrice'] ?? 0} | Sale: Rs. ${item['price'] ?? 0}',
-                                             maxLines: 2, overflow: TextOverflow.ellipsis),
-                                           trailing: Wrap(
-                                             spacing: 0,
-                                             children: [
-                                               IconButton(
-                                                 tooltip: 'Modify product',
-                                                 icon: const Icon(Icons.edit_outlined, size: 17),
-                                                 onPressed: () => _showAddOrEditProductDialog(product: item),
-                                               ),
-                                               IconButton(
-                                                 tooltip: 'Delete product',
-                                                 icon: const Icon(Icons.delete_outline, size: 17, color: Colors.red),
-                                                 onPressed: () => _confirmDeleteProduct(item),
-                                               ),
-                                             ],
-                                           ),
-                                         ),
-                                       );
-                                     },
-                                   ),
-                                 ),
-                               ),
-                   ),
-Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} of ${products.length} products', style: const TextStyle(fontSize: 11, color: Colors.black54))),
-                ],
-              ),
-            )
-          : _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : products.isEmpty
-                  ? const Center(child: Text('No products found. Add some!'))
-                  : ListView.builder(
-                  itemCount: products.length,
+                      Expanded(
+                        child: ListView.builder(
+                  itemCount: _visibleProducts.length,
                   itemBuilder: (context, index) {
-                    final item = products[index];
+                    final item = _visibleProducts[index];
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       child: ListTile(
@@ -446,7 +371,10 @@ Align(alignment: Alignment.centerRight, child: Text('${_visibleProducts.length} 
                       ),
                     );
                   },
-                ),
+                        ),
+                      ),
+                    ],
+                  ),
     );
   }
 }
