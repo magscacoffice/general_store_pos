@@ -3,9 +3,12 @@ using KhanBabaPos.Wpf.Data;
 namespace KhanBabaPos.Wpf.Services;
 public sealed class ProfitLossService
 {
- public async Task<ProfitLossSnapshot> GetAsync(CancellationToken ct=default)
+ public Task<ProfitLossSnapshot> GetAsync(CancellationToken ct=default) =>
+  GetAsync(PosDatabasePath.Resolve(requireExisting:true),ct);
+
+ public async Task<ProfitLossSnapshot> GetAsync(string databasePath,CancellationToken ct=default)
  {
-  var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
+  var path=databasePath;await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
   await using var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=path,Mode=SqliteOpenMode.ReadOnly,Pooling=false}.ToString());await db.OpenAsync(ct);
   double revenue,cost,expenses;
   await using(var cmd=db.CreateCommand()){cmd.CommandText="""
