@@ -476,12 +476,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 <!-- Copy this template for each new bug. -->
 
-### Bug: Windows POS black screen (previously reported; needs fresh reproduction)
-- **Screen / feature:** Windows portable app startup / dashboard.
-- **Steps to reproduce:** Windows portable build ko launch karein. Historical report mein Build #20 par app window black rahi aur process background mein chalti rahi.
-- **Expected result:** POS window par login/dashboard normal display ho.
-- **Actual result:** Black screen report hui. Historical diagnostics mein Flutter engine/first Dart frame aur SQLite initialization ke logs aaye; ek diagnostic probe par `MissingPluginException` for `mobile_scanner` bhi report hua. Is exception ko root cause tab tak na samjhein jab tak reproduce aur isolate na ho.
-- **Screenshot / video (optional):** Is bug ke liye current screenshot/video abhi record nahi.
+### Historical bug: Flutter Windows black screen (superseded by native WPF migration)
+- **Screen / feature:** Retired Flutter Windows runner startup/dashboard.
+- **Historical reproduction:** Build #20 reportedly showed a black window while the process remained running.
+- **Status:** The Flutter Windows runner has since been removed. This historical Flutter bug is not treated as a current WPF defect and must not be marked fixed by assumption.
+- **Remaining validation:** Launch the native WPF application on the target Windows PC and verify first-frame rendering, database startup, login/access flow and dashboard navigation. Record any new WPF failure separately with a current screenshot/log.
 
 **Bug report karne ka demo template (nayi report ke liye copy karein):**
 - **Screen / feature:** [screen ka naam]
