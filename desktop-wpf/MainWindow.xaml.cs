@@ -546,6 +546,13 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private void ProfitLoss_Click(object sender, RoutedEventArgs e)
+    {
+        var report = new ProfitLossWindow { Owner = this };
+        report.ShowDialog();
+        FocusScanner();
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
