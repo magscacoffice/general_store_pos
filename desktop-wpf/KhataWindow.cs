@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
-using System.Diagnostics;
 using System.Text;
-using Microsoft.Win32;
+using System.Windows.Documents;
 using System.Windows;
 using System.Windows.Controls;
 using KhanBabaPos.Wpf.Services;
@@ -150,26 +148,33 @@ public sealed class CustomerLedgerWindow:Window
             "Khata Statement", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private async Task SaveLedgerPdfAsync()
+    private Task SaveLedgerPdfAsync()
     {
-        var dialog = new SaveFileDialog
+        PrintStatement("Full Customer Khata Ledger", BuildLedgerText());
+        return Task.CompletedTask;
+    }
+
+    private void PrintStatement(string title, string content)
+    {
+        var document = new FlowDocument
         {
-            Filter = "PDF document (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            AddExtension = true,
-            FileName = $"KhanBaba_Khata_{_customer.Id}.pdf",
-            Title = "Save Full Customer Ledger"
+            FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+            FontSize = 10,
+            PagePadding = new Thickness(40),
+            PageWidth = 793.7,
+            PageHeight = 1122.5,
+            ColumnWidth = 700
         };
-        if (dialog.ShowDialog(this) != true) return;
-        try
-        {
-            await File.WriteAllBytesAsync(dialog.FileName, PdfReceiptBuilder.Build(BuildLedgerText()));
-            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "Ledger PDF export failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+        foreach (var line in content.Replace("\\r", string.Empty).Split('\\n'))
+            document.Blocks.Add(new Paragraph(new Run(line))
+            {
+                Margin = new Thickness(0, 0, 0, 3),
+                LineHeight = 15
+            });
+
+        var printDialog = new PrintDialog();
+        if (printDialog.ShowDialog() == true)
+            printDialog.PrintDocument(((IDocumentPaginatorSource)document).DocumentPaginator, title);
     }
 
     private async Task ExportPeriodStatementAsync()
@@ -212,17 +217,7 @@ public sealed class CustomerLedgerWindow:Window
             text.AppendLine($"Returns/refunds: Rs. {totalReturns:N2}");
             text.AppendLine($"Net item total: Rs. {lines.Sum(x => x.Amount):N2}");
 
-            var dialog = new SaveFileDialog
-            {
-                Filter = "PDF document (*.pdf)|*.pdf",
-                DefaultExt = ".pdf",
-                AddExtension = true,
-                FileName = $"KhanBaba_Khata_{_customer.Id}_{_from.SelectedDate:yyyyMMdd}_{_to.SelectedDate:yyyyMMdd}.pdf",
-                Title = "Save Selected-Period Customer Item Statement"
-            };
-            if (dialog.ShowDialog(this) != true) return;
-            await File.WriteAllBytesAsync(dialog.FileName, PdfReceiptBuilder.Build(text.ToString()));
-            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+            PrintStatement("Customer Item Statement", text.ToString());
         }
         catch (Exception ex)
         {
