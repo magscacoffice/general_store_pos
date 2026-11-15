@@ -356,7 +356,6 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ### [Windows] Native WPF cashier and inventory
 
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
-- [ ] Pass WPF inventory barcode/CRUD regression tests for exact lookup, duplicate create/update, tombstones and protected delete (latest Actions run #245 is pending).
 - [ ] Validate immediate duplicate-barcode warning using Android camera scanning and the WPF keyboard-wedge scanner on real devices.
 - [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
 - [ ] Complete responsive visual/interaction acceptance at 980×650, 1280×720, maximized and resized states.
@@ -442,13 +441,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] **WPF backup and restore safety** — verified SQLite v18 backup with SHA-256 sidecar, staged restore, atomic active-database pointer switch, active-bill flush, live-file preservation and corrupt-sidecar rejection all covered by passing disposable-database tests.
 - [x] **WPF Khata statements** — full ledger copy/print-to-PDF and separate date-range item statement including sales/returns implemented; query regression and WPF build passed.
 - [x] **WPF native shell usability** — combined scan/search input, foreground-only safe scanner fallback and consistent visible vertical scrollbar theme implemented. Target Windows visual/scanner acceptance remains pending.
+- [x] **WPF inventory duplicate-barcode protection** — barcode-first auto-focus, debounced exact duplicate lookup, duplicate Save blocking, existing-product edit exception and service-level uniqueness checks implemented; CRUD/tombstone/protected-delete regression tests passed (Actions #245).
 - [x] **Android sales and account parity** — Wholesale customer classification, account reclassification, saved wholesale rates, manual per-item rate, cash/credit/partial same-account ledger receipts, Drive snapshot preservation and regression tests passed.
 - [x] **Android sales history and reports** — invoice detail and custom date-range/daily business summaries implemented and retained.
 - [x] **Android Khata statements** — full shareable ledger and selected-period item statement implemented.
 - [x] **Android supplier invoice workflow** — camera capture, printed-text OCR, editable review/confirm, duplicate-posting guard, source-image retention and owner-approved Gemini handwriting option implemented; OCR never posts stock without review.
 - [x] **Android app update workflow** — update checker, stable release prompt, APK download/checksum verification and Android installer handoff implemented. Windows-native updater remains pending.
 - [x] **Flutter Windows retirement and WPF branch integration** — Flutter Windows runner/workflow retired; WPF source transplanted onto current-main-based integration branch; old diverged PR #4 closed and current-main Draft PR #5 opened.
-- [x] **WPF CI and regression suite** — .NET 10 Release build plus schema, sale, purchase, return, Khata, report, profit/loss and backup/restore tests passed in Actions #169, #181, #186, #198, #205 and #226; Android validation/regression passed in #266, #285, #292 and #307.
+- [x] **WPF CI and regression suite** — .NET 10 Release build plus schema, sale, purchase, return, Khata, report, profit/loss, backup/restore and inventory barcode/CRUD tests passed in Actions #169, #181, #186, #198, #205, #226 and #245; Android validation/regression passed in #266, #285, #292, #307 and #316.
 
 ### Historical completed updates before the native WPF migration
 
@@ -483,7 +483,7 @@ Future improvements: add new ideas here when the owner requests them.
 | 2026-11-15 | Added WPF purchase, return/refund and Khata receipt integration tests, including stock/cost changes, Wholesale cost floor, saleable/damaged return stock and receipt overpayment protection. | Service commits `4b92b28`, `5b69d6d`, `70523d8`; test commit `7a279c5`; Actions #198 | WPF Release build and all tests passed. |
 | 2026-11-15 | Added WPF sales-report/profit-loss integration test covering percentage discounts, returns, purchases, expenses, and net profit reconciliation. | Service commits `00a173d`, `3b214cd`; test commit `cc3cf1f`; Actions #205 | WPF Release build and all 11 tests passed. |
 | 2026-11-15 | Added WPF shareable full Khata ledger and selected-period item statement (sales/returns), with Unicode-capable Windows print/PDF flow; added consistent native scrollbar theme. | Khata service/UI commits `a2b78a2`, `a081536`, `7efa622`, `95a14c5`, `6098cc3`; scrollbar commit `3d0c4a5`; Actions #216/#226 | Query tests and native WPF build passed; target Windows print/visual acceptance pending. |
-| 2026-11-15 | Added immediate WPF inventory duplicate-barcode lookup, barcode-first editor focus, duplicate Save blocking, existing-product edit exception and inventory CRUD/tombstone regression tests. | Inventory commits `4319944`, `c1eb8bf`, `2cc9144`, `edf6b3f`, `ee5389c`, `60b526c`; Actions #245 | Code committed; latest WPF regression run #245 pending after earlier test-fixture correction. |
+| 2026-11-15 | Added immediate WPF inventory duplicate-barcode lookup, barcode-first editor focus, duplicate Save blocking, existing-product edit exception and inventory CRUD/tombstone regression tests. | Inventory commits `4319944`, `c1eb8bf`, `2cc9144`, `edf6b3f`, `ee5389c`, `60b526c`; Actions #245 | WPF Release build and all 15 tests passed. Android validation #316 also passed. |
 | 2026-11-15 | Historical pre-migration Flutter Windows correction: removed unsupported Window.getSize usage and retained the old runner's 1280×720 startup/980×650 minimum. The Flutter Windows runner was later retired; this is not a WPF validation result. | Historical Flutter Windows correction | Superseded by native WPF migration; target WPF startup test remains pending. |
 | 2026-11-15 | Pre-migration cleanup: clarified Walk-in/Khata/Wholesale semantics, removed retired Flutter Windows desktop packages and activation code, and updated the migration roadmap. | `ee6df2b`, `6133c52`, `e056dcb` | Flutter Windows target subsequently retired; native WPF source is tracked separately above. |
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
