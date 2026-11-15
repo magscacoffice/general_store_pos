@@ -19,18 +19,18 @@ public sealed class CustomerLookupService
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, name, COALESCE(phone, ''), COALESCE(balance, 0)
+            SELECT id, name, COALESCE(phone, ''), COALESCE(balance, 0), COALESCE(customer_type, 'Khata')
             FROM parties
             WHERE type = 'customer'
             ORDER BY name COLLATE NOCASE;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var customers = new List<CustomerLookup> { new(0, "Walk-in Customer", string.Empty, 0) };
+        var customers = new List<CustomerLookup>();
         while (await reader.ReadAsync(cancellationToken))
             customers.Add(new CustomerLookup(reader.GetInt32(0), reader.GetString(1),
-                reader.GetString(2), reader.GetDouble(3)));
+                reader.GetString(2), reader.GetDouble(3), reader.IsDBNull(4) ? "Khata" : reader.GetString(4)));
         return customers;
     }
 }
 
-public sealed record CustomerLookup(int Id, string Name, string Phone, double Balance);
+public sealed record CustomerLookup(int Id, string Name, string Phone, double Balance, string CustomerType);
