@@ -165,7 +165,7 @@ public sealed class CustomerLedgerWindow:Window
             PageHeight = 1122.5,
             ColumnWidth = 700
         };
-        foreach (var line in content.Replace("\\r", string.Empty).Split('\\n'))
+        foreach (var line in content.Replace("\r", string.Empty).Split('\n'))
             document.Blocks.Add(new Paragraph(new Run(line))
             {
                 Margin = new Thickness(0, 0, 0, 3),
