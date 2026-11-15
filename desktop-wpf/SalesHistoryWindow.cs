@@ -40,7 +40,7 @@ public sealed class SalesHistoryWindow : Window
         var refresh=Button("Refresh");refresh.Click+=async(_,_)=>await LoadAsync();DockPanel.SetDock(refresh,Dock.Right);header.Children.Add(refresh);
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
 
-        var filters=new DockPanel{Margin=new Thickness(0,0,0,12)};
+        var filters=new DockPanel{Margin=new Thickness(0,0,0,12),LastChildFill=false};
         _search.Width=300;_search.Height=36;_search.Padding=new Thickness(8,6,8,6);_search.ToolTip="Search bill number, customer, date or payment";
         filters.Children.Add(_search);
         var fromLabel=new TextBlock{Text="From",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(14,0,5,0)};

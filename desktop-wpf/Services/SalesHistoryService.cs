@@ -25,14 +25,14 @@ public sealed class SalesHistoryService
             FROM sales s LEFT JOIN parties p ON p.id=s.customer_id
             WHERE ($search='' OR CAST(s.id AS TEXT) LIKE $like OR p.name LIKE $like
                    OR s.date LIKE $like OR s.payment_type LIKE $like)
-              AND ($from IS NULL OR s.date >= $from)
-              AND ($to IS NULL OR s.date <= $to)
+              AND ($from IS NULL OR substr(s.date,1,10) >= $from)
+              AND ($to IS NULL OR substr(s.date,1,10) <= $to)
             ORDER BY s.id DESC;
             """;
         cmd.Parameters.AddWithValue("$search", search.Trim());
         cmd.Parameters.AddWithValue("$like", "%" + search.Trim() + "%");
-        cmd.Parameters.AddWithValue("$from", from is null ? DBNull.Value : from.Value.ToString("yyyy-MM-dd 00:00:00", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$to", to is null ? DBNull.Value : to.Value.ToString("yyyy-MM-dd 23:59:59", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$from", from is null ? DBNull.Value : from.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$to", to is null ? DBNull.Value : to.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         var result = new List<SaleHistoryRecord>();
         while (await reader.ReadAsync(cancellationToken))
