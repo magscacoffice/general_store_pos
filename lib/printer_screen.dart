@@ -187,7 +187,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   @override
   void initState() {
     super.initState();
-    if (!Platform.isWindows) _getBluetoothDevices();
+    _getBluetoothDevices();
   }
 
   @override
@@ -216,7 +216,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       });
       if (devices.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Platform.isWindows ? 'USB printer nahi mila. PC USB connection aur printer driver check karein.' : 'USB printer nahi mila. OTG cable aur printer connection check karein.')),
+          SnackBar(content: Text('USB printer nahi mila. OTG cable aur printer connection check karein.')),
         );
       }
     } catch (e) {
@@ -306,7 +306,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   Future<void> _printReceipt() async {
     if (!_isUsbConnected && !_isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Platform.isWindows ? 'Pehle USB printer connect karein.' : 'Pehle USB ya Bluetooth printer connect karein.')),
+        SnackBar(content: Text('Pehle USB ya Bluetooth printer connect karein.')),
       );
       return;
     }
@@ -574,7 +574,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
         MaterialPageRoute(
           builder: (_) => Scaffold(
             appBar: AppBar(
-              leading: desktopReturnButton(),
               title: const Text('Invoice Preview'),
             ),
             body: PdfPreview(
@@ -602,7 +601,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
   @override
   Widget build(BuildContext context) {
 
-    final isWindows = Platform.isWindows;
     final cartItemsList = widget.cartItems.isEmpty
         ? const Center(child: Text('No invoice items found.'))
         : ListView.builder(
@@ -624,7 +622,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     final content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!isWindows) ...[
+            ...[
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
@@ -732,7 +730,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
               icon: _isUsbScanning
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.usb),
-              label: Text(_isUsbScanning ? 'USB printer search ho raha hai...' : (Platform.isWindows ? 'Find USB Printer' : 'Find USB OTG Printer')),
+              label: Text(_isUsbScanning ? 'USB printer search ho raha hai...' : 'Find USB OTG Printer'),
             ),
             if (_usbDevices.isNotEmpty)
               SizedBox(
@@ -760,12 +758,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
             else
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(Platform.isWindows ? 'USB printer ko PC se connect kar ke Find USB Printer dabayein.' : 'USB printer connect kar ke Find USB OTG Printer dabayein.', style: const TextStyle(color: Colors.black54)),
+                child: Text('USB printer connect kar ke Find USB OTG Printer dabayein.', style: const TextStyle(color: Colors.black54)),
               ),
             const Divider(thickness: 2),
-            isWindows
-                ? SizedBox(height: 180, child: cartItemsList)
-                : Expanded(child: cartItemsList),
+            Expanded(child: cartItemsList),
             const Divider(),
             _totalRow('Subtotal', _subtotal),
             _totalRow('Discount', widget.discountAmount),
@@ -862,7 +858,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
         );
     return Scaffold(
       appBar: AppBar(
-        leading: desktopReturnButton(),
         toolbarHeight: 56,
         title: const Text('Printer & Invoice'),
         backgroundColor: Colors.teal,
@@ -870,12 +865,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: isWindows
-            ? Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(child: content),
-              )
-            : content,
+        child: content,
       ),
     );
   }
