@@ -519,6 +519,27 @@ public static class PosDatabaseSchemaVerifier
         ("drive_sync_tombstones", ["entity_type", "entity_key"]),
     ];
 
+    private static readonly IReadOnlyDictionary<string, string[]> RequiredNotNull = new Dictionary<string, string[]>
+    {
+        ["products"] = ["name", "barcode", "price", "quantity", "is_active"],
+        ["sales"] = ["total_amount", "date"],
+        ["parties"] = ["name", "phone", "type"],
+        ["expenses"] = ["title", "amount", "date"],
+        ["reminders"] = ["title", "date"],
+        ["purchases"] = ["product_id", "product_name", "barcode", "quantity", "unit_cost", "total_cost", "date"],
+        ["sale_items"] = ["sale_id", "barcode", "product_name", "quantity", "sale_price", "purchase_price", "line_total", "cost_total"],
+        ["sync_queue"] = ["collection_name", "document_id", "operation", "created_at", "attempts"],
+        ["khata_transactions"] = ["party_id", "type", "amount", "date"],
+        ["sale_returns"] = ["sale_id", "reason", "refund_method", "refund_amount", "date"],
+        ["sale_return_items"] = ["return_id", "sale_item_id", "barcode", "product_name", "quantity", "sale_price", "purchase_price", "line_total", "cost_total", "condition"],
+        ["khata_reminder_log"] = ["party_id", "oldest_due_date", "created_at"],
+        ["pending_bills"] = ["label", "payload", "updated_at"],
+        ["drive_sync_conflicts"] = ["source_device_id", "snapshot_hash", "entity_type", "entity_key", "local_payload", "remote_payload", "status", "created_at"],
+        ["drive_sync_aliases"] = ["source_device_id", "remote_sync_id", "local_sync_id"],
+        ["drive_sync_tombstones"] = ["entity_type", "entity_key", "deleted_at", "source_device_id"],
+        ["drive_sync_ignored_tombstones"] = ["source_device_id", "entity_type", "entity_key"],
+    };
+
     private static readonly IReadOnlyDictionary<string, string> ExpectedDefaults = new Dictionary<string, string>
     {
         ["products.purchasePrice"] = "0.0",
@@ -605,6 +626,11 @@ public static class PosDatabaseSchemaVerifier
             foreach (var column in table.Value)
                 if (!columns.ContainsKey(column))
                     problems.Add($"missing column {table.Key}.{column}");
+
+            if (RequiredNotNull.TryGetValue(table.Key, out var requiredColumns))
+                foreach (var column in requiredColumns)
+                    if (columns.TryGetValue(column, out var metadata) && metadata.NotNull != 1)
+                        problems.Add($"NOT NULL constraint missing on {table.Key}.{column}");
 
             if (!PrimaryKeys.TryGetValue(table.Key, out var expectedKey))
                 continue;
