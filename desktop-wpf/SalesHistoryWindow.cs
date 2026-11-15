@@ -85,6 +85,13 @@ public sealed class SalesHistoryWindow : Window
             _status.Text=$"{Sales.Count:N0} invoice(s)";
         }catch(Exception ex){_status.Text="Sales history load failed: "+ex.Message;}
     }
+    private async Task ProcessReturnSelected()
+    {
+        if(_grid.SelectedItem is not SaleHistoryRecord sale)return;
+        var dialog=new SaleReturnWindow(sale){Owner=this};
+        if(dialog.ShowDialog()==true)await LoadAsync();
+    }
+
     private async void OpenSelected()
     {
         if(_grid.SelectedItem is not SaleHistoryRecord sale)return;

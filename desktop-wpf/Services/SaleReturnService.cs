@@ -28,7 +28,7 @@ public sealed class SaleReturnService
   await using(var sale=db.CreateCommand()){
    sale.Transaction=(SqliteTransaction)tx;sale.CommandText="SELECT customer_id,COALESCE(sync_id,''),COALESCE(payment_type,'Cash'),COALESCE(total_amount,0),COALESCE(discount,0),COALESCE(received_amount,0),final_amount FROM sales WHERE id=$id LIMIT 1;";sale.Parameters.AddWithValue("$id",saleId);
    await using var rd=await sale.ExecuteReaderAsync(ct);if(!await rd.ReadAsync(ct))throw new InvalidOperationException("Original invoice nahi mila.");
-   customerId=rd.IsDBNull(0)?null:rd.GetInt32(0);saleSync=rd.GetString(1);payment=rd.GetString(2);subtotal=rd.GetDouble(3);discount=rd.GetDouble(4);receivedRaw=rd.GetDouble(5);finalRaw=rd.IsDBNull(6)?0:rd.GetDouble(6);
+   customerId=rd.IsDBNull(0)?(int?)null:rd.GetInt32(0);saleSync=rd.GetString(1);payment=rd.GetString(2);subtotal=rd.GetDouble(3);discount=rd.GetDouble(4);receivedRaw=rd.GetDouble(5);finalRaw=rd.IsDBNull(6)?0:rd.GetDouble(6);
   }
   if(string.IsNullOrWhiteSpace(saleSync))throw new InvalidOperationException("Original invoice sync ID missing hai.");
   string? partySync=null;
