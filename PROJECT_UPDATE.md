@@ -5,12 +5,12 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
-> **Planning status:** Audit and migration plan recorded. No C# application code has been generated yet.
+> **Planning status:** The native WPF scaffold, SQLite v18 entity mappings, data-path resolver and read-only schema verifier exist. Operational WPF features and acceptance remain incomplete.
 
 ## 1. Non-negotiable compatibility rules
 
 - [ ] Keep Android's Flutter implementation, Android build workflow, and existing mobile user experience intact.
-- [ ] Build a separate native Windows application under `desktop-wpf/` (proposed location); do not replace or delete the Flutter `lib/`, `windows/`, Android, or shared database code during the migration.
+- [ ] Build and complete the separate native Windows application under `desktop-wpf/`. Flutter Android (`lib/` + `android/`) and shared database logic must remain intact. The Flutter Windows runner/UI and its build/release workflow have been explicitly retired and must not be restored.
 - [ ] Preserve business behaviour: sale posting, stock movements, purchase posting, returns, discounts (including percentage discounts), received amounts, customer balances/Khata ledger, profit calculations, invoice totals, and all existing validation rules.
 - [ ] Preserve all three customer types: Walk-in, Khata, and Wholesale. Customer type is separate from payment method. Wholesale customers may pay cash, credit, or partially; every received amount must be recorded against the same wholesale customer's account/Khata, update the outstanding balance, and retain transaction/payment history. Do not make Wholesale cash-only or remove the existing option.
 - [ ] Do not change database table/column names, IDs, SQLite file location, schema version, sync identifiers, tombstone semantics, or existing backup format without a separately reviewed migration and Android compatibility proof.
@@ -22,7 +22,7 @@
 
 ## 2. Deep audit — repository inventory
 
-The audited Git tree contains 244 entries and is a Flutter/Dart project today. The root includes `lib/`, `android/`, `ios/`, `windows/`, `linux/`, `macos/`, `web/`, `functions/`, `test/`, three GitHub Actions workflows, `pubspec.yaml`, and this tracker. There is currently no WPF solution/project in the repository.
+The repository remains a Flutter/Dart Android project with a separate `desktop-wpf/` native Windows client. The Flutter Windows runner and Windows-specific build/release workflow have been retired. Current GitHub Actions workflows cover Android APK builds, POS sync/invoice tests, and the native WPF build.
 
 ### 2.1 Flutter screens and proposed WPF counterparts
 
@@ -69,7 +69,7 @@ The audited Git tree contains 244 entries and is a Flutter/Dart project today. T
 - `test/supplier_invoice_conversion_test.dart`: SQLite purchase invoice posting, pack conversion, stock and supplier totals.
 - `test/drive_sync_integration_test.dart`: snapshot import, sync conflict detection and conflict resolution.
 - `test/widget_test.dart`: inspect for current startup/widget assumptions; WPF will have its own view-model/service tests and Windows UI smoke tests.
-- GitHub Actions currently build Android APK, build Flutter Windows portable package, and run POS sync/invoice tests. A separate WPF Windows build/test workflow will be added after the first compilable WPF scaffold; Android workflow must remain intact.
+- GitHub Actions retain Android APK and POS sync/invoice tests and include a separate native WPF Windows build workflow. Do not restore a Flutter Windows build/package workflow.
 
 ## 3. Existing SQLite architecture — compatibility contract
 
@@ -85,7 +85,7 @@ The audited Git tree contains 244 entries and is a Flutter/Dart project today. T
 
 | Table | Important columns / role |
 |---|---|
-| `products` | `id`, `name`, unique `barcode`, `price`, `purchasePrice`, `wholesalePrice` (legacy persisted column; do not surface a removed UI option), `damaged_quantity`, `quantity`, `is_active`, `stock_unit` |
+| `products` | `id`, `name`, unique `barcode`, `price`, `purchasePrice`, `wholesalePrice` (persisted default wholesale unit rate; use as the default editable item rate for Wholesale customers when available), `damaged_quantity`, `quantity`, `is_active`, `stock_unit` |
 | `sales` | `id`, `total_amount`, `discount`, `final_amount`, `payment_type`, `customer_id`, `salesman_uid`, `salesman_name`, `customer_type`, `received_amount`, `balance_due`, `sync_id`, `customer_sync_id`, `date` |
 | `sale_items` | `id`, `sale_id`, `product_id`, `barcode`, `product_name`, `quantity`, `sale_price`, `purchase_price`, `line_total`, `cost_total`, `sync_id`, `sale_sync_id`, `stock_unit` |
 | `parties` | `id`, `name`, `phone`, `type`, `customer_type`, `sync_id`, `balance` |
@@ -285,7 +285,7 @@ NuGet package versions will be selected and pinned when scaffolding, after confi
 14. [ ] **Automated parity and regression:** schema fixture tests, calculation parity, transaction atomicity, sync round-trip/conflict tests, printer byte-layout tests and WPF view-model tests.
 15. [ ] **CI and release:** add WPF build/test/package workflow; retain Android APK workflow; publish a separate Windows WPF artifact/release channel and verify update migration.
 16. [ ] **Manual acceptance:** test on the target Windows laptop at 980×650, 1280×720, maximized/restored, scanner, BC-86AC printer, offline mode, Drive conflict and database restore.
-17. [ ] **Cutover:** only after acceptance, make the WPF Windows package the recommended Windows app. Keep Flutter Windows source available during a rollback period; do not delete it until the owner explicitly approves retirement.
+17. [ ] **Cutover:** Flutter Windows retirement has already been explicitly approved and the Flutter Windows runner/build workflow have been removed. Make WPF the supported Windows client only after its full acceptance checklist passes; do not recreate a Flutter Windows rollback path.
 
 ## 10. Acceptance gates / completion definition
 
