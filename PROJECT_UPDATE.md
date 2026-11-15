@@ -352,7 +352,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Pending Updates
 
-<!-- Source implementation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
+<!-- This is the canonical live task list. The earlier roadmap sections describe requirements/architecture; Completed Updates records finished work. Source implementation, automated validation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
 
 ### [Windows] Native WPF cashier and inventory
 
@@ -382,6 +382,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [Windows] Flutter Windows retirement and final cutover
 
+- [ ] Audit and remove remaining Flutter Windows-only UI/window lifecycle hooks in reminders, profit/loss, purchases, inventory, sale returns, backup, cloud sync and sales. Preserve Android workflows and shared Drive-sync/database logic.
+- [ ] Implement the native WPF update checker: stable-channel release detection, compatible version comparison, one notification per version, manual check and release notes.
+- [ ] Implement native WPF package download/checksum verification and safe installer handoff; never overwrite the running executable or touch the live database/settings/backups.
+- [ ] Verify full-ledger and period-statement PDF/print on Windows, including date boundaries, Unicode customer/product names and Microsoft Print to PDF.
+- [ ] Verify WPF scrollbar visibility/hit targets, combined scan/search focus, modal keyboard navigation and responsive layouts on the target PC.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
 - [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
