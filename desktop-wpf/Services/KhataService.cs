@@ -59,6 +59,59 @@ public sealed class KhataService
         result.Reverse();return result;
     }
 
+    public Task<IReadOnlyList<KhataStatementLine>> GetStatementAsync(
+        int partyId, DateTime from, DateTime to, CancellationToken ct = default) =>
+        GetStatementAsync(partyId, from, to, PosDatabasePath.Resolve(requireExisting: true), ct);
+
+    public async Task<IReadOnlyList<KhataStatementLine>> GetStatementAsync(
+        int partyId, DateTime from, DateTime to, string databasePath, CancellationToken ct = default)
+    {
+        if (from.Date > to.Date) throw new InvalidOperationException("From date cannot be after To date.");
+        await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, ct);
+        await using var db = await OpenAsync(databasePath, true, ct);
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = """
+            SELECT entry_type,entry_date,bill_id,product_name,quantity,stock_unit,rate,amount,payment_type,note
+            FROM (
+                SELECT 'Sale' AS entry_type,s.date AS entry_date,s.id AS bill_id,si.product_name,
+                    si.quantity,COALESCE(si.stock_unit,'pcs') AS stock_unit,si.sale_price AS rate,
+                    CASE WHEN COALESCE((SELECT SUM(si2.line_total) FROM sale_items si2 WHERE si2.sale_id=s.id),0)>0
+                         THEN si.line_total - COALESCE(s.discount,0)*si.line_total/
+                              (SELECT SUM(si2.line_total) FROM sale_items si2 WHERE si2.sale_id=s.id)
+                         ELSE si.line_total END AS amount,
+                    COALESCE(s.payment_type,'Cash') AS payment_type,'' AS note
+                FROM sales s JOIN sale_items si ON si.sale_id=s.id
+                WHERE s.customer_id=$id
+                  AND substr(s.date,1,10)>=$from AND substr(s.date,1,10)<=$to
+                UNION ALL
+                SELECT 'Return',r.date,r.sale_id,ri.product_name,-ri.quantity,
+                    COALESCE(si.stock_unit,'pcs'),ri.sale_price,
+                    -CASE WHEN COALESCE((SELECT SUM(ri2.line_total) FROM sale_return_items ri2 WHERE ri2.return_id=r.id),0)>0
+                          THEN r.refund_amount*ri.line_total/
+                               (SELECT SUM(ri2.line_total) FROM sale_return_items ri2 WHERE ri2.return_id=r.id)
+                          ELSE r.refund_amount END,
+                    r.refund_method,COALESCE(r.reason,'')||' ('||COALESCE(ri.condition,'saleable')||')'
+                FROM sale_returns r
+                JOIN sale_return_items ri ON ri.return_id=r.id
+                LEFT JOIN sale_items si ON si.id=ri.sale_item_id
+                WHERE r.customer_id=$id
+                  AND substr(r.date,1,10)>=$from AND substr(r.date,1,10)<=$to
+            )
+            ORDER BY entry_date ASC,bill_id ASC,entry_type ASC,product_name COLLATE NOCASE;
+            """;
+        cmd.Parameters.AddWithValue("$id", partyId);
+        cmd.Parameters.AddWithValue("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var result = new List<KhataStatementLine>();
+        while (await reader.ReadAsync(ct))
+            result.Add(new KhataStatementLine(
+                reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3),
+                reader.GetInt32(4), reader.GetString(5), reader.GetDouble(6), reader.GetDouble(7),
+                reader.GetString(8), reader.GetString(9)));
+        return result;
+    }
+
     public Task RecordReceiptAsync(int partyId,double amount,string note,CancellationToken ct=default) =>
         RecordReceiptAsync(partyId,amount,note,PosDatabasePath.Resolve(requireExisting:true),ct);
 
@@ -113,6 +166,7 @@ public sealed class KhataService
     }
 }
 public sealed record KhataCustomer(int Id,string Name,string Phone,double Balance);
+public sealed record KhataStatementLine(string EntryType,string Date,int BillId,string ProductName,int Quantity,string StockUnit,double Rate,double Amount,string PaymentType,string Note);
 public sealed record KhataEntry(int Id,string Date,string Type,double Amount,string Description,double RunningBalance)
 {
  public double Debit=>Type=="sale"?Amount:0;
