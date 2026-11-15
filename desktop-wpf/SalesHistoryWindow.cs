@@ -118,6 +118,9 @@ public sealed class SaleDetailsWindow : Window
         grid.Columns.Add(new DataGridTextColumn{Header="Rate",Binding=new System.Windows.Data.Binding("SalePrice"){StringFormat="N2"},Width=95});
         grid.Columns.Add(new DataGridTextColumn{Header="Amount",Binding=new System.Windows.Data.Binding("LineTotal"){StringFormat="N2"},Width=105});
         var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
+        var print=new Button{Content="Printer & Invoice",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)};
+        print.Click+=(_,_)=>new PrinterInvoiceWindow(sale,items){Owner=this}.ShowDialog();
+        footer.Children.Add(print);
         var close=new Button{Content="Close",Padding=new Thickness(14,8,14,8)};close.Click+=(_,_)=>Close();
         footer.Children.Add(close);DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
         root.Children.Add(grid);
