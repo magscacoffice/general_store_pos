@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited branch / baseline:** `main` at `f4b0f4a65113dc3857ffd397b34fc8b4f2c0e1f9` (2026-11-15).
-> **Planning status:** Native WPF cashier, inventory, Khata, sales history, purchases, returns, reports, expenses, reminders, profit/loss and printer/invoice source have been integrated onto the current `main` baseline. Automated build/integration checks and physical Windows acceptance remain pending.
+> **Planning status:** Native WPF cashier, inventory, Walk-in/Khata/Wholesale account handling, sales history, purchases, returns, reports, expenses, reminders, profit/loss and printer/invoice source have been integrated onto the current `main` baseline. WPF Release build and schema tests pass; Android Wholesale parity, transaction integration tests, sync/auth and physical Windows acceptance remain pending.
 
 ## 1. Non-negotiable compatibility rules
 
@@ -357,6 +357,10 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 - [x] Integrated dashboard-hosted WPF cashier source: scanner-ready focus, exact barcode lookup, product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
 - [x] Integrated WPF inventory window and service: searchable product list, product add/edit, active/inactive state, protected delete rules and virtualized DataGrid.
+- [x] Added separate Walk-in / Khata / Wholesale customer-type selection, matching account filtering and pending-bill persistence.
+- [x] Added Wholesale account creation in WPF Parties, persisted product wholesale rates in Inventory, and used saved wholesale rate by default when adding a cart item.
+- [x] Enabled per-item manual rate editing for Wholesale bills only; rate validation never allows a sale price below purchase cost.
+- [x] WPF sale posting now stores the selected customer type and supports Cash, Credit and Partial Wholesale payments. Cash/partial receipts are posted against the same customer's Khata ledger and balance in the same transaction.
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
 - [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
 - [ ] Complete responsive visual/interaction acceptance at 980×650, 1280×720, maximized and resized states.
@@ -368,9 +372,11 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [x] Integrated transactional sale-posting source with stock deduction, discount handling, payment modes and ledger updates.
 - [x] Integrated searchable purchase/stock entry, expense register, reminders, customer/supplier list and profit/loss views.
 - [x] Integrated sale-return/refund source with stock restoration and transaction handling.
-- [ ] Run automated integration tests against a disposable copy of the real SQLite v18 database for sales, purchases, returns/refunds, Khata receipts/ledger, stock and backup safety.
+- [x] .NET 10 WPF Release restore/build and the existing SQLite v18 schema verifier tests passed on the integrated source after correcting the disposable test fixture to disable SQLite connection pooling (Actions runs #130 and #131).
+- [ ] Add and run automated integration tests against a disposable copy of the real SQLite v18 database for sales, purchases, returns/refunds, Khata/Wholesale receipts and ledger, stock and backup safety.
 - [ ] Verify all transaction totals, discount (including percentage), received amounts, customer balances, payment history and stock movements against Android behaviour. Do not alter the existing discount feature.
-- [ ] Confirm the current Android customer/payment rules remain intact, including Walk-in, Khata and Wholesale as distinct customer types and cash/credit/partial payments where applicable. Do not remove Wholesale or make it cash-only.
+- [ ] Restore Android Flutter Wholesale parity: current Android billing selector exposes only Walk-in/Khata, and the current DBHelper sale path normalizes every selected account to Khata. Preserve Walk-in, Khata and Wholesale as distinct customer types; Wholesale must support Cash/Credit/Partial, saved wholesale product rate defaults, manual per-item rates, and receipts/ledger history against the same customer account. Do not remove Wholesale or make it cash-only.
+- [ ] Review party/sync paths before enabling Wholesale on Android: customer creation and remote-party import currently default customer_type to Khata; preserve the supplied customer_type in local saves and Drive sync. Provide a safe way to reclassify existing accounts because an earlier schema upgrade converted Wholesale values to Khata and those historical classifications cannot be inferred automatically.
 
 ### [Windows] Printer and invoice
 
