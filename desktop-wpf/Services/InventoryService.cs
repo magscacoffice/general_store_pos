@@ -52,6 +52,7 @@ public sealed class InventoryService
 
     public async Task CreateAsync(ProductMutation p, string databasePath, CancellationToken ct = default)
     {
+        AccessService.RequireCurrentAdmin();
         Validate(p);
         var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
