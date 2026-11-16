@@ -828,3 +828,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF history model mein customer ID include ki, taa-ke recalled bill sahi customer account ke sath load ho aur draft receipt model bhi compatible rahe.
 - [x] WPF startup par stable update notification per-version aik martaba show karne ka logic add kiya; last-notified version LocalAppData mein store hota hai.
 - [ ] **Pending:** in tamam latest changes ka consolidated source review, Flutter analyze/build, WPF Release build aur regression tests. Owner ke kehne par abhi intermediate validation nahi chalayi gayi.
+
+
+## Consolidated progress — 2026-11-16
+
+- [x] Android Recall Bill UI, transactional overwrite service, Save as New Bill path aur explicit New Bill action source mein add kar diye gaye.
+- [x] WPF Recall Bill selection dialog, history customer ID, transactional overwrite service, Save as New Bill path aur explicit New Sale reset source mein add kar diye gaye.
+- [x] WPF startup par stable update notification per-version one-time display ke liye LocalAppData marker add kiya; manual update check aur signed-installer safety gate barqarar hai.
+- [x] Recall ke waqt WPF ka existing active pending cart pehle persist hota hai; recalled bill ke liye naya pending-bill identity use hota hai.
+- [ ] **Overall project completion abhi In Progress hai.** Repo mein mazeed pending code/acceptance items mojood hain: Google Drive v3 orchestration/reconciliation (remote import disabled), native updater download/progress/installer signing, WPF full-ledger/period-statement PDF validation, complete screen-by-screen responsive audit, schema/calculation parity, scanner/printer physical acceptance, supplier invoice UI ke baad CI, aur target-PC/owner sign-off.
+- [ ] Owner ki hidayat ke mutabiq abhi intermediate build/test run nahi hua. Android aur WPF ke tamam latest code changes final consolidated pass tak unverified hain. Koi production-ready ya tested claim nahi kiya ja raha.
+- [ ] Live business database ya production backup ko touch nahi kiya gaya.
