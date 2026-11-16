@@ -18,6 +18,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var path = Path.Combine(Path.GetTempPath(), "khan-baba-sale-tests-" + Guid.NewGuid().ToString("N") + ".dat");
         var access = new AccessService(path);
         access.ProvisionFirstAdmin("testadmin", "Local Windows User", "TestPassword!2026");
+        AccessService.RegisterProcess(access);
         return access;
     }
 
