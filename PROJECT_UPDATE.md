@@ -781,3 +781,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] **Pending — Recall Bill / Edit Previous Bill:** dono platforms par feature implementation aur transactional regression tests abhi baqi hain.
 - [ ] **Pending — latest WPF validation:** supplier invoice UI ke baad Release build + complete tests ka naya successful CI result abhi verify nahi hua.
 - [ ] **Pending — environment limitation:** is session mein Codespaces terminal/workspace ka live connection available nahi mila; GitHub source read/write mumkin hai, lekin is waqt local `dotnet` / `flutter` commands run karke code changes compile/test karna mumkin nahi. Bina build/test ke unverified code commit nahi kiya jayega.
+
+
+## Work order update — 2026-11-16 (Owner ne darmiyani build/test filhal skip karne ki ijazat di)
+
+- [ ] **Status: In Progress.** Owner ki wazeh hidayat: "Code aur is ka test/build bhi filhal chhor do. Bas code likhte jao. Aakhir mein jab commit/push karenge, tab errors dekh kar fix karenge. Abhi code mukammal karo."
+- [ ] Is liye implementation ke darmiyan har choti tabdeeli ke baad build/test chalana zaroori nahi. Pehle tamam agreed code changes mukammal karne hain; phir aik consolidated review, build aur tests commit/push se pehle ya us waqt available environment mein chalaye jayenge.
+- [ ] Yeh ijazat accounting/data safety ko bypass karne ki ijazat nahi: Recall Bill overwrite ke liye return ya baad ki Khata receipt/payment ki pabandi, stock aur Khata ki aik SQLite transaction, rollback par original bill ki hifazat, sync/outbox identity aur existing discount/printing behavior preserve karna lazmi hai.
+- [ ] Agar local terminal ya CI run available na ho to tests skip hone ki wajah sachai se note karni hai; test pass hone ka dawa nahi karna.
