@@ -549,6 +549,7 @@ public partial class MainWindow : Window
         await PersistActiveBillAsync();
         _suppressPersistence = true;
         _activeBillId = Guid.NewGuid().ToString("N");
+        _recalledSaleId = null;
         CartLines.Clear();
         SaleTypeBox.SelectedItem = "Walk-in";
         ApplyCustomerTypeFilter();
