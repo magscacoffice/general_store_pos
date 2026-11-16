@@ -2,7 +2,7 @@ name: Validate Native WPF POS (No Publish Artifacts)
 
 on:
   push:
-    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
+    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml', '.github/workflows/validate-windows-installer.yml']
   pull_request:
     paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
   workflow_dispatch:

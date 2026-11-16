@@ -1,13 +1,8 @@
 name: Validate Native Windows Installer (Manual Only)
 
 on:
-  push:
-    branches: [integration/wpf-mainline]
-    paths:
-      - 'desktop-wpf/**'
-      - 'desktop-wpf.Tests/**'
-      - 'installer/**'
-      - '.github/workflows/validate-windows-installer.yml'
+  # Installer compilation and test-artifact upload are manual-only.
+  # Regular WPF build/test validation remains in build-wpf.yml.
   workflow_dispatch:
     inputs:
       version:
@@ -46,10 +41,17 @@ jobs:
 
       - name: Compile per-user installer (not published)
         shell: pwsh
+        env:
+          APP_VERSION: ${{ inputs.version }}
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
-          & $iscc "/DAppVersion=${{ inputs.version || '1.0.0' }}" "installer/KhanBabaPOS.iss"
+          $version = $env:APP_VERSION
+          if ([string]::IsNullOrWhiteSpace($version)) { $version = "1.0.0" }
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+            throw "Invalid installer version: $version"
+          }
+          & $iscc "/DAppVersion=$version" "installer/KhanBabaPOS.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
           $installer = "artifacts/installer/KhanBabaPOS-Setup-x64.exe"
           if (-not (Test-Path $installer)) { throw "Installer output was not created." }

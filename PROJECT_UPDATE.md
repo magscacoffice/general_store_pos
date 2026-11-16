@@ -670,3 +670,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Add automated tests for first-run provisioning, password verification, role denial, disabled users, last-Admin protection, session expiry and sale attribution. WPF Release build and tests passed in GitHub Actions run 43831153534 (commit 2f2bc1e). [ ] Target-PC login/role acceptance remains required.
 - [x] Added the transactional SQLite v18 merge/conflict/tombstone engine and explicit resolution methods; initial disposable-database tests verify product conflict resolution and protection against deleting a stocked product. [ ] Complete the full Android-parity test matrix and target-PC acceptance before enabling Drive imports.
 - [x] Added per-user x64 Inno Setup installer source, separate user-data/backups preservation paths, GitHub-release update check, SHA-256 and Authenticode verification logic, a manual-only installer compilation workflow and update-check UI. No installer/release artifact was published. [ ] Compile and test installer/upgrade/uninstall, obtain the production signing certificate, pin its thumbprint, sign installer/releases, and complete owner acceptance. Updater installation intentionally remains disabled until the publisher pin is configured.
+
+## Work log — 2026-11-16 (installer workflow correction)
+
+- [x] Inspected latest branch head `d89ca686100bbc141eb8415099f2058f96ab6c85`: native WPF Release build and 28 regression tests passed in installer-validation run `43844243858`; installer compilation failed because the push event supplied an empty `inputs.version`, overriding the Inno Setup script's default and leaving `AppVersion` blank.
+- [x] Correct the installer workflow to use a validated PowerShell fallback version (`1.0.0`) when no manual input is supplied.
+- [x] Make installer compilation/test-artifact upload manual-only; regular WPF build/test validation remains in `build-wpf.yml`. No production installer or release is published by this change.
+- [x] Refresh the WPF README to reflect the implemented Drive reconciliation/orchestration foundation and the intentionally paused remote imports.
