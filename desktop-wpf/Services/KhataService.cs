@@ -117,6 +117,7 @@ public sealed class KhataService
 
     public async Task RecordReceiptAsync(int partyId,double amount,string note,string databasePath,CancellationToken ct=default)
     {
+        AccessService.RequireCurrentAdmin();
         if(!double.IsFinite(amount)||amount<=0)throw new InvalidOperationException("Receipt amount zero se zyada hona chahiye.");
         var path=databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
