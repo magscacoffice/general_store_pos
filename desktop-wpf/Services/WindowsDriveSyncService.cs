@@ -16,6 +16,8 @@ namespace KhanBabaPos.Wpf.Services;
 public sealed class WindowsDriveSyncService
 {
     private static readonly byte[] DeviceEntropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.DriveDeviceId.v1");
+    // Keep remote imports paused until the full SQLite v18 parity matrix and owner acceptance pass.
+    private const bool EnableDeviceSnapshotImports = false;
     private readonly AccessService _access;
     private readonly GoogleDriveAuthService _auth = new();
     private readonly GoogleDriveApiClient _drive;
@@ -84,41 +86,51 @@ public sealed class WindowsDriveSyncService
             var backupDirectory = Path.Combine(Path.GetDirectoryName(path)!, "Backups");
             Directory.CreateDirectory(backupDirectory);
 
-            foreach (var file in files.Where(x =>
-                         x.Name.StartsWith("device_", StringComparison.Ordinal) &&
-                         x.Name.EndsWith(".json", StringComparison.Ordinal) &&
-                         x.Name != $"device_{deviceId}.json"))
+            if (EnableDeviceSnapshotImports)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                SetStatus($"Checking {file.Name}...");
-                using var document = await _drive.DownloadJsonAsync(file.Id, cancellationToken);
-                var validated = DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(document.RootElement.GetRawText());
-                if (manifest.IsProcessed(validated.DeviceId, validated.SnapshotHash))
+                foreach (var file in files.Where(x =>
+                             x.Name.StartsWith("device_", StringComparison.Ordinal) &&
+                             x.Name.EndsWith(".json", StringComparison.Ordinal) &&
+                             x.Name != $"device_{deviceId}.json"))
                 {
-                    skipped++;
-                    continue;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    SetStatus($"Checking {file.Name}...");
+                    using var document = await _drive.DownloadJsonAsync(file.Id, cancellationToken);
+                    var validated = DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(document.RootElement.GetRawText());
+                    if (manifest.IsProcessed(validated.DeviceId, validated.SnapshotHash))
+                    {
+                        skipped++;
+                        continue;
+                    }
+    
+                    var backupName = manifest.GetPreMergeBackup(validated.DeviceId);
+                    var backupExists = !string.IsNullOrWhiteSpace(backupName) &&
+                                       File.Exists(Path.Combine(backupDirectory, backupName));
+                    if (!backupExists)
+                    {
+                        SetStatus($"Creating safety backup before importing {validated.DeviceId}...");
+                        var backupPath = await _backups.CreateBackupAsync(path, backupDirectory, cancellationToken);
+                        manifest.SetPreMergeBackup(validated.DeviceId, Path.GetFileName(backupPath));
+                    }
+    
+                    SetStatus($"Merging records from {validated.DeviceId}...");
+                    var result = await _merge.MergeAsync(validated, validated.DeviceId, path,
+                        applyMasterState: false, detectConflicts: true, cancellationToken);
+                    imported++;
+                    pendingConflicts += result.PendingConflicts;
+                    if (result.SnapshotFullyAccepted)
+                        manifest.MarkProcessed(validated.DeviceId, validated.SnapshotHash);
+                    else
+                        manifest.MarkPending(validated.DeviceId);
                 }
-
-                var backupName = manifest.GetPreMergeBackup(validated.DeviceId);
-                var backupExists = !string.IsNullOrWhiteSpace(backupName) &&
-                                   File.Exists(Path.Combine(backupDirectory, backupName));
-                if (!backupExists)
-                {
-                    SetStatus($"Creating safety backup before importing {validated.DeviceId}...");
-                    var backupPath = await _backups.CreateBackupAsync(path, backupDirectory, cancellationToken);
-                    manifest.SetPreMergeBackup(validated.DeviceId, Path.GetFileName(backupPath));
-                }
-
-                SetStatus($"Merging records from {validated.DeviceId}...");
-                var result = await _merge.MergeAsync(validated, validated.DeviceId, path,
-                    applyMasterState: false, detectConflicts: true, cancellationToken);
-                imported++;
-                pendingConflicts += result.PendingConflicts;
-                if (result.SnapshotFullyAccepted)
-                    manifest.MarkProcessed(validated.DeviceId, validated.SnapshotHash);
-                else
-                    manifest.MarkPending(validated.DeviceId);
+    
             }
+            else
+            {
+                skipped = files.Count(x => x.Name.StartsWith("device_", StringComparison.Ordinal) &&
+                    x.Name.EndsWith(".json", StringComparison.Ordinal) && x.Name != $"device_{deviceId}.json");
+            }
+
 
             SetStatus("Publishing updated Windows master snapshot...");
             var masterSnapshot = await _export.ExportAsync(path, cancellationToken);
@@ -133,9 +145,11 @@ public sealed class WindowsDriveSyncService
             var remaining = await _merge.GetPendingConflictsAsync(path, cancellationToken);
             pendingConflicts = remaining.Count;
             var summary = new DriveSyncSummary(imported, skipped, pendingConflicts, LastSyncAtUtc.Value);
-            SetStatus(pendingConflicts > 0
-                ? $"Windows master synced. {pendingConflicts} conflict(s) require Admin review."
-                : $"Windows master synced successfully at {LastSyncAtUtc.Value.LocalDateTime:t}.");
+            SetStatus(!EnableDeviceSnapshotImports
+                ? $"Windows master snapshot uploaded. {skipped} other-device snapshot(s) were not imported; imports are paused pending full v18 regression and owner acceptance."
+                : pendingConflicts > 0
+                    ? $"Windows master synced. {pendingConflicts} conflict(s) require Admin review."
+                    : $"Windows master synced successfully at {LastSyncAtUtc.Value.LocalDateTime:t}.");
             return summary;
         }
         catch (Exception ex)
