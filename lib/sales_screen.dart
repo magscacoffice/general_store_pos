@@ -936,16 +936,40 @@ class SalesScreenState extends State<SalesScreen> {
 
     try {
       // Stock, sale aur customer balance ek transaction mein update honge.
-      final saleId = await DBHelper.completeSale(
-        sale: sale,
-        items: completedCart,
-      );
+      var saveAsNew = false;
+      if (_recalledSaleId != null) {
+        final action = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('Recalled Bill #$_recalledSaleId'),
+            content: const Text('Existing bill update karna hai ya naya bill save karna hai? Return ya baad ki Khata receipt wali bill overwrite nahi ho sakti.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, 'cancel'), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, 'new'), child: const Text('Save as New Bill')),
+              ElevatedButton(onPressed: () => Navigator.pop(dialogContext, 'update'), child: const Text('Update Existing Bill')),
+            ],
+          ),
+        );
+        if (action == null || action == 'cancel') {
+          if (mounted) setState(() => isCheckingOut = false);
+          return;
+        }
+        saveAsNew = action == 'new';
+      }
+      final int saleId;
+      if (_recalledSaleId != null && !saveAsNew) {
+        await DBHelper.updateSaleFromRecall(saleId: _recalledSaleId!, sale: sale, items: completedCart);
+        saleId = _recalledSaleId!;
+      } else {
+        saleId = await DBHelper.completeSale(sale: sale, items: completedCart);
+      }
 
       if (!mounted) return;
 
       // Sirf successful sale ke baad cart clear karein.
       setState(() {
         cart.clear();
+        _recalledSaleId = null;
         overallDiscount = 0.0;
         isPercentageDiscount = false;
         selectedCustomerId = null;
