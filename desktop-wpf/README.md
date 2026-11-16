@@ -16,7 +16,7 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 
 ## Google Drive sync migration status
 
-The native WPF project now contains the PKCE loopback OAuth flow, DPAPI-protected Windows token storage, Google Drive v3 file transport and a schema-v2 SQLite snapshot exporter. This is foundation work only: Windows-master reconciliation, conflict/alias/tombstone processing, processed-snapshot manifests, periodic/offline sync, WPF controls and owner acceptance remain pending. Do not treat Drive sync as operational or connect a production store until those items are implemented and verified.
+The native WPF project now contains the PKCE loopback OAuth flow, DPAPI-protected Windows token storage, Google Drive v3 file transport and a schema-v2 SQLite snapshot exporter. The exporter’s disposable schema-v18 integration test passes in the current 14-test WPF suite. This is foundation work only: Windows-master reconciliation, conflict/alias/tombstone processing, processed-snapshot manifests, periodic/offline sync, WPF controls and owner acceptance remain pending. Do not treat Drive sync as operational or connect a production store until those items are implemented and verified.
 
 ## Build and test
 
