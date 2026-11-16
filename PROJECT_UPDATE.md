@@ -810,3 +810,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Har version ke liye notification sirf aik martaba show ho; same version ke liye har app restart par popup spam na ho. Manual "Check for Updates" hamesha current status dikha sake.
 - [ ] Download/install tabhi allow ho jab manifest SHA-256 aur Windows Authenticode signature pinned production certificate se verify ho. Certificate/thumbprint absent ho to download/install ko disabled hi rakhna hai aur user ko clear status dena hai.
 - [ ] Update ke dauran database, settings, invoice files aur backups ko touch nahi karna. Latest-version selection ko GitHub stable release endpoint tak mahdood rakhna hai.
+
+
+## Work log — 2026-11-16 (Native WPF update notification refinement)
+
+- [x] Startup update checker ab naye stable release milne par version aur release notes ke sath notification dikhata hai.
+- [x] LocalAppData mein last-notified version save hota hai; aik hi version ka popup har restart par repeat nahi hota.
+- [x] Existing manual Check for Updates action barqarar hai.
+- [x] Installer/download tab tak disabled hai jab tak production signing certificate thumbprint configure nahi hota; SHA-256 aur Authenticode verification gates ko bypass nahi kiya.
+- [ ] Build/CI validation final consolidated pass mein pending hai. Real release feed, one-time popup aur signed installer handoff target PC par verify karna baqi hai.
