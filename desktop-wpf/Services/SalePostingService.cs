@@ -287,6 +287,19 @@ public sealed class SalePostingService
             }
             if (oldCustomerId is not null)
             {
+                await using (var account = connection.CreateCommand())
+                {
+                    account.Transaction = transaction;
+                    account.CommandText = "SELECT sync_id, COALESCE(customer_type,'Khata') FROM parties WHERE id=$party AND type='customer' LIMIT 1;";
+                    account.Parameters.AddWithValue("$party", oldCustomerId.Value);
+                    await using var accountReader = await account.ExecuteReaderAsync(cancellationToken);
+                    if (!await accountReader.ReadAsync(cancellationToken))
+                        throw new InvalidOperationException("Original customer account verify nahi ho saka.");
+                    oldCustomerSync = accountReader.IsDBNull(0) ? null : accountReader.GetString(0);
+                    var actualType = accountReader.GetString(1);
+                    if (!string.Equals(actualType, oldCustomerType, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("Original customer type change ho chuka hai; overwrite safe nahi.");
+                }
                 await using var receipts = connection.CreateCommand();
                 receipts.Transaction = transaction;
                 receipts.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$party AND type='receipt' AND note != $ownReceipt;";
