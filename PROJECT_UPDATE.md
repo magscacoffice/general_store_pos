@@ -681,3 +681,10 @@ Future improvements: add new ideas here when the owner requests them.
 ## Work log — 2026-11-16 (WPF build warning cleanup)
 
 - [x] Changed the intentionally disabled Drive import gate from a compile-time constant to a read-only runtime field. Import behaviour remains disabled, but the compiler no longer treats the guarded merge path as unreachable; no sync safety gate was enabled or relaxed.
+
+
+## Work log — 2026-11-16 (Windows role-boundary regression coverage)
+
+- [x] Audited WPF data-mutation service entry points: Admin-only operations enforce the role inside the service layer; cashier sale posting, pending-bill operations and receipt printing explicitly permit Admin/Salesman as intended.
+- [x] Added a Windows regression test proving a logged-in Salesman is rejected by expense, reminder, party/customer-type, Khata receipt, purchase, sale-return, backup/restore and printer-settings mutation entry points before database/file operations begin.
+- [ ] Run the new role-boundary regression test in Windows WPF CI; retain physical Windows account/role acceptance as a separate gate.

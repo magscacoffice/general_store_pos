@@ -90,4 +90,35 @@ public sealed class AccessServiceTests : IDisposable
             service.Authenticate("owner", "StrongPass!2026"));
         Assert.Contains("locked", error.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task SalesmanCannotUseAdminOnlyMutationServices()
+    {
+        var service = new AccessService(StorePath);
+        service.ProvisionFirstAdmin("owner", "Owner", "StrongPass!2026");
+        service.CreateStaff("cashier", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
+        service.Logout();
+        service.Authenticate("cashier", "CashierPass!2026");
+        AccessService.RegisterProcess(service);
+
+        try
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new ExpenseService().AddAsync("Test expense", 10));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new ReminderService().AddAsync("Test reminder", ""));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PartyService().AddAsync("Test party", "", "customer"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PartyService().UpdateCustomerTypeAsync(1, "Khata"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new KhataService().RecordReceiptAsync(1, 10, ""));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PurchaseService().RecordAsync(1, 1, 10, null));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new SaleReturnService().RecordAsync(1, "Test return", "Cash", Array.Empty<SaleReturnLineInput>()));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new DatabaseBackupService().CreateBackupAsync("unused.db", "unused-backups"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new DatabaseBackupService().RestoreAsync("unused.db", "unused-backup.db", "unused-data"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PrinterSettingsService().SaveAsync(new PrinterPreferences()));
+        }
+        finally
+        {
+            AccessService.ClearProcess(service);
+            service.Logout();
+        }
+    }
+
 }
