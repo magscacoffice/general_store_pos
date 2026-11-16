@@ -790,7 +790,6 @@ public sealed class PosDatabaseSchemaVerifierTests
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
     }
-}
 
 
     [Fact]
@@ -875,3 +874,4 @@ public sealed class PosDatabaseSchemaVerifierTests
         Assert.Equal("windows-master", validated.DeviceId);
         Assert.Equal(hash, validated.SnapshotHash);
     }
+}
