@@ -14,6 +14,7 @@ public sealed class ExpenseService
  }
  public async Task<int> AddAsync(string title,double amount,CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   title=title.Trim();if(title.Length==0||!double.IsFinite(amount)||amount<=0)throw new InvalidOperationException("Title aur positive valid amount darj karein.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);
