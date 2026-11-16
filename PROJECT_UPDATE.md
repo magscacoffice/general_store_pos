@@ -7,6 +7,23 @@
 > **Audited base / integration:** `main` at `2dbbf9ee4e89a29b69726ac33531c0b15c5f13de` (2026-11-15); WPF source and tracker updates are on `integration/wpf-mainline` and Draft PR #5, not yet merged to main.
 > **Planning status:** Native WPF and Android Flutter billing now both include distinct Walk-in/Khata/Wholesale account handling, wholesale-rate defaults and per-item Wholesale price editing. WPF Release build/schema tests and Android analysis/regression tests, including Wholesale cash/partial ledger and Drive snapshot round-trip coverage, passed on the latest integration commit (Actions #150 and #266). WPF transaction parity, Drive sync/auth, real-device and physical Windows acceptance remain pending.
 
+## Immediate owner priority — Windows cashier-first operation (2026-11-16)
+
+Owner wants Windows WPF to remain usable for daily billing while other Windows modules are completed incrementally later. Android Flutter must remain untouched.
+
+- [x] Keep the Windows New Sale workspace as the cashier landing screen, scanner-focused after startup and after adding each product.
+- [x] Preserve repeated barcode behaviour: add the next unit to the existing cart line, bounded by available stock.
+- [x] Preserve draft/pending bill autosave in the existing SQLite v18 `pending_bills` table; starting another bill first saves the active draft. Completed checkout is posted transactionally to the existing `sales`, `sale_items`, stock and Khata tables by `SalePostingService`.
+- [x] Add visible Print Bill action in the New Sale workspace; persist the current draft before opening the print preview. Draft printing is read-only and must not deduct stock or post a sale.
+- [x] Add cashier keyboard shortcuts at the window level: F2 scanner, F4 customer, F5 new bill, F6 discount, F7 received amount, F8 payment mode, F9 print/preview, F10 complete sale; Ctrl+P also opens print/preview.
+- [x] Add F9 / Ctrl+P thermal receipt shortcut inside Printer & Invoice window. Physical printer output still requires a Windows PC and BC-86AC acceptance test.
+- [x] Add a non-blocking startup update check and an in-app update-available indicator; offline or failed update checks must never block New Sale or local billing.
+- [ ] **Signed updater release gate:** `NativeUpdateService` checks the latest GitHub Release and validates the release manifest, SHA-256 and Authenticode publisher. Download/install remains intentionally disabled until the owner provides the production code-signing certificate and its trusted thumbprint is pinned. Do not install unsigned or untrusted packages.
+- [ ] Publish a versioned Windows installer and `khan-baba-release.json` manifest as GitHub Release assets after Windows runtime tests, code signing, checksum generation and installer/data-preservation tests pass. Only then can the app notify, download and install future feature updates safely.
+- [ ] Verify F2/F4/F5/F6/F7/F8/F9/F10 and Ctrl+P on a real Windows cashier PC; verify barcode scanner focus and the saved default printer with the physical SpeedX SP60D and Black Copper BC-86AC.
+- [ ] Confirm startup update notification against a real published test release; confirm offline startup does not delay billing.
+- [ ] Run Windows Release build and all WPF regression tests after these changes; verify the uploaded Windows x64 artifact. Do not merge Draft PR #5 or declare production-ready until the independent migration, sync, auth, printer and owner acceptance gates are passed.
+
 ## 1. Non-negotiable compatibility rules
 
 - [x] Keep Android's Flutter implementation, Android validation workflow, and existing mobile user experience intact; Android analyzer and test validation passed after the test harness fix.
@@ -50,7 +67,7 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 | `backup_screen.dart` | `BackupRestoreWindow.cs`, `Services/DatabaseBackupService.cs` | Verified backup and staged restore with SHA-256, schema validation and atomic active-pointer switch implemented and tested |
 | `cloud_sync_screen.dart` | WPF Cloud Sync window/service — implemented in source | Native Drive connection/sync window, pending-conflict comparison and Keep Windows / Use Other Device actions added; target-PC Google OAuth and offline acceptance remain pending |
 | `drive_sync_service.dart` | WPF Drive snapshot service — implemented in source | OAuth/DPAPI token storage, Drive v3 upload/download, stable device identity, schema-v2 hash validation, pre-merge backups, Windows-master manifest, transactional merge, 2-minute retry scheduler and conflict UI added; real-account/runtime acceptance remains pending |
-| `update_manager.dart`, `windows/windows_update_service.dart` | `Services/UpdateService.cs`, `Views/UpdateDialog.xaml` | Stable release detection, checksum verification, staged update and safe restart without touching user data |
+| `update_manager.dart`, `windows/windows_update_service.dart` | `Services/NativeUpdateService.cs` | GitHub Release detection, signed manifest/SHA-256/Authenticode validation and staged installer launch; production signing certificate remains a hard gate |
 | `windows/system_tray_service.dart`, `windows/pos_windows.dart` | `Services/SystemTrayService.cs`, `Services/WindowCoordinator.cs` | Tray menu, dashboard and cashier window lifecycle, multiple pending bills, minimize/restore and close handling |
 | `windows/desktop_theme.dart`, `windows/desktop_app_bar.dart` | `Themes/Colors.xaml`, `Themes/Controls.xaml`, `Styles/DataGrid.xaml` | Consistent desktop typography, controls, focus/hover states, scrolling and shared visual language |
 
