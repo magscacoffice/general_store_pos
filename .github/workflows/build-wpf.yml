@@ -1,4 +1,4 @@
-name: Validate Native WPF POS (No Publish Artifacts)
+name: Build and Test Native WPF POS + Windows x64 Artifact
 
 on:
   push:
