@@ -17,6 +17,7 @@ public sealed class DatabaseBackupService
         string backupDirectory,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
         Directory.CreateDirectory(backupDirectory);
         var name = $"khan_baba_pos_backup_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.db";
@@ -34,6 +35,7 @@ public sealed class DatabaseBackupService
         string dataDirectory,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         if (!File.Exists(currentDatabasePath))
             throw new FileNotFoundException("Current POS database was not found; restore was not started.", currentDatabasePath);
         if (!File.Exists(selectedBackupPath))
