@@ -1374,101 +1374,31 @@ class SalesScreenState extends State<SalesScreen> {
   Widget _buildCartList() => Expanded(
     child: cart.isEmpty
         ? const Center(child: Text('Cart is empty. Scan or search for products.'))
-        : Platform.isWindows
-            ? Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(color: const Color(0xFFD9E0E6)),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SingleChildScrollView(
-                      child: DataTable(
-                        headingRowHeight: 40,
-                        dataRowMinHeight: 42,
-                        dataRowMaxHeight: 50,
-                        columns: const [
-                          DataColumn(label: Text('Product')),
-                          DataColumn(label: Text('Barcode')),
-                          DataColumn(label: Text('Qty'), numeric: true),
-                          DataColumn(label: Text('Unit Rate'), numeric: true),
-                          DataColumn(label: Text('Line Total'), numeric: true),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: cart.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final item = entry.value;
-                          final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-                          final rate = (item['salePrice'] as num?)?.toDouble() ?? 0;
-                          return DataRow(cells: [
-                            DataCell(SizedBox(
-                              width: 220,
-                              child: Text(
-                                item['name']?.toString() ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            )),
-                            DataCell(SizedBox(
-                              width: 120,
-                              child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            )),
-                            DataCell(Text('$quantity ${item['stockUnit'] ?? 'pcs'}')),
-                            DataCell(Text('Rs. ${rate.toStringAsFixed(2)}')),
-                            DataCell(Text('Rs. ${(rate * quantity).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600))),
-                            DataCell(Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                                if (selectedSaleType == 'Wholesale')
-                                  IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                                IconButton(
-                                  tooltip: 'Remove item',
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () {
-                                    setState(() => cart.removeAt(index));
-                                    unawaited(_persistActiveBill());
-                                  },
-                                ),
-                              ],
-                            )),
-                          ]);
-                        }).toList(),
-                      ),
-                    ),
+        : ListView.builder(
+            itemCount: cart.length,
+            itemBuilder: (context, index) {
+              final item = cart[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: ListTile(
+                  title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('Rate: Rs. ${item['salePrice']} per ${item['stockUnit'] ?? 'pcs'}  |  Qty: ${item['quantity']} ${item['stockUnit'] ?? 'pcs'}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                  trailing: Wrap(
+                    spacing: 0,
+                    children: [
+                      IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                      if (selectedSaleType == 'Wholesale')
+                        IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                      IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                        setState(() => cart.removeAt(index));
+                        unawaited(_persistActiveBill());
+                      }),
+                    ],
                   ),
                 ),
-              )
-            : ListView.builder(
-                itemCount: cart.length,
-                itemBuilder: (context, index) {
-                  final item = cart[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    child: ListTile(
-                      title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Rate: Rs. ${item['salePrice']} per ${item['stockUnit'] ?? 'pcs'}  |  Qty: ${item['quantity']} ${item['stockUnit'] ?? 'pcs'}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
-                      trailing: Wrap(
-                        spacing: 0,
-                        children: [
-                          IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                          if (selectedSaleType == 'Wholesale')
-                            IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                          IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
-                            setState(() => cart.removeAt(index));
-                            unawaited(_persistActiveBill());
-                          }),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              );
+            },
+          ),
   );
 
   Widget _buildCheckoutPanel() =>
@@ -1513,7 +1443,7 @@ class SalesScreenState extends State<SalesScreen> {
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal,
-                            foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                               vertical: 12,
                               horizontal: 16,
@@ -1564,32 +1494,14 @@ class SalesScreenState extends State<SalesScreen> {
         },
         child: Scaffold(
       appBar: widget.embeddedInDashboard ? null : AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
+        automaticallyImplyLeading: true,
         title: Text(
-          Platform.isWindows ? 'KHAN BABA POS  |  NEW SALE' : 'POS Billing (Quick & Khata)',
+          'POS Billing (Quick & Khata)',
           style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3),
         ),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal.shade800,
+        backgroundColor: Colors.teal.shade800,
         foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
         actions: [
-          if (Platform.isWindows && !widget.embeddedInDashboard) ...[
-            IconButton(
-              tooltip: 'New Bill - Ctrl+N',
-              icon: const Icon(Icons.add_box_outlined),
-              onPressed: _createNewBill,
-            ),
-            IconButton(
-              tooltip: 'Open Held Bills - F5',
-              icon: const Icon(Icons.inventory_2_outlined),
-              onPressed: _openPendingBills,
-            ),
-            IconButton(
-              tooltip: 'Open Dashboard in a separate window',
-              icon: const Icon(Icons.dashboard_outlined),
-              onPressed: PosWindows.openDashboard,
-            ),
-            const SizedBox(width: 8),
-          ],
           IconButton(
             tooltip: 'Scan barcode',
             icon: const Icon(Icons.qr_code_scanner),
@@ -1598,126 +1510,14 @@ class SalesScreenState extends State<SalesScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Platform.isWindows
-          ? Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: SizedBox(
-                      height: 42,
-                      child: RawAutocomplete<Map<String, dynamic>>(
-                        textEditingController: _usbBarcodeController,
-                        focusNode: _usbBarcodeFocusNode,
-                        displayStringForOption: (option) => option['name']?.toString() ?? '',
-                        optionsBuilder: (value) {
-                          final term = value.text.trim().toLowerCase();
-                          if (term.isEmpty) return const <Map<String, dynamic>>[];
-                          if (_productSearchCache.any((product) =>
-                              product['barcode']?.toString().trim() == value.text.trim())) {
-                            return const <Map<String, dynamic>>[];
-                          }
-                          return _productSearchCache.where((product) {
-                            final name = product['name']?.toString().toLowerCase() ?? '';
-                            final barcode = product['barcode']?.toString().toLowerCase() ?? '';
-                            return name.contains(term) || barcode.contains(term);
-                          }).take(12);
-                        },
-                        onSelected: (product) => unawaited(_addSelectedSearchProduct(product)),
-                        optionsViewBuilder: (context, onSelected, options) {
-                          final matches = options.toList();
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              elevation: 8,
-                              borderRadius: BorderRadius.circular(8),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 620, maxHeight: 300),
-                                child: ListView.separated(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: matches.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final product = matches[index];
-                                    final stock = (product['quantity'] as num?)?.toInt() ?? 0;
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(product['name']?.toString() ?? 'Product',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      subtitle: Text(
-                                        'Barcode: ${product['barcode'] ?? '—'} | Stock: $stock | Rate: Rs. ${product['price'] ?? 0}',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      onTap: () => onSelected(product),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                          return TextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            autofocus: true,
-                            onSubmitted: (value) {
-                              final term = value.trim().toLowerCase();
-                              final exactBarcode = _productSearchCache.any((product) =>
-                                  product['barcode']?.toString().trim() == value.trim());
-                              final hasMatches = !exactBarcode && _productSearchCache.any((product) =>
-                                  (product['name']?.toString().toLowerCase() ?? '').contains(term) ||
-                                  (product['barcode']?.toString().toLowerCase() ?? '').contains(term));
-                              if (value.trim().isNotEmpty && !hasMatches) {
-                                unawaited(_handleUnifiedProductInput(value));
-                              }
-                              onFieldSubmitted();
-                            },
-                            textInputAction: TextInputAction.done,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.qr_code_scanner),
-                              labelText: 'Scan / Search Product',
-                              hintText: 'Barcode scan karein ya product name type karein',
-                              suffixIcon: Icon(Icons.search),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                  Expanded(
-                    flex: 7,
-                    child: Column(
-                      children: [
-                        _buildCustomerPanel(),
-                        const SizedBox(height: 8),
-                        _buildBillReviewHeading(),
-                        _buildCartList(),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  SizedBox(width: 340, child: _buildCheckoutPanel()),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                _buildCustomerPanel(),
-                _buildBillReviewHeading(),
-                _buildCartList(),
-                _buildCheckoutPanel(),
-              ],
-            ),
+      body: Column(
+        children: [
+          _buildCustomerPanel(),
+          _buildBillReviewHeading(),
+          _buildCartList(),
+          _buildCheckoutPanel(),
+        ],
+      ),
       ),
       ),
     );
