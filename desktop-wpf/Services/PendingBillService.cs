@@ -15,6 +15,7 @@ public sealed class PendingBillService
 
     public async Task SaveAsync(PendingBillSnapshot bill, CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
         if (string.IsNullOrWhiteSpace(bill.BillId))
             throw new InvalidOperationException("Pending bill ID is required.");
         var path = PosDatabasePath.Resolve(requireExisting: true);
@@ -39,6 +40,7 @@ public sealed class PendingBillService
 
     public async Task<IReadOnlyList<PendingBillSnapshot>> GetAllAsync(CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
         var path = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, cancellationToken);
@@ -75,6 +77,7 @@ public sealed class PendingBillService
 
     public async Task DeleteAsync(string billId, CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
         if (string.IsNullOrWhiteSpace(billId)) return;
         var path = PosDatabasePath.Resolve(requireExisting: true);
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
