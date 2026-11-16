@@ -1,0 +1,51 @@
+name: Validate Native Windows Installer (Manual Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Installer version
+        required: true
+        default: "1.0.0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-installer:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore, build and test WPF
+        shell: pwsh
+        run: |
+          dotnet restore desktop-wpf/KhanBabaPos.Wpf.csproj
+          dotnet build desktop-wpf/KhanBabaPos.Wpf.csproj -c Release --no-restore
+          dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj -c Release
+
+      - name: Publish self-contained Windows x64 app
+        shell: pwsh
+        run: dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
+
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Compile per-user installer (not published)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc "/DAppVersion=${{ inputs.version }}" "installer/KhanBabaPOS.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          $installer = "artifacts/installer/KhanBabaPOS-Setup-x64.exe"
+          if (-not (Test-Path $installer)) { throw "Installer output was not created." }
+          Write-Host "Installer source compiled. No artifact was uploaded or released."
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          Write-Host "Authenticode status: $($signature.Status). Production signing is a separate required gate."
