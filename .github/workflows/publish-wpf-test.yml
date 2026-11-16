@@ -1,0 +1,64 @@
+name: Publish Native WPF Test Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-test-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore desktop-wpf/KhanBabaPos.Wpf.csproj
+
+      - name: Build and test
+        run: |
+          dotnet build desktop-wpf/KhanBabaPos.Wpf.csproj --configuration Release --no-restore
+          dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj --configuration Release
+
+      - name: Publish portable Windows x64 test app
+        run: dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --output artifacts/KhanBabaPOS-Windows-Test
+
+      - name: Add test-build instructions
+        shell: pwsh
+        run: |
+          @'
+          KHAN BABA POS — NATIVE WINDOWS TEST BUILD
+          =========================================
+
+          This is a PORTABLE TEST BUILD from the WPF migration branch.
+          It is not a production release and has not passed owner hardware acceptance.
+
+          QUICK START
+          1. Extract the complete ZIP to a normal writable folder (do not run from inside the ZIP).
+          2. Run KhanBabaPos.Wpf.exe.
+          3. Test first with a disposable copy of your SQLite v18 database.
+          4. Keep your original store database and existing backups untouched.
+
+          IMPORTANT
+          - Windows 10/11 x64 is required.
+          - .NET 10 runtime is bundled; no separate .NET installation should be needed.
+          - Google Drive sync, Windows login/role parity, automatic updates, scanner hardware and physical printer output are not production-accepted yet.
+          - Do not treat this build as a production-ready installer.
+          '@ | Set-Content artifacts/KhanBabaPOS-Windows-Test/TEST-INSTRUCTIONS.txt
+
+      - name: Package portable test build
+        run: Compress-Archive -Path artifacts/KhanBabaPOS-Windows-Test/* -DestinationPath artifacts/KhanBabaPOS-Windows-Test.zip -Force
+
+      - name: Upload test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanBabaPOS-Windows-Test-win-x64
+          path: artifacts/KhanBabaPOS-Windows-Test.zip
+          if-no-files-found: error
+          retention-days: 30
