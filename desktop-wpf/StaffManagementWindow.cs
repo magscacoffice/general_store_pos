@@ -84,9 +84,11 @@ public sealed class StaffManagementWindow : Window
         try
         {
             if (Selected is not { } user) throw new InvalidOperationException("Pehle staff select karein.");
-            var prompt = new PasswordBox { MinWidth = 240, Padding = new Thickness(8) };
-            var dialog = new Window { Title = "New password", Content = prompt, SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this };
-            if (dialog.ShowDialog() == true) _access.ResetPassword(user.Id, prompt.Password);
+            var prompt = new PasswordBox { MinWidth = 240, Padding = new Thickness(8), Margin = new Thickness(12) };
+            var save = new Button { Content = "Reset password", IsDefault = true, Margin = new Thickness(12), Padding = new Thickness(10, 7, 10, 7) };
+            var dialog = new Window { Title = "New password", SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this, Content = new StackPanel { Children = { new TextBlock { Text = "Naya password (minimum 10 characters)", Margin = new Thickness(12, 12, 12, 0) }, prompt, save } } };
+            save.Click += (_, _) => dialog.DialogResult = true;
+            if (dialog.ShowDialog() == true) { _access.ResetPassword(user.Id, prompt.Password); MessageBox.Show("Password reset ho gaya.", Title, MessageBoxButton.OK, MessageBoxImage.Information); }
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
