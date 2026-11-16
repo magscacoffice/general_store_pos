@@ -27,7 +27,7 @@ public sealed class SalePostingService
         _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
         var activeSession = _access.CurrentSession
             ?? throw new UnauthorizedAccessException("Session expire ho gaya. Dobara login karein.");
-        if (!string.Equals(request.CashierUid, activeSession.UserId, StringComparison.Ordinal) ||
+        if ((request.CashierUid is not null && !string.Equals(request.CashierUid, activeSession.UserId, StringComparison.Ordinal)) ||
             !string.Equals(request.CashierName, activeSession.DisplayName, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("Sale cashier identity active login se match nahi karti.");
         if (string.IsNullOrWhiteSpace(databasePath))
@@ -163,7 +163,7 @@ public sealed class SalePostingService
                 sale.Parameters.AddWithValue("$final", finalAmount);
                 sale.Parameters.AddWithValue("$payment", paymentType);
                 sale.Parameters.AddWithValue("$customer", (object?)customerId ?? DBNull.Value);
-                sale.Parameters.AddWithValue("$uid", (object?)request.CashierUid ?? DBNull.Value);
+                sale.Parameters.AddWithValue("$uid", activeSession.UserId);
                 sale.Parameters.AddWithValue("$cashier", string.IsNullOrWhiteSpace(request.CashierName) ? "Local Windows User" : request.CashierName);
                 sale.Parameters.AddWithValue("$customerType", customerType);
                 sale.Parameters.AddWithValue("$received", receivedAmount);
