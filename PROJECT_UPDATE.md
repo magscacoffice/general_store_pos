@@ -438,6 +438,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 Future improvements: add new ideas here when the owner requests them.
 
 
+| 2026-11-16 | Added Windows-only offline Admin/Salesman authentication: first-run Admin setup, PBKDF2-SHA256 credential hashing, DPAPI CurrentUser-protected credential/audit store, staff create/disable/password reset, last-Admin protection, login/logout, lockout, sliding session expiry, MainWindow Admin navigation gates and authenticated sale attribution. Added authentication and cashier-identity tests; disabled automatic portable test-package publishing while production tasks remain pending. | Auth implementation commits through `2f2bc1e`; CI run `43831153534` | .NET 10 WPF Release build and all WPF tests passed. Target-PC login/role acceptance and remaining service-level authorization audit are still pending. |
+
 ## Completed Updates
 
 <!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. Completed items are moved here so the Pending Updates section contains only unfinished work. -->
@@ -656,11 +658,11 @@ Future improvements: add new ideas here when the owner requests them.
 ## Windows local authentication decision — 2026-11-16
 
 - [x] Owner approved the recommended Windows-only local authentication direction. Android Flutter/Firebase authentication remains unchanged; Windows login will work offline and will not require Firebase.
-- [ ] Implement first-run Admin account provisioning with a forced password setup; never ship a default password.
-- [ ] Store local credential verifier using a modern salted password hash (PBKDF2-HMAC-SHA256 or stronger, versioned parameters) and protect local secrets with Windows DPAPI CurrentUser scope. Do not store plaintext passwords or reusable password-equivalent secrets.
-- [ ] Add local user lifecycle: Admin can create/disable/reset staff accounts; roles initially Admin and Salesman; prevent disabling/deleting the last active Admin.
-- [ ] Enforce role authorization in the service layer and every navigation/action entry point, not only by hiding buttons. Record the authenticated staff identity on each sale using the existing salesman_uid/salesman_name fields without altering Android schema semantics.
-- [ ] Add login/logout, lockout/backoff, session timeout and audit events; ensure offline login remains available and credentials are scoped to the Windows account/device.
-- [ ] Add tests for first-run provisioning, password verification, role denial, disabled users, last-Admin protection, session expiry and sale attribution. Windows CI and target-PC acceptance remain required.
+- [x] Implement first-run Admin account provisioning with a forced password setup; no default password is shipped. Login UI requires the owner to create the first Admin password.
+- [x] Store local credential verifier using versioned PBKDF2-HMAC-SHA256 (310,000 iterations, random 16-byte salt) and protect the local credential/audit store with Windows DPAPI CurrentUser scope. No plaintext password is stored.
+- [x] Add local user lifecycle: Admin can create/disable/reset staff accounts; roles are Admin and Salesman; disabling the last active Admin is blocked.
+- [ ] Complete role authorization in every mutating data service. MainWindow navigation/actions are Admin-gated, staff management is Admin-gated, and sale posting verifies the active session and records its actual user ID/display name in existing salesman_uid/salesman_name fields. Audit remaining service entry points before marking role parity complete.
+- [x] Add login/logout, five-failure temporary lockout, 30-minute sliding session expiry and protected audit events. Login works offline and credentials are scoped to the current Windows account via DPAPI.
+- [x] Add automated tests for first-run provisioning, password verification, role denial, disabled users, last-Admin protection, session expiry and sale attribution. WPF Release build and tests passed in GitHub Actions run 43831153534 (commit 2f2bc1e). [ ] Target-PC login/role acceptance remains required.
 - [ ] Conflict/tombstone work remains separate: port Android merge/resolution semantics transactionally against disposable SQLite v18 fixtures before enabling Drive imports.
 - [ ] Native updater/installer remains separate: choose and validate a signed MSIX or WiX/MSI packaging path, preserve user data across upgrades, verify package signatures and rollback, and keep test ZIP separate from production distribution. Signing certificate and owner acceptance remain required.
