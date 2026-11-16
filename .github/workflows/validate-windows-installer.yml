@@ -49,7 +49,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
-          & $iscc "/DAppVersion=${{ inputs.version }}" "installer/KhanBabaPOS.iss"
+          & $iscc "/DAppVersion=${{ inputs.version || '1.0.0' }}" "installer/KhanBabaPOS.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
           $installer = "artifacts/installer/KhanBabaPOS-Setup-x64.exe"
           if (-not (Test-Path $installer)) { throw "Installer output was not created." }
