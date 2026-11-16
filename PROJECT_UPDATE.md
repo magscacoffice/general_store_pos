@@ -631,3 +631,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Windows WPF CI passed on commit `4b42cdcf47ec63986e2c85db509fc51e4623e1b7`: Release build succeeded; 17 tests passed, 0 failed, 0 skipped (run `43811531846`).
 - [x] Android validation passed on preceding source-equivalent commit `0bc0a5b78b21daf09351a7af0546ea799e2e7648` (run `43811259207`); latest converter visibility change is WPF-only.
 - [ ] Continue with transactional SQLite v18 merge engine; no Drive import/merge is enabled yet.
+## Work log — 2026-11-16 (WPF master manifest foundation)
+
+- [x] Added `DriveMasterManifest` matching Android master envelope fields: `masterDeviceId`, `processedSnapshots`, `preMergeBackups`, `data`, `snapshotHash`, and `updatedAt`.
+- [x] Added idempotent processed-hash lookup/mark/pending operations and backup filename tracking; cloud manifest rejects local absolute backup paths to avoid leaking Windows profile paths.
+- [x] Added round-trip and manifest-state tests; latest WPF and Android CI for commit `167f276a0b9e4bd7c5b34bf9bdb02cbb2e0a2c08` is running (run IDs `43811887867`, `43811887929`).
+- [ ] Await CI result and fix any regression before implementing database merge operations.
+- [ ] Full transactional SQLite v18 merge, conflict review/resolution, aliases, tombstones, Drive orchestration, auto-sync/offline retry and WPF sync UI remain pending.
