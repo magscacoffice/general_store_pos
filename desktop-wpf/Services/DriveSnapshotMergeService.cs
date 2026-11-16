@@ -24,6 +24,7 @@ public sealed class DriveSnapshotMergeService
         bool detectConflicts = true,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         ArgumentNullException.ThrowIfNull(snapshot);
         if (string.IsNullOrWhiteSpace(sourceDeviceId)) throw new ArgumentException("Source device ID is required.", nameof(sourceDeviceId));
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
@@ -424,6 +425,7 @@ public sealed class DriveSnapshotMergeService
     public async Task ResolveConflictAsync(long conflictId, bool useRemote, string databasePath,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(databasePath, cancellationToken);
         await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString());
@@ -539,6 +541,7 @@ public sealed class DriveSnapshotMergeService
     public async Task<IReadOnlyList<DriveConflictRow>> GetPendingConflictsAsync(string databasePath,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
         await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
         await db.OpenAsync(cancellationToken);
