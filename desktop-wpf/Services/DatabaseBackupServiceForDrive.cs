@@ -10,6 +10,7 @@ internal static class DatabaseBackupServiceForDrive
     public static async Task CreateBeforeIdentityRepairAsync(
         string databasePath, CancellationToken cancellationToken)
     {
+        AccessService.RequireCurrentAdmin();
         await PosDatabaseSchemaVerifier.VerifyAsync(databasePath, cancellationToken);
         var directory = Path.Combine(Path.GetDirectoryName(databasePath)!, "Backups");
         Directory.CreateDirectory(directory);
