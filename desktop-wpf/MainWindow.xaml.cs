@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         _access = access;
         _session = session;
         _sales = new SalePostingService(access);
-        _driveSync = new WindowsDriveSyncService();
+        _driveSync = new WindowsDriveSyncService(access);
         _driveSync.StartAutoSync();
         Closed += (_, _) => _driveSync.StopAutoSync();
         InitializeComponent();
