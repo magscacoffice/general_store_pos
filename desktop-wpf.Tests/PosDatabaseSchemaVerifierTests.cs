@@ -315,7 +315,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
-            var service = new SalePostingService();
+            var service = new SalePostingService(TestAccess);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.CompleteSaleAsync(
                     new SaleCheckoutRequest(
@@ -397,7 +397,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
-            await new SalePostingService().CompleteSaleAsync(
+            await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 1, 18)],
                     customerId,
@@ -441,7 +441,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
-            var sale = await new SalePostingService().CompleteSaleAsync(
+            var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
                     customerId,
@@ -509,7 +509,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
-            var sale = await new SalePostingService().CompleteSaleAsync(
+            var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
                     customerId,
@@ -658,7 +658,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
-            await new SalePostingService().CompleteSaleAsync(
+            await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 1, 18)],
                     customerId,
