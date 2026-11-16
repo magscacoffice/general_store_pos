@@ -12,6 +12,7 @@ public sealed class PartyService
  }
  public async Task AddAsync(string name,string phone,string type,string customerType="Khata",CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   name=name.Trim();phone=phone.Trim();if(name.Length==0)throw new InvalidOperationException("Party name zaroori hai.");if(type is not ("customer" or "supplier"))throw new ArgumentOutOfRangeException(nameof(type));
   if(type=="customer" && customerType is not ("Khata" or "Wholesale"))throw new InvalidOperationException("Customer type must be Khata or Wholesale.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
@@ -22,6 +23,7 @@ public sealed class PartyService
  }
  public async Task UpdateCustomerTypeAsync(int id,string customerType,CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   if(customerType is not ("Khata" or "Wholesale"))throw new InvalidOperationException("Customer type must be Khata or Wholesale.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var cmd=db.CreateCommand();
