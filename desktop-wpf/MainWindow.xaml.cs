@@ -531,9 +531,9 @@ public partial class MainWindow : Window
                 CultureInfo.InvariantCulture, out var partial) && double.IsFinite(partial) && partial >= 0 => partial,
             _ => 0d
         };
-        if (paymentMode == "Partial" && (received <= 0 || received > FinalTotal))
+        if (paymentMode == "Partial" && (received <= 0 || received >= FinalTotal))
         {
-            MessageBox.Show("Partial received amount 0 se zyada aur net total se kam ya barabar hona chahiye.",
+            MessageBox.Show("Partial received amount zero se zyada aur net total se kam hona chahiye.",
                 "Current Bill", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
