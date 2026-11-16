@@ -769,6 +769,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal(2, json.RootElement.GetProperty("schemaVersion").GetInt32());
             var product = json.RootElement.GetProperty("products")[0];
             Assert.Equal("Milk <Fresh>", product.GetProperty("name").GetString());
+            Assert.Equal("20.0", product.GetProperty("price").GetRawText());
             Assert.False(product.TryGetProperty("id", out _));
             var party = json.RootElement.GetProperty("parties")[0];
             var partySyncId = party.GetProperty("sync_id").GetString();

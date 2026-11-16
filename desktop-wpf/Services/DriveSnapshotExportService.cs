@@ -1,8 +1,10 @@
 using System.IO;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Encodings.Web;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using KhanBabaPos.Wpf.Data;
 
@@ -69,7 +71,11 @@ public sealed class DriveSnapshotExportService
         snapshot["tombstones"] = await ReadRowsAsync(
             connection, "drive_sync_tombstones", [], cancellationToken);
 
-        var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new DartCompatibleDoubleConverter() }
+        });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)))
             .ToLowerInvariant();
         return new DriveSnapshotPayload(snapshot, hash, json);
@@ -192,6 +198,21 @@ public sealed class DriveSnapshotExportService
             rows.Add(row);
         }
         return rows;
+    }
+}
+
+
+internal sealed class DartCompatibleDoubleConverter : JsonConverter<double>
+{
+    public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.GetDouble();
+
+    public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
+    {
+        var raw = value.ToString("R", CultureInfo.InvariantCulture);
+        if (!raw.Contains('.') && !raw.Contains('E') && !raw.Contains('e'))
+            raw += ".0";
+        writer.WriteRawValue(raw);
     }
 }
 
