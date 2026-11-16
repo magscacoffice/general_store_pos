@@ -499,6 +499,7 @@ Future improvements: add new ideas here when the owner requests them.
 | 2026-11-15 | Pre-migration cleanup: clarified Walk-in/Khata/Wholesale semantics, removed retired Flutter Windows desktop packages and activation code, and updated the migration roadmap. | `ee6df2b`, `6133c52`, `e056dcb` | Flutter Windows target subsequently retired; native WPF source is tracked separately above. |
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
 | 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
+| 2026-11-16 | Added native WPF Google OAuth/PKCE with DPAPI token storage, Google Drive v3 transport and a schema-v2 SQLite snapshot exporter with pre-repair safety backup and stable-reference repair. | Commits `352befc`, `b37b5af`, `11793f0`, `4650bd8`, `5e62050`, `9f43ea1` | WPF Release build passed in validation run `43805757277`; snapshot-export integration test and latest branch validation are still running. Full master merge/conflict/tombstone/auto-sync and UI integration remain pending. |
 | 2026-11-16 | Retired Flutter Windows sale-window, pending-bill lifecycle and keyboard/window event code from `sales_screen.dart`; preserved Android billing/scanning and the shared SQLite pending-bill table used by WPF. | Pending consolidated commit | Android validation required; legacy Drive-sync compatibility shim intentionally retained until native WPF sync replaces its call sites. |
 | 2026-11-16 | Removed legacy Flutter Windows sales-screen presentation branches (desktop DataTable cart, split-pane cashier layout and desktop AppBar controls); retained Android billing panels and existing sale calculations. | Pending consolidated commit | Android validation required; remaining legacy bill/window lifecycle cleanup is still pending. |
 | 2026-11-14 | Historical Flutter Windows POS #68 passed; old desktop scrollbar/startup-status, receipt, autocomplete and lazy-inventory work was implemented before the Flutter Windows runner was retired. Optional Gemini handwriting OCR is Android-only and remains active. | Historical Flutter Windows build #68 | Not counted as native WPF acceptance; WPF UI, scanner and printer verification remain pending. |
@@ -509,6 +510,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] **Supplier invoice capture device confirmed — Android/mobile camera.**** Supplier purchase/inventory invoices will be scanned or photographed using the **mobile phone camera**. The intended workflow is camera capture followed by OCR-assisted extraction and an editable review/confirmation step before posting purchase, stock, or supplier-account changes. This is separate from the model-agnostic Windows USB barcode-scanner workflow.
 
 ## User-approved scope update — 2026-11-14
+
+### Native WPF Google Drive implementation progress — 2026-11-16
+
+- [x] Added native Windows Google OAuth loopback authorization with PKCE, refresh-token handling and current-user DPAPI-encrypted token storage.
+- [x] Added Google Drive v3 transport for the existing `Khan Baba POS` folder, paginated file listing, JSON download, and JSON create/update.
+- [x] Added a schema-v2 snapshot exporter for the existing SQLite v18 database. It excludes device-local integer IDs, preserves stable sync IDs/barcode keys, computes a SHA-256 digest, and creates a verified safety copy before repairing missing legacy sync IDs/foreign references.
+- [ ] Verify byte-for-byte snapshot hash compatibility against Android's Dart JSON encoding and test against a disposable schema-v18 database.
+- [ ] Port Windows-master reconciliation: process Android device snapshots idempotently, merge append-only sales/purchases/Khata/returns/expenses/reminders, detect product-stock and account-balance conflicts, and preserve aliases/tombstones.
+- [ ] Add master manifest processed-snapshot/pre-merge-backup tracking, conflict review/resolution, Android master-approval download, offline status, connectivity-triggered and periodic sync, and retry/recovery.
+- [ ] Integrate Drive connect/sync/status/disconnect controls into WPF and test with a separate Google account and disposable databases. Physical Windows acceptance remains pending.
 
 ### Google Drive two-way sync
 - Google Drive is the only Android business-data cloud provider after the first complete Firebase/Firestore business-data round-trip and a successful initial Drive upload.

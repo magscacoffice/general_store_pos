@@ -14,6 +14,10 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 - Manual Backup & Restore uses verified SQLite backups, SHA-256 sidecars, schema-v18 validation and a staged restore file activated through an atomic `.active_database` pointer; the previous live database is never overwritten.
 - Windows business data remains local-first. Firebase/Firestore business-data sync is not added.
 
+## Google Drive sync migration status
+
+The native WPF project now contains the PKCE loopback OAuth flow, DPAPI-protected Windows token storage, Google Drive v3 file transport and a schema-v2 SQLite snapshot exporter. This is foundation work only: Windows-master reconciliation, conflict/alias/tombstone processing, processed-snapshot manifests, periodic/offline sync, WPF controls and owner acceptance remain pending. Do not treat Drive sync as operational or connect a production store until those items are implemented and verified.
+
 ## Build and test
 
 On Windows with the .NET 10 SDK:
