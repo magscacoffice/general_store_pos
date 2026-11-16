@@ -357,6 +357,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [Windows] Native WPF cashier and inventory
 
+- [ ] **New Sale — pre-checkout Print/Preview:** Add a visible Print / Print Preview action for the current in-progress bill so the owner can preview and print the current bill before checkout, without posting the sale or changing stock/customer balances. Preserve the existing 80mm receipt layout and printer settings.
+- [ ] **New Sale — keyboard-accessible product suggestions:** After barcode/product search input, show a dropdown list of matching products. Allow moving through suggestions with Up/Down arrow keys and selecting the highlighted product with Enter; maintain reliable scanner/search focus and avoid requiring mouse selection.
 - [ ] Verify the WPF cashier and inventory workflows on a real Windows PC using a disposable copy of the real SQLite v18 database.
 - [ ] Validate immediate duplicate-barcode warning using Android camera scanning and the WPF keyboard-wedge scanner on real devices.
 - [ ] Validate SpeedX SP60D keyboard-wedge scanner responsiveness and inventory performance on the target computer.
