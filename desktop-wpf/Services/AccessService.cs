@@ -18,7 +18,7 @@ public sealed class AccessService
     private const int HashBytes = 32;
     private const int MaxFailedAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
+    private readonly TimeSpan _sessionLifetime;
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.LocalAccess.v1");
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,8 +32,10 @@ public sealed class AccessService
     private LocalAccessStore? _store;
     private AccessSession? _session;
 
-    public AccessService(string? storePath = null)
+    public AccessService(string? storePath = null, TimeSpan? sessionLifetime = null)
     {
+        _sessionLifetime = sessionLifetime ?? TimeSpan.FromMinutes(30);
+        if (_sessionLifetime <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(sessionLifetime));
         _storePath = storePath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "KhanBabaPOS", "Security", "users.dat");
@@ -92,6 +94,8 @@ public sealed class AccessService
             if (user.LockedUntilUtc is { } until && until > now)
                 throw new UnauthorizedAccessException($"Account temporarily locked. {Math.Ceiling((until - now).TotalSeconds)} seconds baad dobara koshish karein.");
 
+            if (user.HashVersion != CurrentHashVersion || user.Iterations < 100_000 || user.Iterations > 2_000_000)
+                throw new InvalidDataException("Credential hash version ya parameters supported nahi hain. Admin se password reset karwayein.");
             var supplied = Derive(password, Convert.FromBase64String(user.Salt), user.Iterations);
             var expected = Convert.FromBase64String(user.PasswordHash);
             if (!CryptographicOperations.FixedTimeEquals(supplied, expected))
@@ -195,7 +199,7 @@ public sealed class AccessService
             if (!allowedRoles.Contains(session.Role))
                 throw new UnauthorizedAccessException("Is action ke liye Admin permission zaroori hai.");
             session.LastActivityUtc = DateTimeOffset.UtcNow;
-            session.ExpiresAtUtc = session.LastActivityUtc.Add(SessionLifetime);
+            session.ExpiresAtUtc = session.LastActivityUtc.Add(_sessionLifetime);
         }
     }
 
@@ -265,11 +269,11 @@ public sealed class AccessService
     private static byte[] Derive(string password, byte[] salt, int iterations) =>
         Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, HashBytes);
 
-    private static AccessSession CreateSession(LocalUser user)
+    private AccessSession CreateSession(LocalUser user)
     {
         var now = DateTimeOffset.UtcNow;
         return new AccessSession(user.Id, user.Username, user.DisplayName, user.Role,
-            now, now, now.Add(SessionLifetime));
+            now, now, now.Add(_sessionLifetime));
     }
 
     private static StaffAccount ToPublic(LocalUser user) =>
