@@ -819,3 +819,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Existing manual Check for Updates action barqarar hai.
 - [x] Installer/download tab tak disabled hai jab tak production signing certificate thumbprint configure nahi hota; SHA-256 aur Authenticode verification gates ko bypass nahi kiya.
 - [ ] Build/CI validation final consolidated pass mein pending hai. Real release feed, one-time popup aur signed installer handoff target PC par verify karna baqi hai.
+
+
+## Work log — 2026-11-16 (Recall workflow follow-up)
+
+- [x] Android aur WPF dono mein Recall mode se bahar nikalne ke liye explicit New Bill action/flow add kiya; naya bill shuru karne par recalled invoice ID reset hoti hai, taa-ke agla checkout ghalti se purana bill overwrite na kare.
+- [x] Android overwrite se pehle original customer account aur customer type ko dobara verify karta hai; existing bill par customer/type change allowed nahi.
+- [x] WPF history model mein customer ID include ki, taa-ke recalled bill sahi customer account ke sath load ho aur draft receipt model bhi compatible rahe.
+- [x] WPF startup par stable update notification per-version aik martaba show karne ka logic add kiya; last-notified version LocalAppData mein store hota hai.
+- [ ] **Pending:** in tamam latest changes ka consolidated source review, Flutter analyze/build, WPF Release build aur regression tests. Owner ke kehne par abhi intermediate validation nahi chalayi gayi.
