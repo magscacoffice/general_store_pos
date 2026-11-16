@@ -499,6 +499,7 @@ Future improvements: add new ideas here when the owner requests them.
 | 2026-11-15 | Pre-migration cleanup: clarified Walk-in/Khata/Wholesale semantics, removed retired Flutter Windows desktop packages and activation code, and updated the migration roadmap. | `ee6df2b`, `6133c52`, `e056dcb` | Flutter Windows target subsequently retired; native WPF source is tracked separately above. |
 | 2026-11-13 | Added sample update, previously reported Windows bug, verified completed items, and validation follow-ups | This file update | Done |
 | 2026-11-13 | Created project tracking file | `2c2409275da6a2518a1ca6b676605867e130a25d` | Done |
+| 2026-11-16 | Retired Flutter Windows sale-window, pending-bill lifecycle and keyboard/window event code from `sales_screen.dart`; preserved Android billing/scanning and the shared SQLite pending-bill table used by WPF. | Pending consolidated commit | Android validation required; legacy Drive-sync compatibility shim intentionally retained until native WPF sync replaces its call sites. |
 | 2026-11-16 | Removed legacy Flutter Windows sales-screen presentation branches (desktop DataTable cart, split-pane cashier layout and desktop AppBar controls); retained Android billing panels and existing sale calculations. | Pending consolidated commit | Android validation required; remaining legacy bill/window lifecycle cleanup is still pending. |
 | 2026-11-14 | Historical Flutter Windows POS #68 passed; old desktop scrollbar/startup-status, receipt, autocomplete and lazy-inventory work was implemented before the Flutter Windows runner was retired. Optional Gemini handwriting OCR is Android-only and remains active. | Historical Flutter Windows build #68 | Not counted as native WPF acceptance; WPF UI, scanner and printer verification remain pending. |
 
@@ -561,7 +562,8 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Remove retired Windows scanner-screen presentation branches while retaining Android camera scanning and generic mobile scanner guidance (commit `a92d02b`).
 - [x] Remove Windows-only FAB variants from expense, reminders, party and inventory screens (commits `4f87791`, `a0413ef`, `dd2a929`, `9a51794`).
 - [x] Removed the remaining Flutter Windows-only sales cart DataTable, split-pane cashier body, desktop AppBar actions and Windows-specific AppBar styling. Android customer, cart, discount and checkout panels remain in the shared Flutter sales screen.
-- [ ] Finish retiring the unused Flutter Windows sale-window and pending-bill lifecycle hooks in `sales_screen.dart` and its restore integration. Preserve Android workflows, shared SQLite schema and Drive snapshot/database safety paths; do not delete shared data/sync paths.
+- [x] Retired Flutter Windows sale-window and pending-bill lifecycle hooks from `sales_screen.dart`; removed Windows keyboard/window event handling and kept Android scanner, product search, cart, discounts and checkout flow. The shared `pending_bills` SQLite table/service remains available to native WPF; the `PosWindows` compatibility shim remains because the legacy Flutter Drive-sync implementation still references it.
+- [ ] Complete native WPF Google Drive snapshot sync and recovery before removing the obsolete Flutter `PosWindows` compatibility shim and Flutter-only Windows Drive backup calls.
 
 - [ ] Complete WPF implementation, CI validation and physical Windows acceptance before declaring the native Windows client ready.
 
