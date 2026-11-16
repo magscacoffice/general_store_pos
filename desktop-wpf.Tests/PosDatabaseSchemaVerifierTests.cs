@@ -934,4 +934,110 @@ public sealed class PosDatabaseSchemaVerifierTests
         Assert.Contains("backup-android-device-1.db", json);
     }
 
+    private static ValidatedDriveSnapshot BuildTestSnapshot(
+        List<Dictionary<string, object?>>? products = null,
+        List<Dictionary<string, object?>>? tombstones = null)
+    {
+        var data = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["schemaVersion"] = 2,
+            ["products"] = (products ?? []).Cast<object?>().ToList(),
+            ["parties"] = new List<object?>(),
+            ["sales"] = new List<object?>(),
+            ["sale_items"] = new List<object?>(),
+            ["purchases"] = new List<object?>(),
+            ["khata_transactions"] = new List<object?>(),
+            ["expenses"] = new List<object?>(),
+            ["reminders"] = new List<object?>(),
+            ["sale_returns"] = new List<object?>(),
+            ["sale_return_items"] = new List<object?>(),
+            ["tombstones"] = (tombstones ?? []).Cast<object?>().ToList()
+        };
+        return new ValidatedDriveSnapshot("android-test-device", new string('a', 64), data, "{}");
+    }
+
+    [Fact]
+    public async Task DriveMergeCreatesExplicitProductConflictAndResolvesRemoteChoice()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var snapshot = BuildTestSnapshot(products:
+            [
+                new Dictionary<string, object?>
+                {
+                    ["name"] = "Remote Item", ["barcode"] = "WPF-WH-1",
+                    ["price"] = 25d, ["purchasePrice"] = 10d, ["wholesalePrice"] = 19d,
+                    ["quantity"] = 4L, ["damaged_quantity"] = 0L, ["is_active"] = 1L, ["stock_unit"] = "pcs"
+                }
+            ]);
+            var service = new DriveSnapshotMergeService();
+            var result = await service.MergeAsync(snapshot, snapshot.DeviceId, path);
+            Assert.Equal(1, result.PendingConflicts);
+            Assert.False(result.SnapshotFullyAccepted);
+            var conflicts = await service.GetPendingConflictsAsync(path);
+            var conflict = Assert.Single(conflicts);
+            Assert.Equal("product", conflict.EntityType);
+            Assert.Equal("WPF-WH-1", conflict.EntityKey);
+
+            await service.ResolveConflictAsync(conflict.Id, useRemote: true, path);
+            var remaining = await service.GetPendingConflictsAsync(path);
+            Assert.Empty(remaining);
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var query = db.CreateCommand();
+            query.CommandText = "SELECT name,price,quantity FROM products WHERE barcode='WPF-WH-1';";
+            await using var reader = await query.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("Remote Item", reader.GetString(0));
+            Assert.Equal(25, reader.GetDouble(1), 2);
+            Assert.Equal(4, reader.GetInt32(2));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DriveDeleteTombstoneRequiresExplicitChoiceAndCannotRemoveStockedProduct()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var snapshot = BuildTestSnapshot(tombstones:
+            [
+                new Dictionary<string, object?>
+                {
+                    ["entity_type"] = "product", ["entity_key"] = "WPF-WH-1",
+                    ["deleted_at"] = DateTimeOffset.UtcNow.ToString("O")
+                }
+            ]);
+            var service = new DriveSnapshotMergeService();
+            var result = await service.MergeAsync(snapshot, snapshot.DeviceId, path);
+            Assert.Equal(1, result.PendingConflicts);
+            var conflict = Assert.Single(await service.GetPendingConflictsAsync(path));
+            Assert.Equal("product_delete", conflict.EntityType);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.ResolveConflictAsync(conflict.Id, useRemote: true, path));
+            await service.ResolveConflictAsync(conflict.Id, useRemote: false, path);
+            Assert.Empty(await service.GetPendingConflictsAsync(path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var stock = db.CreateCommand();
+            stock.CommandText = "SELECT quantity FROM products WHERE barcode='WPF-WH-1';";
+            Assert.Equal(10, Convert.ToInt32(await stock.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
 }
