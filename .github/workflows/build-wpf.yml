@@ -7,6 +7,10 @@ on:
     paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
   workflow_dispatch:
 
+concurrency:
+  group: validate-wpf-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
