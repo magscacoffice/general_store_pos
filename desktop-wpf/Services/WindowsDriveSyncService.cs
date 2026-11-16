@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Windows.Threading;
+using KhanBabaPos.Wpf.Data;
 
 namespace KhanBabaPos.Wpf.Services;
 
