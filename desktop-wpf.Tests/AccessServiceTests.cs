@@ -55,7 +55,6 @@ public sealed class AccessServiceTests : IDisposable
         service.Authenticate("owner", "StrongPass!2026");
         var owner = service.ListStaff().Single(x => x.Username == "owner");
         Assert.Throws<InvalidOperationException>(() => service.SetEnabled(owner.Id, false));
-        Assert.Throws<InvalidOperationException>(() => service.SetEnabled(owner.Id, false));
     }
 
     [Fact]
