@@ -88,6 +88,7 @@ public sealed class InventoryService
 
     public async Task UpdateAsync(int id, ProductMutation p, string databasePath, CancellationToken ct = default)
     {
+        AccessService.RequireCurrentAdmin();
         Validate(p);
         var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
@@ -125,6 +126,7 @@ public sealed class InventoryService
 
     public async Task SetActiveAsync(int id, bool active, string databasePath, CancellationToken ct = default)
     {
+        AccessService.RequireCurrentAdmin();
         var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
@@ -142,6 +144,7 @@ public sealed class InventoryService
 
     public async Task DeleteAsync(int id, string databasePath, CancellationToken ct = default)
     {
+        AccessService.RequireCurrentAdmin();
         var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, ct);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, ct);
