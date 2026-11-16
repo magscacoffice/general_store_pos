@@ -874,4 +874,54 @@ public sealed class PosDatabaseSchemaVerifierTests
         Assert.Equal("windows-master", validated.DeviceId);
         Assert.Equal(hash, validated.SnapshotHash);
     }
+
+
+    [Fact]
+    public void DriveMasterManifestTracksProcessedHashesAndBackupFilenames()
+    {
+        var manifest = DriveMasterManifest.Empty("windows-device-1");
+        const string deviceHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        manifest.SetPreMergeBackup("android-device-1", "drive-premerge-android-device-1.db");
+        Assert.Equal("drive-premerge-android-device-1.db", manifest.GetPreMergeBackup("android-device-1"));
+        Assert.False(manifest.IsProcessed("android-device-1", deviceHash));
+
+        manifest.MarkProcessed("android-device-1", deviceHash);
+        Assert.True(manifest.IsProcessed("android-device-1", deviceHash));
+        Assert.False(manifest.IsProcessed("android-device-1", new string('b', 64)));
+
+        manifest.MarkPending("android-device-1");
+        Assert.False(manifest.IsProcessed("android-device-1", deviceHash));
+        Assert.Throws<ArgumentException>(() => manifest.SetPreMergeBackup("android-device-1", @"C:\\Users\\user\\backup.db"));
+    }
+
+    [Fact]
+    public void DriveMasterManifestRoundTripsWithoutExposingLocalBackupPaths()
+    {
+        var manifest = DriveMasterManifest.Empty("windows-device-1");
+        const string deviceHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        manifest.MarkProcessed("android-device-1", deviceHash);
+        manifest.SetPreMergeBackup("android-device-1", "backup-android-device-1.db");
+
+        var data = new Dictionary<string, object?>
+        {
+            ["products"] = Array.Empty<object>(), ["parties"] = Array.Empty<object>(),
+            ["sales"] = Array.Empty<object>(), ["sale_items"] = Array.Empty<object>(),
+            ["purchases"] = Array.Empty<object>(), ["khata_transactions"] = Array.Empty<object>(),
+            ["expenses"] = Array.Empty<object>(), ["reminders"] = Array.Empty<object>(),
+            ["sale_returns"] = Array.Empty<object>(), ["sale_return_items"] = Array.Empty<object>(),
+            ["tombstones"] = Array.Empty<object>()
+        };
+        var dataJson = JsonSerializer.Serialize(data);
+        using var dataDocument = JsonDocument.Parse(dataJson);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataJson))).ToLowerInvariant();
+
+        var json = manifest.ToJson(dataDocument.RootElement, hash, DateTimeOffset.Parse("2026-11-16T00:00:00Z"));
+        var restored = DriveMasterManifest.Parse(json);
+        Assert.Equal("windows-device-1", restored.MasterDeviceId);
+        Assert.True(restored.IsProcessed("android-device-1", deviceHash));
+        Assert.Equal("backup-android-device-1.db", restored.GetPreMergeBackup("android-device-1"));
+        Assert.DoesNotContain(Environment.UserName, json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("backup-android-device-1.db", json);
+    }
+
 }
