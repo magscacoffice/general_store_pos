@@ -11,9 +11,11 @@ public sealed class PrinterSettingsService
 {
  static string SettingsPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"KhanBabaPOS","printer-settings.json");
  public async Task<PrinterPreferences> LoadAsync(CancellationToken ct=default){try{if(!File.Exists(SettingsPath))return new PrinterPreferences();var json=await File.ReadAllTextAsync(SettingsPath,ct);return JsonSerializer.Deserialize<PrinterPreferences>(json)??new PrinterPreferences();}catch{return new PrinterPreferences();}}
- public async Task SaveAsync(PrinterPreferences value,CancellationToken ct=default){var dir=Path.GetDirectoryName(SettingsPath)!;Directory.CreateDirectory(dir);await File.WriteAllTextAsync(SettingsPath,JsonSerializer.Serialize(value,new JsonSerializerOptions{WriteIndented=true}),ct);}
+ public async Task SaveAsync(PrinterPreferences value,CancellationToken ct=default){
+        AccessService.RequireCurrentAdmin();var dir=Path.GetDirectoryName(SettingsPath)!;Directory.CreateDirectory(dir);await File.WriteAllTextAsync(SettingsPath,JsonSerializer.Serialize(value,new JsonSerializerOptions{WriteIndented=true}),ct);}
  public Task<IReadOnlyList<PrinterQueueInfo>> GetInstalledAsync(CancellationToken ct=default)=>Task.Run<IReadOnlyList<PrinterQueueInfo>>(()=>{using var server=new LocalPrintServer();var rows=new List<PrinterQueueInfo>();foreach(var q in server.GetPrintQueues()){q.Refresh();var status=q.QueueStatus;var ready=(status&(PrintQueueStatus.Offline|PrintQueueStatus.NotAvailable|PrintQueueStatus.Error))==0;rows.Add(new PrinterQueueInfo(q.Name,ready,status.ToString()));q.Dispose();}return rows.OrderBy(x=>x.Name,StringComparer.OrdinalIgnoreCase).ToList();},ct);
- public async Task PrintRawAsync(string printerName,byte[] bytes,CancellationToken ct=default){if(string.IsNullOrWhiteSpace(printerName))throw new InvalidOperationException("Select a printer first.");await Task.Run(()=>RawPrinter.Send(printerName,bytes),ct);}
+ public async Task PrintRawAsync(string printerName,byte[] bytes,CancellationToken ct=default){
+        AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);if(string.IsNullOrWhiteSpace(printerName))throw new InvalidOperationException("Select a printer first.");await Task.Run(()=>RawPrinter.Send(printerName,bytes),ct);}
 }
 public sealed record PrinterQueueInfo(string Name,bool IsAvailable,string Status){public string DisplayStatus=>IsAvailable?"Available":"Unavailable";}
 public sealed record PrinterPreferences(string? PreferredPrinter=null,int PaperWidthMm=80,int HeaderSize=2,int TotalSize=2,int MarginMm=2);
