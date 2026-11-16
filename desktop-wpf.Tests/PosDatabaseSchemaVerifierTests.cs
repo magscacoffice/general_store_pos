@@ -259,7 +259,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     0,
                     false,
                     "Wholesale",
-                    "WPF Test Cashier"),
+                    "Local Windows User"),
                 path);
             Assert.Equal(18, cash.ReceivedAmount, 2);
             Assert.Equal(0, cash.BalanceDue, 2);
