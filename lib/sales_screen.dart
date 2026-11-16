@@ -94,6 +94,33 @@ class SalesScreenState extends State<SalesScreen> {
     });
   }
 
+  Future<void> _startNewBill() async {
+    if (cart.isNotEmpty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('New Bill'),
+          content: const Text('Current cart ko clear karke naya bill shuru karna hai?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('New Bill')),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    setState(() {
+      cart.clear();
+      _recalledSaleId = null;
+      overallDiscount = 0;
+      isPercentageDiscount = false;
+      selectedSaleType = 'Walk-in';
+      selectedCustomerId = null;
+      customerPaymentMode = 'Cash';
+      receivedAmountController.clear();
+    });
+  }
+
   Future<void> _recallRecentBill() async {
     if (cart.isNotEmpty) {
       final choice = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -1146,6 +1173,8 @@ class SalesScreenState extends State<SalesScreen> {
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
     child: Row(children: [
       const Expanded(child: Text('Bill Review - Save/Print se pehle items check karein', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
+      OutlinedButton.icon(onPressed: _startNewBill, icon: const Icon(Icons.add), label: const Text('New Bill')),
+      const SizedBox(width: 6),
       OutlinedButton.icon(onPressed: _recallRecentBill, icon: const Icon(Icons.history), label: const Text('Recall Bills')),
     ]),
   );
