@@ -197,6 +197,8 @@
                         <DockPanel Margin="0,0,0,10">
                             <Button Content="Print Bill (F9)" DockPanel.Dock="Right" Click="PrintCurrentBill_Click"
                                     Margin="8,0,0,0" Padding="10,6" ToolTip="Open current bill print preview"/>
+                            <Button Content="Recall Bills" DockPanel.Dock="Right" Click="RecallBill_Click"
+                                    Margin="8,0,0,0" Padding="10,6" ToolTip="Recall or edit a previously saved bill"/>
                             <TextBlock x:Name="CartCountText" DockPanel.Dock="Right" Text="0 items"
                                        Foreground="#728078" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock Text="Current Bill" FontSize="17" FontWeight="Bold" Foreground="#20342D"/>
