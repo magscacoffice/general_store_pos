@@ -702,6 +702,7 @@ public partial class MainWindow : Window
 
             var items = await history.GetSaleItemsAsync(selected.SaleId);
             if (items.Count == 0) throw new InvalidOperationException("Selected bill mein items nahi milay.");
+            _activeBillId = Guid.NewGuid().ToString("N");
             _suppressPersistence = true;
             CartLines.Clear();
             foreach (var item in items)
