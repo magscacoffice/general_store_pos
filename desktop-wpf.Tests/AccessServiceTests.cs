@@ -35,7 +35,7 @@ public sealed class AccessServiceTests : IDisposable
         Assert.Throws<UnauthorizedAccessException>(() => service.Authenticate("owner", "wrong-password"));
         Assert.Equal(AccessRole.Admin, service.Authenticate("OWNER", "StrongPass!2026").Role);
         service.Logout();
-        var admin = service.Authenticate("owner", "StrongPass!2026");
+        service.Authenticate("owner", "StrongPass!2026");
         var salesman = service.CreateStaff("cashier", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
         service.SetEnabled(salesman.Id, false);
         service.Logout();
@@ -47,7 +47,7 @@ public sealed class AccessServiceTests : IDisposable
     {
         var service = new AccessService(StorePath);
         service.ProvisionFirstAdmin("owner", "Owner", "StrongPass!2026");
-        var salesman = service.CreateStaff("cashier", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
+        service.CreateStaff("cashier", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
         service.Logout();
         service.Authenticate("cashier", "CashierPass!2026");
         Assert.Throws<UnauthorizedAccessException>(() => service.RequireAdmin());
