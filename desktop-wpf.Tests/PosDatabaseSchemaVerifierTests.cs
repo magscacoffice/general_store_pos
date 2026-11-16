@@ -791,3 +791,87 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 }
+
+
+    [Fact]
+    public void DriveEnvelopeValidatorAcceptsValidAndroidSchemaV2AndRejectsTampering()
+    {
+        var data = new Dictionary<string, object?>
+        {
+            ["products"] = new object[] { new Dictionary<string, object?> { ["barcode"] = "A-1", ["price"] = 12.0 } },
+            ["parties"] = Array.Empty<object>(),
+            ["sales"] = Array.Empty<object>(),
+            ["sale_items"] = Array.Empty<object>(),
+            ["purchases"] = Array.Empty<object>(),
+            ["khata_transactions"] = Array.Empty<object>(),
+            ["expenses"] = Array.Empty<object>(),
+            ["reminders"] = Array.Empty<object>(),
+            ["sale_returns"] = Array.Empty<object>(),
+            ["sale_return_items"] = Array.Empty<object>(),
+            ["tombstones"] = Array.Empty<object>()
+        };
+        var options = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        options.Converters.Add(new DartCompatibleDoubleConverter());
+        var compactData = JsonSerializer.Serialize(data, options);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(compactData))).ToLowerInvariant();
+        var envelope = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 2,
+            deviceId = "android-fixture",
+            snapshotHash = hash,
+            data
+        }, options);
+
+        var validated = DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(envelope);
+        Assert.Equal("android-fixture", validated.DeviceId);
+        Assert.Equal(hash, validated.SnapshotHash);
+        Assert.Contains("\\"barcode\\":\\"A-1\\"", validated.CompactJson);
+
+        var tampered = envelope.Replace("\\"A-1\\"", "\\"A-2\\"", StringComparison.Ordinal);
+        Assert.Throws<FormatException>(() => DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(tampered));
+    }
+
+    [Fact]
+    public void DriveEnvelopeValidatorRequiresEverySchemaV2Collection()
+    {
+        var incomplete = """{"schemaVersion":2,"deviceId":"device-1","snapshotHash":"deadbeef","data":{"products":[]}}""";
+        var error = Assert.Throws<FormatException>(() =>
+            DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(incomplete));
+        Assert.Contains("parties", error.Message);
+    }
+
+    [Fact]
+    public void DriveEnvelopeValidatorChecksMasterProcessedSnapshotManifest()
+    {
+        var data = new Dictionary<string, object?>
+        {
+            ["products"] = Array.Empty<object>(), ["parties"] = Array.Empty<object>(),
+            ["sales"] = Array.Empty<object>(), ["sale_items"] = Array.Empty<object>(),
+            ["purchases"] = Array.Empty<object>(), ["khata_transactions"] = Array.Empty<object>(),
+            ["expenses"] = Array.Empty<object>(), ["reminders"] = Array.Empty<object>(),
+            ["sale_returns"] = Array.Empty<object>(), ["sale_return_items"] = Array.Empty<object>(),
+            ["tombstones"] = Array.Empty<object>()
+        };
+        var options = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        var dataJson = JsonSerializer.Serialize(data, options);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataJson))).ToLowerInvariant();
+        var master = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 2,
+            masterDeviceId = "windows-1",
+            processedSnapshots = new Dictionary<string, string> { ["android-1"] = "aabbcc" },
+            preMergeBackups = new Dictionary<string, string>(),
+            data,
+            snapshotHash = hash
+        }, options);
+
+        var validated = DriveSnapshotEnvelopeValidator.ValidateMasterEnvelope(master);
+        Assert.Equal("windows-master", validated.DeviceId);
+        Assert.Equal(hash, validated.SnapshotHash);
+    }
