@@ -58,6 +58,7 @@
                     <Button Content="▥   Purchases" Click="Purchases_Click"/>
                     <Button Content="◫   Customer Khata" Click="Khata_Click"/>
                     <Button Content="♙   Parties" Click="Parties_Click"/>
+                    <Button Content="☁   Google Drive Sync" Click="DriveSync_Click"/>
                     <Button Content="♟   Staff &amp; Access" Click="Staff_Click"/>
                     <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="▣   Expenses" Click="Expenses_Click"/>
