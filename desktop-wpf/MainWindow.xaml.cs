@@ -768,6 +768,34 @@ public partial class MainWindow : Window
         Close();
     }
 
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureAdminAccess()) return;
+        var updater = new NativeUpdateService();
+        try
+        {
+            var update = await updater.CheckForUpdateAsync();
+            if (update is null)
+            {
+                MessageBox.Show("Apka POS latest release par hai.", "Software Update", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var message = $"New version {update.Version} available hai.\\n\\n{update.ReleaseNotes}";
+            if (!updater.CanInstallSignedUpdates)
+            {
+                MessageBox.Show(message + "\\n\\nDownload/install filhal disabled hai jab tak production code-signing certificate configure nahi hota.", "Update available — installation pending", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (MessageBox.Show(message + "\\n\\nUpdate install karna hai?", "Software Update", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            await updater.DownloadAndStartInstallerAsync(update);
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Software Update", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void DriveSync_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdminAccess()) return;
