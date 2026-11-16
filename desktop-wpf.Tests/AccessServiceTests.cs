@@ -67,6 +67,18 @@ public sealed class AccessServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SalePostingRejectsCashierIdentityThatDoesNotMatchAuthenticatedStaff()
+    {
+        var service = new AccessService(StorePath);
+        var session = service.ProvisionFirstAdmin("owner", "Owner", "StrongPass!2026");
+        var sales = new SalePostingService(service);
+        var request = new SaleCheckoutRequest(
+            [new SaleLineInput("B-1", 1, 10)], null, "Cash", null, 0, false,
+            "Walk-in", "Someone Else", "different-user");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sales.CompleteSaleAsync(request, "unused-test-db.sqlite"));
+    }
+
+    [Fact]
     public void RepeatedFailuresApplyTemporaryLockout()
     {
         var service = new AccessService(StorePath);
