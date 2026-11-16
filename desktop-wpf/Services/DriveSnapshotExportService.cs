@@ -202,7 +202,7 @@ public sealed class DriveSnapshotExportService
 }
 
 
-internal sealed class DartCompatibleDoubleConverter : JsonConverter<double>
+public sealed class DartCompatibleDoubleConverter : JsonConverter<double>
 {
     public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         reader.GetDouble();
