@@ -235,6 +235,211 @@ public sealed class SalePostingService
         }
     }
 
+
+    public async Task<SalePostingResult> UpdateSaleFromRecallAsync(
+        int saleId, SaleCheckoutRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
+        var session = _access.CurrentSession ?? throw new UnauthorizedAccessException("Session expire ho gaya. Dobara login karein.");
+        if (!string.Equals(request.CashierUid, session.UserId, StringComparison.Ordinal) ||
+            !string.Equals(request.CashierName, session.DisplayName, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Sale cashier identity active login se match nahi karti.");
+        if (request.Items.Count == 0) throw new InvalidOperationException("Cart is empty.");
+        var path = PosDatabasePath.Resolve(requireExisting: true);
+        await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
+        await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, cancellationToken);
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        { DataSource = path, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString());
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
+        try
+        {
+            await using var oldCommand = connection.CreateCommand();
+            oldCommand.Transaction = transaction;
+            oldCommand.CommandText = "SELECT customer_id, COALESCE(customer_type,'Walk-in'), COALESCE(payment_type,'Cash'), COALESCE(total_amount,0), COALESCE(discount,0), COALESCE(final_amount,0), COALESCE(received_amount,0), COALESCE(balance_due,0), date, sync_id, customer_sync_id FROM sales WHERE id=$id LIMIT 1;";
+            oldCommand.Parameters.AddWithValue("$id", saleId);
+            await using var oldReader = await oldCommand.ExecuteReaderAsync(cancellationToken);
+            if (!await oldReader.ReadAsync(cancellationToken)) throw new InvalidOperationException("Original bill nahi mila.");
+            var oldCustomerId = oldReader.IsDBNull(0) ? (int?)null : oldReader.GetInt32(0);
+            var oldCustomerType = oldReader.GetString(1);
+            var oldDate = oldReader.GetString(8);
+            var oldSaleSync = oldReader.IsDBNull(9) ? null : oldReader.GetString(9);
+            var oldCustomerSync = oldReader.IsDBNull(10) ? null : oldReader.GetString(10);
+            var oldTotal = oldReader.GetDouble(3);
+            var oldDiscount = oldReader.GetDouble(4);
+            var oldFinal = oldReader.GetDouble(5) > 0 || oldTotal <= 0 ? oldReader.GetDouble(5) : Math.Max(0, oldTotal-oldDiscount);
+            var oldReceived = oldReader.GetDouble(6);
+            var oldDue = oldReader.GetDouble(7) > 0 ? oldReader.GetDouble(7) :
+                oldReader.GetString(2) is "Khata" or "Partial" ? Math.Max(0, oldFinal-oldReceived) : 0;
+            await oldReader.DisposeAsync();
+            if (oldSaleSync is null || oldSaleSync.Length == 0) throw new InvalidOperationException("Original bill sync identity missing hai.");
+            if (oldCustomerId != request.CustomerId || oldCustomerType != request.CustomerType)
+                throw new InvalidOperationException("Existing bill ka customer/type change nahi ho sakta. Save as New Bill karein.");
+
+            await using (var returns = connection.CreateCommand())
+            {
+                returns.Transaction = transaction;
+                returns.CommandText = "SELECT COUNT(*) FROM sale_returns WHERE sale_id=$id;";
+                returns.Parameters.AddWithValue("$id", saleId);
+                if (Convert.ToInt32(await returns.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0)
+                    throw new InvalidOperationException("Is bill par return record mojood hai. Sirf Save as New Bill karein.");
+            }
+            if (oldCustomerId is not null)
+            {
+                await using var receipts = connection.CreateCommand();
+                receipts.Transaction = transaction;
+                receipts.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$party AND type='receipt' AND note != $ownReceipt;";
+                receipts.Parameters.AddWithValue("$party", oldCustomerId.Value);
+                receipts.Parameters.AddWithValue("$ownReceipt", $"Cash received at sale #{saleId}");
+                if (Convert.ToInt32(await receipts.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0)
+                    throw new InvalidOperationException("Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.");
+            }
+
+            var oldItems = new List<(int ProductId, int Quantity)>();
+            await using (var items = connection.CreateCommand())
+            {
+                items.Transaction = transaction;
+                items.CommandText = "SELECT product_id, quantity FROM sale_items WHERE sale_id=$id;";
+                items.Parameters.AddWithValue("$id", saleId);
+                await using var reader = await items.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    if (reader.IsDBNull(0)) throw new InvalidOperationException("Purane bill ka product link missing hai.");
+                    oldItems.Add((reader.GetInt32(0), reader.GetInt32(1)));
+                }
+            }
+            foreach (var old in oldItems)
+            {
+                await using var restore = connection.CreateCommand();
+                restore.Transaction = transaction;
+                restore.CommandText = "UPDATE products SET quantity=quantity+$qty WHERE id=$id;";
+                restore.Parameters.AddWithValue("$qty", old.Quantity);
+                restore.Parameters.AddWithValue("$id", old.ProductId);
+                if (await restore.ExecuteNonQueryAsync(cancellationToken) != 1)
+                    throw new InvalidOperationException("Original stock restore nahi ho saka.");
+            }
+
+            var prepared = new List<PreparedSaleLine>();
+            foreach (var input in request.Items)
+            {
+                if (string.IsNullOrWhiteSpace(input.Barcode) || input.Quantity <= 0 ||
+                    !double.IsFinite(input.SalePrice) || input.SalePrice < 0)
+                    throw new InvalidOperationException("Invalid barcode, quantity ya sale rate.");
+                await using var lookup = connection.CreateCommand();
+                lookup.Transaction = transaction;
+                lookup.CommandText = "SELECT id,name,barcode,COALESCE(purchasePrice,0),COALESCE(quantity,0),COALESCE(stock_unit,'pcs'),COALESCE(is_active,1) FROM products WHERE barcode=$barcode LIMIT 1;";
+                lookup.Parameters.AddWithValue("$barcode", input.Barcode.Trim());
+                await using var reader = await lookup.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("Product nahi mila: " + input.Barcode);
+                var line = new PreparedSaleLine(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
+                    input.Quantity, input.SalePrice, reader.GetDouble(3), reader.GetString(5));
+                var stock = reader.GetInt32(4);
+                var active = reader.GetInt32(6);
+                await reader.DisposeAsync();
+                if (active != 1) throw new InvalidOperationException(line.Name + " inactive hai.");
+                if (stock < line.Quantity) throw new InvalidOperationException("Stock kam hai: " + line.Name);
+                if (line.SalePrice < line.PurchasePrice) throw new InvalidOperationException("Sale rate purchase cost se kam hai: " + line.Name);
+                prepared.Add(line);
+            }
+            var subtotal = prepared.Sum(x => x.SalePrice * x.Quantity);
+            if (!double.IsFinite(request.DiscountValue) || request.DiscountValue < 0 ||
+                (request.IsPercentageDiscount && request.DiscountValue > 100) ||
+                (!request.IsPercentageDiscount && request.DiscountValue > subtotal))
+                throw new InvalidOperationException("Discount valid nahi.");
+            var discount = request.IsPercentageDiscount ? subtotal * request.DiscountValue / 100d : request.DiscountValue;
+            var finalAmount = Math.Max(0, subtotal-discount);
+            double received;
+            string paymentType;
+            switch (request.CustomerType == "Walk-in" ? "Cash" : request.PaymentMode)
+            {
+                case "Cash": received = finalAmount; paymentType = "Cash"; break;
+                case "Credit": received = 0; paymentType = "Khata"; break;
+                case "Partial":
+                    received = request.PartialReceivedAmount ?? -1;
+                    if (!double.IsFinite(received) || received <= 0 || received >= finalAmount)
+                        throw new InvalidOperationException("Partial payment amount valid nahi.");
+                    paymentType = "Partial"; break;
+                default: throw new InvalidOperationException("Payment mode unsupported.");
+            }
+            var due = oldCustomerId is null ? 0 : finalAmount-received;
+            foreach (var line in prepared)
+            {
+                await using var stock = connection.CreateCommand();
+                stock.Transaction = transaction;
+                stock.CommandText = "UPDATE products SET quantity=quantity-$qty WHERE id=$id AND quantity >= $qty;";
+                stock.Parameters.AddWithValue("$qty", line.Quantity);
+                stock.Parameters.AddWithValue("$id", line.ProductId);
+                if (await stock.ExecuteNonQueryAsync(cancellationToken) != 1)
+                    throw new InvalidOperationException("Stock update fail hua: " + line.Name);
+            }
+            await using (var update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText = "UPDATE sales SET total_amount=$total, discount=$discount, final_amount=$final, payment_type=$payment, received_amount=$received, balance_due=$due WHERE id=$id AND sync_id=$sync;";
+                update.Parameters.AddWithValue("$total", subtotal);
+                update.Parameters.AddWithValue("$discount", discount);
+                update.Parameters.AddWithValue("$final", finalAmount);
+                update.Parameters.AddWithValue("$payment", paymentType);
+                update.Parameters.AddWithValue("$received", received);
+                update.Parameters.AddWithValue("$due", due);
+                update.Parameters.AddWithValue("$id", saleId);
+                update.Parameters.AddWithValue("$sync", oldSaleSync);
+                if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Original bill update nahi hua.");
+            }
+            await using (var delete = connection.CreateCommand())
+            {
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM sale_items WHERE sale_id=$id;";
+                delete.Parameters.AddWithValue("$id", saleId);
+                await delete.ExecuteNonQueryAsync(cancellationToken);
+            }
+            foreach (var line in prepared)
+            {
+                await using var insert = connection.CreateCommand();
+                insert.Transaction = transaction;
+                insert.CommandText = "INSERT INTO sale_items (sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit) VALUES ($sale,$product,$barcode,$name,$qty,$price,$cost,$line,$total,$sync,$saleSync,$unit);";
+                insert.Parameters.AddWithValue("$sale", saleId);
+                insert.Parameters.AddWithValue("$product", line.ProductId);
+                insert.Parameters.AddWithValue("$barcode", line.Barcode);
+                insert.Parameters.AddWithValue("$name", line.Name);
+                insert.Parameters.AddWithValue("$qty", line.Quantity);
+                insert.Parameters.AddWithValue("$price", line.SalePrice);
+                insert.Parameters.AddWithValue("$cost", line.PurchasePrice);
+                insert.Parameters.AddWithValue("$line", line.SalePrice*line.Quantity);
+                insert.Parameters.AddWithValue("$total", line.PurchasePrice*line.Quantity);
+                insert.Parameters.AddWithValue("$sync", NewSyncId());
+                insert.Parameters.AddWithValue("$saleSync", oldSaleSync);
+                insert.Parameters.AddWithValue("$unit", line.StockUnit);
+                await insert.ExecuteNonQueryAsync(cancellationToken);
+            }
+            if (oldCustomerId is not null)
+            {
+                await using (var deleteLedger = connection.CreateCommand())
+                {
+                    deleteLedger.Transaction = transaction;
+                    deleteLedger.CommandText = "DELETE FROM khata_transactions WHERE party_id=$party AND (note=$sale OR note=$receipt);";
+                    deleteLedger.Parameters.AddWithValue("$party", oldCustomerId.Value);
+                    deleteLedger.Parameters.AddWithValue("$sale", $"Sale #{saleId}");
+                    deleteLedger.Parameters.AddWithValue("$receipt", $"Cash received at sale #{saleId}");
+                    await deleteLedger.ExecuteNonQueryAsync(cancellationToken);
+                }
+                await InsertKhataEntryAsync(connection, transaction, oldCustomerId.Value, oldCustomerSync, "credit", finalAmount, $"Sale #{saleId}", oldDate, cancellationToken);
+                if (received > 0) await InsertKhataEntryAsync(connection, transaction, oldCustomerId.Value, oldCustomerSync, "receipt", received, $"Cash received at sale #{saleId}", oldDate, cancellationToken);
+                await using var balance = connection.CreateCommand();
+                balance.Transaction = transaction;
+                balance.CommandText = "UPDATE parties SET balance=COALESCE(balance,0)-$oldDue+$newDue WHERE id=$id;";
+                balance.Parameters.AddWithValue("$oldDue", oldDue);
+                balance.Parameters.AddWithValue("$newDue", due);
+                balance.Parameters.AddWithValue("$id", oldCustomerId.Value);
+                await balance.ExecuteNonQueryAsync(cancellationToken);
+            }
+            transaction.Commit();
+            return new SalePostingResult(saleId, subtotal, discount, finalAmount, received, due, paymentType, oldDate);
+        }
+        catch { transaction.Rollback(); throw; }
+    }
+
     private static async Task InsertKhataEntryAsync(
         SqliteConnection connection, SqliteTransaction transaction, int partyId,
         string? partySyncId, string type, double amount, string note, string date,
