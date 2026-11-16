@@ -40,7 +40,7 @@ public static class EscPosReceiptBuilder
   string Pair(string l,string r){if(l.Length+r.Length+1>=width){l=l[..Math.Min(l.Length,width-r.Length-1)];}return l+new string(' ',Math.Max(1,width-l.Length-r.Length))+r;}
   var b=new StringBuilder();b.AppendLine(Center("KHAN BABA"));b.AppendLine(Center("GENERAL STORE"));b.AppendLine(Center("G.T ROAD SANAWAN"));b.AppendLine(Center("PH#03451444325"));b.AppendLine();
   var date=DateTime.TryParse(sale.Date,out var parsed)?parsed:DateTime.Now;
-  b.AppendLine(Pair($"Bill# {sale.SaleId:D6}",$"Date: {date:dd/MM/yy}"));b.AppendLine(Pair($"Cashier: {sale.Cashier}",$"Time: {date:hh:mm:ss tt}"));b.AppendLine(Pair($"Type: {sale.CustomerType}",""));b.AppendLine(Pair($"Customer: {sale.CustomerName}",""));b.AppendLine(line);
+  b.AppendLine(sale.SaleId <= 0 ? Pair("DRAFT PREVIEW",$"Date: {date:dd/MM/yy}") : Pair($"Bill# {sale.SaleId:D6}",$"Date: {date:dd/MM/yy}"));b.AppendLine(Pair($"Cashier: {sale.Cashier}",$"Time: {date:hh:mm:ss tt}"));b.AppendLine(Pair($"Type: {sale.CustomerType}",""));b.AppendLine(Pair($"Customer: {sale.CustomerName}",""));b.AppendLine(line);
   b.AppendLine(" Qty Description       Rate       Amount");
   b.AppendLine(line);
   foreach(var item in items){var q=item.Quantity.ToString(CultureInfo.InvariantCulture).PadLeft(4);var rate=item.SalePrice.ToString("0.00",CultureInfo.InvariantCulture).PadLeft(10);var amount=item.LineTotal.ToString("0.00",CultureInfo.InvariantCulture).PadLeft(11);var desc=item.ProductName.Length>17?item.ProductName[..17]:item.ProductName;b.AppendLine(q+" "+desc.PadRight(17)+" "+rate+" "+amount);}
