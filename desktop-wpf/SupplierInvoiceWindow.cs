@@ -153,7 +153,8 @@ public sealed class SupplierInvoiceWindow : Window
 
     private void AddLine()
     {
-        if (_product.SelectedItem is not InventoryProduct product &&
+        var product = _product.SelectedItem as InventoryProduct;
+        if (product is null &&
             (string.IsNullOrWhiteSpace(_newName.Text) || string.IsNullOrWhiteSpace(_newBarcode.Text)))
         {
             _status.Text = "Existing product select karein ya new product ka name aur barcode enter karein.";
