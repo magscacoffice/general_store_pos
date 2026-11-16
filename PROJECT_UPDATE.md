@@ -677,3 +677,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Correct the installer workflow to use a validated PowerShell fallback version (`1.0.0`) when no manual input is supplied.
 - [x] Make installer compilation/test-artifact upload manual-only; regular WPF build/test validation remains in `build-wpf.yml`. No production installer or release is published by this change.
 - [x] Refresh the WPF README to reflect the implemented Drive reconciliation/orchestration foundation and the intentionally paused remote imports.
+
+## Work log — 2026-11-16 (WPF build warning cleanup)
+
+- [x] Changed the intentionally disabled Drive import gate from a compile-time constant to a read-only runtime field. Import behaviour remains disabled, but the compiler no longer treats the guarded merge path as unreachable; no sync safety gate was enabled or relaxed.

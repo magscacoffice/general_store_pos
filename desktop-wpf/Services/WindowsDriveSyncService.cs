@@ -17,7 +17,7 @@ public sealed class WindowsDriveSyncService
 {
     private static readonly byte[] DeviceEntropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.DriveDeviceId.v1");
     // Keep remote imports paused until the full SQLite v18 parity matrix and owner acceptance pass.
-    private const bool EnableDeviceSnapshotImports = false;
+    private static readonly bool EnableDeviceSnapshotImports = false;
     private readonly AccessService _access;
     private readonly GoogleDriveAuthService _auth = new();
     private readonly GoogleDriveApiClient _drive;
