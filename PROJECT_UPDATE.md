@@ -755,3 +755,17 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added supplier and invoice metadata entry, invoice discount/tax, paid amount and automatic due balance posting through the transactional invoice service.
 - [x] Expanded purchase history to display supplier, invoice number, invoice total, paid and outstanding amounts.
 - [ ] Run WPF Release build and all regression tests for the new desktop UI. Mobile OCR/camera capture has not been ported to Windows.
+
+
+## Work log — 2026-11-16 (Owner instruction: complete remaining Khan Baba POS work)
+
+- [ ] **Status: Pending.** Owner ki nayi hidayat: "Jab tak main Windows wala ready artifact try karta hun, aap is app ko ab mukamal kren." Is ka matlab hai ke `integration/wpf-mainline` par Khan Baba POS ke tamam baqi software/development tasks ka audit karke unhein complete karna hai, bina Windows artifact ki owner-side testing ka intezar kiye.
+- [ ] Sab se pehle tamam pending items, incomplete implementations, build/test failures, platform parity gaps aur release blockers ka source-code aur CI ki bunyaad par audit karna hai. Existing completed features ko dobara ya ghair-zaroori tor par change nahi karna.
+- [ ] Har task ke liye pehle se mojood requirements aur safety conditions barqarar rakhni hain. Android Flutter aur Windows native C#/.NET WPF dono ko maintain karna hai; Windows ke liye WinUI 3 ya Flutter Windows UI dobara introduce nahi karni.
+- [ ] Offline-first SQLite schema, sales, stock, purchases, supplier invoices, returns, Khata, customer balances, discounts, payments, backup/restore, printer/scanner workflows aur existing sync/outbox contracts ko preserve karna hai. Windows Google Drive import/sync filhal disabled hi rahe jab tak us ke tamam safety gates pass na hon.
+- [ ] Pehle se approved "Recall Bill / Edit Previous Bill" feature abhi pending hai: Android aur WPF dono mein Recent/Recall Bills, saved bill items/customer/time details, safe edit/overwrite aur Save as New Bill. Overwrite sirf us bill par mumkin ho jahan return record ya baad ki Khata receipt/payment na ho; warna sirf Save as New Bill. Stock aur Khata ki tabdeeliyan aik SQLite transaction mein hon, failure par original bill mehfooz rahe, discount aur 80mm ESC/POS print flow preserve rahe. Is feature par code se pehle detailed audit aur schema verification lazmi hai.
+- [ ] Supplier invoice desktop UI ke baad WPF Release build aur tamam regression tests chalane hain; CI result aur test counts isi log mein record karne hain.
+- [ ] Har implementation se pehle us feature ki tamam user requirements aur acceptance/safety conditions isi `PROJECT_UPDATE.md` mein Roman Urdu mein darj karni hain. Documentation-first commit ke baad hi code changes shuru hon. Har implementation ke baad status aur asal test/build results update karne hain.
+- [ ] Koi live store database, real customer/accounting record ya production backup development test ke liye use/modify nahi karna. Tests disposable database copies par chalane hain.
+- [ ] Owner-side physical Windows laptop, scanner, printer, real backup/restore aur operational acceptance ko software CI se alag pending gates ke tor par report karna hai; inhein bina owner verification ke Completed nahi kehna.
+- [ ] Is broad completion instruction ki implementation abhi shuru nahi hui; yeh entry sirf scope aur work order record karti hai.
