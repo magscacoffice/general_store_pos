@@ -638,3 +638,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added round-trip and manifest-state tests; latest WPF and Android CI for commit `167f276a0b9e4bd7c5b34bf9bdb02cbb2e0a2c08` is running (run IDs `43811887867`, `43811887929`).
 - [ ] Await CI result and fix any regression before implementing database merge operations.
 - [ ] Full transactional SQLite v18 merge, conflict review/resolution, aliases, tombstones, Drive orchestration, auto-sync/offline retry and WPF sync UI remain pending.
+
+## 2026-11-16 — Portable Windows test packaging
+
+- [x] Added `.github/workflows/publish-wpf-test.yml` on `integration/wpf-mainline`. It builds and runs the WPF regression tests, then publishes a self-contained Windows x64 portable ZIP as a 30-day GitHub Actions artifact. It is explicitly labelled TEST ONLY and does not create a production release or installer.
+- [ ] Run the packaging workflow and verify that the ZIP artifact is generated and launches on a Windows machine using a disposable SQLite v18 database copy. The workflow file being committed is not evidence that the package itself has built or run successfully.
+- [ ] Keep Google Drive sync, Windows authentication/role parity, native updater/installer, physical scanner/printer acceptance and owner sign-off as production cutover gates.
