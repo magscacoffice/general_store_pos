@@ -59,7 +59,7 @@
                     <Button Content="◫   Customer Khata" Click="Khata_Click"/>
                     <Button Content="♙   Parties" Click="Parties_Click"/>
                     <Button Content="☁   Google Drive Sync" Click="DriveSync_Click"/>
-                    <Button Content="↻   Check for Updates" Click="CheckUpdates_Click"/>
+                    <Button x:Name="UpdateButton" Content="↻   Check for Updates" Click="CheckUpdates_Click"/>
                     <Button Content="♟   Staff &amp; Access" Click="Staff_Click"/>
                     <Button Content="▦   Reports" Click="Reports_Click"/>
                     <Button Content="▣   Expenses" Click="Expenses_Click"/>
@@ -91,6 +91,8 @@
                     <TextBlock Text="New Sale" FontSize="25" FontWeight="Bold" Foreground="#1C3028"/>
                     <TextBlock Text="Scan a barcode or search a product. Scanner focus returns after each item."
                                Foreground="#65736C" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="UpdateStatusText" Text="Updates checked automatically when internet is available."
+                               Foreground="#728078" FontSize="11" Margin="0,4,0,0"/>
                 </StackPanel>
                 <Border Grid.Column="1" Background="White" BorderBrush="#DCE5E0" BorderThickness="1"
                         CornerRadius="8" Padding="12,8" VerticalAlignment="Center">
@@ -193,8 +195,8 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <DockPanel Margin="0,0,0,10">
-                            <Button Content="Print / Preview" DockPanel.Dock="Right" Click="PrintCurrentBill_Click"
-                                    Margin="8,0,0,0" Padding="10,6"/>
+                            <Button Content="Print Bill (F9)" DockPanel.Dock="Right" Click="PrintCurrentBill_Click"
+                                    Margin="8,0,0,0" Padding="10,6" ToolTip="Open current bill print preview"/>
                             <TextBlock x:Name="CartCountText" DockPanel.Dock="Right" Text="0 items"
                                        Foreground="#728078" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock Text="Current Bill" FontSize="17" FontWeight="Bold" Foreground="#20342D"/>
@@ -271,13 +273,17 @@
                                 <TextBlock x:Name="SubtotalText" Text="Rs. 0.00" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
                                 <TextBlock Text="Net total" Foreground="#D9E6E0" Margin="0,8,0,2"/>
                                 <TextBlock x:Name="FinalTotalText" Text="Rs. 0.00" Foreground="White" FontSize="27" FontWeight="Bold"/>
-                                <Button x:Name="CheckoutButton" Content="Complete Sale" Click="Checkout_Click"
+                                <Button x:Name="PrintBillButton" Content="Print Bill  •  F9" Click="PrintCurrentBill_Click"
+                                        IsEnabled="False" HorizontalContentAlignment="Center"
+                                        Background="#EAF2EE" Foreground="#173B32" FontWeight="SemiBold"
+                                        Margin="0,14,0,0"/>
+                                <Button x:Name="CheckoutButton" Content="Complete Sale  •  F10" Click="Checkout_Click"
                                         IsEnabled="False" HorizontalContentAlignment="Center"
                                         Background="#DCE9E2" Foreground="#173B32" FontWeight="Bold"
-                                        Margin="0,14,0,0"/>
+                                        Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
-                        <TextBlock Text="F2: Scanner  •  F4: Customer  •  F5: New bill  •  Esc: Close suggestion"
+                        <TextBlock Text="F2 Scanner  •  F4 Customer  •  F5 New Bill  •  F6 Discount  •  F7 Received  •  F8 Payment  •  F9 Print  •  F10 Complete Sale"
                                    TextWrapping="Wrap" Foreground="#77847D" FontSize="10" Margin="4,9,4,0"/>
                     </StackPanel>
                 </ScrollViewer>
