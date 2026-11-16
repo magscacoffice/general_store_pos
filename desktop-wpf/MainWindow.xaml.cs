@@ -19,7 +19,7 @@ public partial class MainWindow : Window
 
     private readonly ProductLookupService _products = new();
     private readonly CustomerLookupService _customers = new();
-    private readonly SalePostingService _sales = new();
+    private readonly SalePostingService _sales;
     private readonly AccessService _access;
     private readonly AccessSession _session;
     private IReadOnlyList<CustomerLookup> _allCustomers = [];
@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     {
         _access = access;
         _session = session;
+        _sales = new SalePostingService(access);
         InitializeComponent();
         DataContext = this;
 
@@ -568,6 +569,8 @@ public partial class MainWindow : Window
 
     private async void Checkout_Click(object sender, RoutedEventArgs e)
     {
+        try { _access.RequireRole(AccessRole.Admin, AccessRole.Salesman); }
+        catch (UnauthorizedAccessException ex) { MessageBox.Show(ex.Message, "Login required", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (_checkoutInProgress || CartLines.Count == 0) return;
         try
         {
