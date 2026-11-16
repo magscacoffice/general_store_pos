@@ -82,8 +82,9 @@ public sealed class NativeUpdateService
             await using var output = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None);
             await input.CopyToAsync(output, cancellationToken);
         }
-        await using var installerStream = File.OpenRead(installerPath);
-        var actualHash = Convert.ToHexString(await SHA256.HashDataAsync(installerStream, cancellationToken)).ToLowerInvariant();
+        string actualHash;
+        await using (var installerStream = File.OpenRead(installerPath))
+            actualHash = Convert.ToHexString(await SHA256.HashDataAsync(installerStream, cancellationToken)).ToLowerInvariant();
         if (!CryptographicOperations.FixedTimeEquals(Convert.FromHexString(actualHash), Convert.FromHexString(update.Sha256)))
         {
             File.Delete(installerPath);
