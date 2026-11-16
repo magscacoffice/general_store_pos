@@ -802,3 +802,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Windows mein recalled bill ko update karne ke waqt original customer aur customer type change karna allowed nahi; return ya extra receipt/payment record ho to update block hota hai aur Save as New Bill option available rehta hai.
 - [ ] **Validation Pending:** owner ki hidayat ke mutabiq darmiyani build/tests skip kiye gaye. Android Flutter analysis/build, WPF Release build aur regression tests consolidated final pass mein chalane hain. Is waqt in changes ko tested/pass ya production-ready declare nahi kiya ja raha.
 - [ ] **Code review pending:** consolidated compile review mein schema column names, sync tombstones, customer/payment edge cases, return/payment lock checks, discount calculations aur printing flow verify karne hain. Koi test result abhi available nahi.
+
+
+## Work item — Native WPF update notification refinement (2026-11-16)
+
+- [ ] **Status: Pending.** WPF app startup par latest stable GitHub release check honi chahiye; draft/prerelease ko ignore karna hai. Installed version se naya version ho to UI mein update status aur release notes show hon.
+- [ ] Har version ke liye notification sirf aik martaba show ho; same version ke liye har app restart par popup spam na ho. Manual "Check for Updates" hamesha current status dikha sake.
+- [ ] Download/install tabhi allow ho jab manifest SHA-256 aur Windows Authenticode signature pinned production certificate se verify ho. Certificate/thumbprint absent ho to download/install ko disabled hi rakhna hai aur user ko clear status dena hai.
+- [ ] Update ke dauran database, settings, invoice files aur backups ko touch nahi karna. Latest-version selection ko GitHub stable release endpoint tak mahdood rakhna hai.
