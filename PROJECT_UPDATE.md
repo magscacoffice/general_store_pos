@@ -769,3 +769,15 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Koi live store database, real customer/accounting record ya production backup development test ke liye use/modify nahi karna. Tests disposable database copies par chalane hain.
 - [ ] Owner-side physical Windows laptop, scanner, printer, real backup/restore aur operational acceptance ko software CI se alag pending gates ke tor par report karna hai; inhein bina owner verification ke Completed nahi kehna.
 - [ ] Is broad completion instruction ki implementation abhi shuru nahi hui; yeh entry sirf scope aur work order record karti hai.
+
+
+## Work log — 2026-11-16 (Initial remaining-work source audit)
+
+- [x] Latest working branch `integration/wpf-mainline` aur canonical `PROJECT_UPDATE.md` verify ki. `update.md` duplicate create nahi ki.
+- [x] Android `lib/history_screen.dart` inspect ki: existing Sales History bill details load/reprint aur sale-return flows hain; approved Recall/Edit Previous Bill overwrite workflow nazar nahi aaya.
+- [x] Android `lib/db_helper.dart` mein schema-v18 sale, sale_items, sale_returns, sale_return_items aur khata_transactions contracts ka initial inspection kiya. Sale posting mein sale aur Khata ledger rows transaction mein banti hain; Recall implementation se pehle receipt/return linkage aur sync delete/tombstone contract ki mazeed verification zaroori hai.
+- [x] WPF `SalesHistoryService.cs` read-only history aur sale item retrieval deta hai; WPF MainWindow mein Recall Bill selection/edit workflow abhi maujood nahi. WPF `SalePostingService` filhal new sale posting karta hai.
+- [x] Supplier invoice desktop dialog aur purchase history UI source mein mojood hain. Is UI ke baad ka required WPF Release build aur full regression test result abhi documentation mein Pending hai.
+- [ ] **Pending — Recall Bill / Edit Previous Bill:** dono platforms par feature implementation aur transactional regression tests abhi baqi hain.
+- [ ] **Pending — latest WPF validation:** supplier invoice UI ke baad Release build + complete tests ka naya successful CI result abhi verify nahi hua.
+- [ ] **Pending — environment limitation:** is session mein Codespaces terminal/workspace ka live connection available nahi mila; GitHub source read/write mumkin hai, lekin is waqt local `dotnet` / `flutter` commands run karke code changes compile/test karna mumkin nahi. Bina build/test ke unverified code commit nahi kiya jayega.
