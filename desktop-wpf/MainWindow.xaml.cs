@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -135,6 +136,25 @@ public partial class MainWindow : Window
             UpdateButton.Foreground = new SolidColorBrush(Color.FromRgb(23, 75, 49));
             UpdateStatusText.Text = "A newer Windows version is available. Admin can open Check for Updates.";
             UpdateStatusText.Foreground = Brushes.SeaGreen;
+
+            // Persist the last notified stable version so startup does not repeat the same popup.
+            var notificationDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KhanBabaPOS");
+            Directory.CreateDirectory(notificationDirectory);
+            var notificationFile = Path.Combine(notificationDirectory, "last-notified-version.txt");
+            var lastNotified = File.Exists(notificationFile)
+                ? (await File.ReadAllTextAsync(notificationFile)).Trim()
+                : string.Empty;
+            var versionText = update.Version.ToString();
+            if (!string.Equals(lastNotified, versionText, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(
+                    $"Khan Baba POS ka naya stable version {versionText} available hai.\\n\\n{update.ReleaseNotes}\\n\\nInstaller download/install tab tak disabled rahega jab tak production signing certificate configure nahi hota.",
+                    "Khan Baba POS — Update Available",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                await File.WriteAllTextAsync(notificationFile, versionText);
+            }
         }
         catch (Exception ex)
         {
