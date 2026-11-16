@@ -697,3 +697,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Require stock and customer-balance updates to affect exactly one row so a stale reference cannot silently produce an incomplete return.
 - [x] Added a regression test proving an over-quantity duplicate-line return is rejected and the return header/items, stock and Khata balance all remain unchanged.
 - [ ] Run Windows WPF CI and confirm the full regression suite.
+
+
+## Work log — 2026-11-16 (deterministic Windows test isolation)
+
+- [x] The first sale-return regression run compiled cleanly and passed the new duplicate-line rollback test, but exposed an existing test-suite race: separate test classes mutate the process-wide AccessService test session while Drive merge tests require Admin.
+- [x] Disabled xUnit test parallelization for this Windows integration test assembly because the application intentionally uses a single process-wide authenticated session. This keeps the tests representative and removes cross-test authentication races without changing production session behaviour.
+- [ ] Re-run Windows WPF CI and confirm all 30 tests pass.

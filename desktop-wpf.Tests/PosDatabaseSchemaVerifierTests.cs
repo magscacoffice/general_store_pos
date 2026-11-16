@@ -7,6 +7,8 @@ using Xunit;
 using KhanBabaPos.Wpf.Data;
 using KhanBabaPos.Wpf.Services;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace KhanBabaPos.Wpf.Tests;
 
 public sealed class PosDatabaseSchemaVerifierTests
