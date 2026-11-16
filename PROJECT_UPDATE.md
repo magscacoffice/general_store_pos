@@ -651,3 +651,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Owner launched the portable WPF test build on the target Windows PC and supplied a screenshot showing the New Sale screen and `Existing SQLite v18 verified` status. First-window startup and database detection are confirmed; this does not yet verify navigation, transactions, or hardware.
 - [ ] Complete target-PC basic navigation and responsive layout acceptance using a disposable SQLite v18 database copy. Keep the live store database and existing backups untouched.
 - [ ] Keep Google Drive sync/reconciliation, Windows authentication/role parity, native updater/production installer, end-to-end feature parity, physical scanner/printer acceptance and owner sign-off as production cutover gates.
+
+
+## Windows local authentication decision — 2026-11-16
+
+- [x] Owner approved the recommended Windows-only local authentication direction. Android Flutter/Firebase authentication remains unchanged; Windows login will work offline and will not require Firebase.
+- [ ] Implement first-run Admin account provisioning with a forced password setup; never ship a default password.
+- [ ] Store local credential verifier using a modern salted password hash (PBKDF2-HMAC-SHA256 or stronger, versioned parameters) and protect local secrets with Windows DPAPI CurrentUser scope. Do not store plaintext passwords or reusable password-equivalent secrets.
+- [ ] Add local user lifecycle: Admin can create/disable/reset staff accounts; roles initially Admin and Salesman; prevent disabling/deleting the last active Admin.
+- [ ] Enforce role authorization in the service layer and every navigation/action entry point, not only by hiding buttons. Record the authenticated staff identity on each sale using the existing salesman_uid/salesman_name fields without altering Android schema semantics.
+- [ ] Add login/logout, lockout/backoff, session timeout and audit events; ensure offline login remains available and credentials are scoped to the Windows account/device.
+- [ ] Add tests for first-run provisioning, password verification, role denial, disabled users, last-Admin protection, session expiry and sale attribution. Windows CI and target-PC acceptance remain required.
+- [ ] Conflict/tombstone work remains separate: port Android merge/resolution semantics transactionally against disposable SQLite v18 fixtures before enabling Drive imports.
+- [ ] Native updater/installer remains separate: choose and validate a signed MSIX or WiX/MSI packaging path, preserve user data across upgrades, verify package signatures and rollback, and keep test ZIP separate from production distribution. Signing certificate and owner acceptance remain required.
