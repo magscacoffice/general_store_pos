@@ -1043,4 +1043,27 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+    [Fact]
+    public async Task SalesmanCannotMutatePartyThroughServiceLayer()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "khan-baba-role-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var access = new AccessService(Path.Combine(directory, "users.dat"));
+            access.ProvisionFirstAdmin("owner", "Owner", "OwnerPassword!2026");
+            access.CreateStaff("cashier", "Cashier", "CashierPassword!2026", AccessRole.Salesman);
+            access.Logout();
+            access.Authenticate("cashier", "CashierPassword!2026");
+            AccessService.RegisterProcess(access);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                new PartyService().AddAsync("Blocked Party", "03000000000", "customer"));
+        }
+        finally
+        {
+            AccessService.RegisterProcess(TestAccess);
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
 }
