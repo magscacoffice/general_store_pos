@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private bool _suppressPersistence;
     private bool _suppressPendingSelection;
     private bool _checkoutInProgress;
+    private int? _recalledSaleId;
 
     public MainWindow(AccessService access, AccessSession session)
     {
@@ -628,6 +629,81 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+
+    private async void RecallBill_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
+            var history = new SalesHistoryService();
+            var records = await history.GetSalesAsync();
+            if (records.Count == 0)
+            {
+                MessageBox.Show("Abhi koi saved bill mojood nahi.", "Recall Bill", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var grid = new DataGrid
+            {
+                ItemsSource = records,
+                AutoGenerateColumns = true,
+                IsReadOnly = true,
+                SelectionMode = DataGridSelectionMode.Single,
+                SelectionUnit = DataGridSelectionUnit.FullRow,
+                Margin = new Thickness(10)
+            };
+            var dialog = new Window
+            {
+                Title = "Recall / Recent Bills",
+                Width = 1050,
+                Height = 620,
+                MinWidth = 760,
+                MinHeight = 420,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                Background = Brushes.White
+            };
+            var panel = new DockPanel();
+            var select = new Button { Content = "Recall Selected Bill", Padding = new Thickness(14, 9, 14, 9), Margin = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Right };
+            select.Click += (_, _) =>
+            {
+                if (grid.SelectedItem is SaleHistoryRecord) dialog.DialogResult = true;
+                else MessageBox.Show("Pehle bill select karein.", "Recall Bill", MessageBoxButton.OK, MessageBoxImage.Information);
+            };
+            DockPanel.SetDock(select, Dock.Bottom);
+            panel.Children.Add(select);
+            panel.Children.Add(grid);
+            dialog.Content = panel;
+            if (dialog.ShowDialog() != true || grid.SelectedItem is not SaleHistoryRecord selected) return;
+
+            var items = await history.GetSaleItemsAsync(selected.SaleId);
+            if (items.Count == 0) throw new InvalidOperationException("Selected bill mein items nahi milay.");
+            _suppressPersistence = true;
+            CartLines.Clear();
+            foreach (var item in items)
+                CartLines.Add(new CartLine(item.ProductName, item.Barcode, item.SalePrice, item.Quantity,
+                    item.PurchasePrice, item.StockUnit, int.MaxValue));
+            SaleTypeBox.SelectedItem = selected.CustomerType;
+            ApplyCustomerTypeFilter();
+            CustomerBox.SelectedValue = selected.CustomerId ?? 0;
+            PaymentModeBox.SelectedItem = selected.PaymentType == "Khata" ? "Credit" :
+                selected.PaymentType == "Partial" ? "Partial" : "Cash";
+            PartialAmountBox.Text = selected.Received.ToString(CultureInfo.InvariantCulture);
+            DiscountModeBox.SelectedItem = "Rupe";
+            DiscountValueBox.Text = selected.Discount.ToString(CultureInfo.InvariantCulture);
+            _recalledSaleId = selected.SaleId;
+            _suppressPersistence = false;
+            RefreshTotals();
+            SearchStatusText.Text = $"Bill #{selected.SaleId} recalled. Checkout par Update Existing ya Save as New choose karein.";
+            FocusScanner();
+        }
+        catch (Exception ex)
+        {
+            _suppressPersistence = false;
+            MessageBox.Show(ex.Message, "Recall Bill", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private async void Checkout_Click(object sender, RoutedEventArgs e)
     {
         try { _access.RequireRole(AccessRole.Admin, AccessRole.Salesman); }
@@ -664,11 +740,23 @@ public partial class MainWindow : Window
                 SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
                 _session.DisplayName,
                 _session.UserId);
-            var result = await _sales.CompleteSaleAsync(request);
+            SalePostingResult result;
+            if (_recalledSaleId is not null)
+            {
+                var choice = MessageBox.Show(
+                    $"Bill #{_recalledSaleId} recall hua hai.\n\nYes = Existing bill update\nNo = Save as New Bill\nCancel = Wapas",
+                    "Recall Bill", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                if (choice == MessageBoxResult.Cancel) return;
+                result = choice == MessageBoxResult.Yes
+                    ? await _sales.UpdateSaleFromRecallAsync(_recalledSaleId.Value, request)
+                    : await _sales.CompleteSaleAsync(request);
+            }
+            else result = await _sales.CompleteSaleAsync(request);
             await _pendingBills.DeleteAsync(_activeBillId);
 
             _suppressPersistence = true;
             CartLines.Clear();
+            _recalledSaleId = null;
             _activeBillId = Guid.NewGuid().ToString("N");
             SaleTypeBox.SelectedItem = "Walk-in";
             ApplyCustomerTypeFilter();
