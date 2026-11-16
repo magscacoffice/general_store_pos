@@ -97,7 +97,8 @@ public sealed class NativeUpdateService
             Verb = "open",
             Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
         };
-        Process.Start(start) ?? throw new InvalidOperationException("Installer process could not be started.");
+        if (Process.Start(start) is null)
+            throw new InvalidOperationException("Installer process could not be started.");
     }
 
     private static void VerifyAuthenticodeSignature(string path, string expectedThumbprint)
