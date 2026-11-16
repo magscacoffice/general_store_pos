@@ -137,6 +137,36 @@
                         </Border>
                     </Grid>
                 </Border>
+                    <Popup x:Name="SuggestionsPopup" Grid.Column="0" PlacementTarget="{Binding ElementName=ScannerBox}"
+                           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="White" BorderBrush="#B8C9C0" BorderThickness="1"
+                                CornerRadius="6" Width="620" MaxHeight="280">
+                            <ListBox x:Name="SuggestionsList" MaxHeight="276" BorderThickness="0"
+                                     SelectionChanged="SuggestionsList_SelectionChanged"
+                                     KeyDown="SuggestionsList_KeyDown"
+                                     MouseDoubleClick="SuggestionsList_MouseDoubleClick"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="4,5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#20342D"/>
+                                                <TextBlock Text="{Binding Barcode}" FontSize="11" Foreground="#77847D"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding Price, StringFormat=N2}" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                                                <TextBlock Text="{Binding StockLabel}" FontSize="10" Foreground="#77847D"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </Popup>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
                     <TextBlock Text="Pending bill" VerticalAlignment="Center" Foreground="#65736C" Margin="0,0,7,0"/>
                     <ComboBox x:Name="PendingBillsBox" Width="155" DisplayMemberPath="Label"
@@ -160,9 +190,11 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <DockPanel Margin="0,0,0,10">
-                            <TextBlock Text="Current Bill" FontSize="17" FontWeight="Bold" Foreground="#20342D"/>
+                            <Button Content="Print / Preview" DockPanel.Dock="Right" Click="PrintCurrentBill_Click"
+                                    Margin="8,0,0,0" Padding="10,6"/>
                             <TextBlock x:Name="CartCountText" DockPanel.Dock="Right" Text="0 items"
-                                       Foreground="#728078" VerticalAlignment="Center"/>
+                                       Foreground="#728078" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="Current Bill" FontSize="17" FontWeight="Bold" Foreground="#20342D"/>
                         </DockPanel>
                         <DataGrid x:Name="CartGrid" Grid.Row="1" ItemsSource="{Binding CartLines}"
                                   SelectionMode="Single" SelectionUnit="FullRow">
@@ -189,29 +221,9 @@
                                 <TextBlock Text="Product suggestions" FontSize="16" FontWeight="Bold" Foreground="#20342D"/>
                                 <TextBlock x:Name="SearchStatusText" Text="Ready for barcode scan."
                                            Foreground="#728078" FontSize="12" Margin="0,5,0,8"/>
-                                <ListBox x:Name="SuggestionsList" Height="165" BorderThickness="0"
-                                         SelectionChanged="SuggestionsList_SelectionChanged"
-                                         KeyDown="SuggestionsList_KeyDown"
-                                         MouseDoubleClick="SuggestionsList_MouseDoubleClick">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="2,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#20342D"/>
-                                                    <TextBlock Text="{Binding Barcode}" FontSize="11" Foreground="#77847D"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                                                    <TextBlock Text="{Binding Price, StringFormat=N2}" FontWeight="SemiBold" HorizontalAlignment="Right"/>
-                                                    <TextBlock Text="{Binding StockLabel}" FontSize="10" Foreground="#77847D"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                <TextBlock Text="Matching products appear in the search dropdown. Use ↑ / ↓ and Enter to select."
+                                           Foreground="#728078" FontSize="12" TextWrapping="Wrap"/>
+
                             </StackPanel>
                         </Border>
 
