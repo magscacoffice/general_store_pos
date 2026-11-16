@@ -704,3 +704,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] The first sale-return regression run compiled cleanly and passed the new duplicate-line rollback test, but exposed an existing test-suite race: separate test classes mutate the process-wide AccessService test session while Drive merge tests require Admin.
 - [x] Disabled xUnit test parallelization for this Windows integration test assembly because the application intentionally uses a single process-wide authenticated session. This keeps the tests representative and removes cross-test authentication races without changing production session behaviour.
 - [ ] Re-run Windows WPF CI and confirm all 30 tests pass.
+
+
+## Work log — 2026-11-16 (Windows supplier invoice transaction)
+
+- [x] Added a WPF-side supplier invoice posting service matching the Android schema-v18 invoice contract: supplier, normalized invoice number/date, invoice discount/tax, paid amount, balance due, item pack conversion and invoice-level cost allocation.
+- [x] Stock updates, purchase rows, supplier payable balance and supplier purchase/payment ledger entries are committed in one SQLite transaction.
+- [x] Duplicate supplier invoice numbers are rejected; invalid pack conversions, mismatched stock units, missing suppliers/products, and retail prices below allocated cost are rejected before commit.
+- [x] Added regression tests for a converted pack invoice with partial payment and for duplicate/invalid invoice rollback.
+- [ ] Run WPF CI and confirm the invoice tests pass.
+- [ ] Add the desktop invoice-entry UI and supplier invoice history/ledger presentation after service tests pass.

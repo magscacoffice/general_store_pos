@@ -197,6 +197,21 @@ public sealed class PosDatabaseSchemaVerifierTests
         return id;
     }
 
+
+    private static async Task<int> SeedSupplierAsync(string path, string name = "WPF Test Supplier")
+    {
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+            VALUES($name,'03001112222','supplier',NULL,'wpf-supplier-sync',0);
+            SELECT last_insert_rowid();
+            """;
+        command.Parameters.AddWithValue("$name", name);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
     [Fact]
     public async Task RestoreRejectsBackupWithBadShaSidecarWithoutChangingActivePointer()
     {
@@ -387,6 +402,140 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal(4, purchaseReader.GetInt32(0));
             Assert.Equal(20, purchaseReader.GetDouble(1), 2);
             Assert.Equal(80, purchaseReader.GetDouble(2), 2);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+
+    [Fact]
+    public async Task WpfSupplierInvoicePostsStockDiscountTaxPaidAndPayableAtomically()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            var supplierId = await SeedSupplierAsync(path);
+            int productId;
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var find = db.CreateCommand();
+                find.CommandText = "SELECT id FROM products WHERE barcode='WPF-WH-1';";
+                productId = Convert.ToInt32(await find.ExecuteScalarAsync());
+            }
+
+            var group = await new PurchaseService().RecordInvoiceAsync(
+                new PurchaseInvoiceRequest(supplierId, " inv-2026-001 ", new DateTime(2026, 11, 16),
+                    200, 10, 30, 50,
+                    [new PurchaseInvoiceLineInput(productId, null, null, 18, 1.5, 12, 120, "carton", "pcs", 20, 180)]),
+                path);
+            Assert.False(string.IsNullOrWhiteSpace(group));
+
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await connection.OpenAsync();
+            await using (var stock = connection.CreateCommand())
+            {
+                stock.CommandText = "SELECT quantity,purchasePrice,price,stock_unit FROM products WHERE id=$id;";
+                stock.Parameters.AddWithValue("$id", productId);
+                await using var reader = await stock.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(21, reader.GetInt32(0));
+                Assert.Equal(200d / 18d, reader.GetDouble(1), 4);
+                Assert.Equal(20, reader.GetDouble(2), 2);
+                Assert.Equal("pcs", reader.GetString(3));
+            }
+            await using (var invoice = connection.CreateCommand())
+            {
+                invoice.CommandText = "SELECT supplier_id,invoice_number,invoice_date,invoice_total,invoice_discount,invoice_tax,invoice_paid_amount,invoice_balance_due,quantity,unit_cost,total_cost,invoice_quantity,conversion_factor,invoice_unit_cost FROM purchases WHERE invoice_group_id=$group;";
+                invoice.Parameters.AddWithValue("$group", group);
+                await using var reader = await invoice.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(supplierId, reader.GetInt32(0));
+                Assert.Equal("INV-2026-001", reader.GetString(1));
+                Assert.Equal("2026-11-16", reader.GetString(2));
+                Assert.Equal(200, reader.GetDouble(3), 2);
+                Assert.Equal(10, reader.GetDouble(4), 2);
+                Assert.Equal(30, reader.GetDouble(5), 2);
+                Assert.Equal(50, reader.GetDouble(6), 2);
+                Assert.Equal(150, reader.GetDouble(7), 2);
+                Assert.Equal(18, reader.GetInt32(8));
+                Assert.Equal(200d / 18d, reader.GetDouble(9), 4);
+                Assert.Equal(200, reader.GetDouble(10), 2);
+                Assert.Equal(1.5, reader.GetDouble(11), 2);
+                Assert.Equal(12, reader.GetDouble(12), 2);
+                Assert.Equal(120, reader.GetDouble(13), 2);
+                Assert.False(await reader.ReadAsync());
+            }
+            await using (var balance = connection.CreateCommand())
+            {
+                balance.CommandText = "SELECT balance FROM parties WHERE id=$id AND type='supplier';";
+                balance.Parameters.AddWithValue("$id", supplierId);
+                Assert.Equal(150, Convert.ToDouble(await balance.ExecuteScalarAsync()), 2);
+            }
+            await using (var ledger = connection.CreateCommand())
+            {
+                ledger.CommandText = "SELECT COUNT(*),SUM(CASE WHEN type='supplier_purchase' THEN amount ELSE 0 END),SUM(CASE WHEN type='supplier_payment' THEN amount ELSE 0 END) FROM khata_transactions WHERE party_id=$id;";
+                ledger.Parameters.AddWithValue("$id", supplierId);
+                await using var reader = await ledger.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(2, reader.GetInt32(0));
+                Assert.Equal(200, reader.GetDouble(1), 2);
+                Assert.Equal(50, reader.GetDouble(2), 2);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WpfSupplierInvoiceRejectsDuplicateInvoiceAndRollsBackInvalidLine()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            var supplierId = await SeedSupplierAsync(path);
+            int productId;
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var find = db.CreateCommand();
+                find.CommandText = "SELECT id FROM products WHERE barcode='WPF-WH-1';";
+                productId = Convert.ToInt32(await find.ExecuteScalarAsync());
+            }
+            var service = new PurchaseService();
+            var request = new PurchaseInvoiceRequest(supplierId, "INV-DUP-1", DateTime.Today, 100, 0, 0, 0,
+                [new PurchaseInvoiceLineInput(productId, null, null, 2, 2, 1, 50, "pcs", "pcs", 60, 100)]);
+            await service.RecordInvoiceAsync(request, path);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.RecordInvoiceAsync(request, path));
+            var invalid = request with { InvoiceNumber = "INV-INVALID-1", Items = [new PurchaseInvoiceLineInput(productId, null, null, 2, 2, 1, 50, "pcs", "pcs", 10, 100)] };
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.RecordInvoiceAsync(invalid, path));
+
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await connection.OpenAsync();
+            await using var stock = connection.CreateCommand();
+            stock.CommandText = "SELECT quantity FROM products WHERE id=$id;";
+            stock.Parameters.AddWithValue("$id", productId);
+            Assert.Equal(5, Convert.ToInt32(await stock.ExecuteScalarAsync()));
+            await using var invoices = connection.CreateCommand();
+            invoices.CommandText = "SELECT COUNT(*) FROM purchases WHERE supplier_id=$id;";
+            invoices.Parameters.AddWithValue("$id", supplierId);
+            Assert.Equal(1, Convert.ToInt32(await invoices.ExecuteScalarAsync()));
+            await using var balance = connection.CreateCommand();
+            balance.CommandText = "SELECT balance FROM parties WHERE id=$id;";
+            balance.Parameters.AddWithValue("$id", supplierId);
+            Assert.Equal(100, Convert.ToDouble(await balance.ExecuteScalarAsync()), 2);
+            await using var ledger = connection.CreateCommand();
+            ledger.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$id;";
+            ledger.Parameters.AddWithValue("$id", supplierId);
+            Assert.Equal(1, Convert.ToInt32(await ledger.ExecuteScalarAsync()));
         }
         finally
         {
