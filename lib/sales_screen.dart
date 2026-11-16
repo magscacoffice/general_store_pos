@@ -1,6 +1,5 @@
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
@@ -52,6 +51,21 @@ class SalesScreenState extends State<SalesScreen> {
     receivedAmountController.dispose();
     _productSearchController.dispose();
     super.dispose();
+  }
+
+  void _setSaleType(String type) {
+    if (cart.isNotEmpty && type != selectedSaleType) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customer type badalne se pehle cart clear karein.')),
+      );
+      return;
+    }
+    setState(() {
+      selectedSaleType = type;
+      selectedCustomerId = null;
+      customerPaymentMode = 'Cash';
+      receivedAmountController.clear();
+    });
   }
 
   double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
@@ -790,7 +804,7 @@ class SalesScreenState extends State<SalesScreen> {
                       overallDiscount = value;
                       isPercentageDiscount = isPercent;
                     });
-                    ;
+
                     Navigator.pop(context);
                   },
                   child: const Text('Apply'),
@@ -994,7 +1008,7 @@ class SalesScreenState extends State<SalesScreen> {
                             .toList(),
                         onChanged: (id) {
                           setState(() => selectedCustomerId = id);
-                          ;
+
                         },
                       ),
                     ] else
@@ -1018,7 +1032,7 @@ class SalesScreenState extends State<SalesScreen> {
                             customerPaymentMode = selection.first;
                             receivedAmountController.clear();
                           });
-                          ;
+
                         },
                       ),
                       if (customerPaymentMode == 'Partial') ...[
@@ -1072,7 +1086,7 @@ class SalesScreenState extends State<SalesScreen> {
                         IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
                       IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
                         setState(() => cart.removeAt(index));
-                        ;
+
                       }),
                     ],
                   ),
