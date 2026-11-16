@@ -38,6 +38,7 @@ public sealed class DriveSnapshotExportService
         string? databasePath = null,
         CancellationToken cancellationToken = default)
     {
+        AccessService.RequireCurrentAdmin();
         var path = databasePath ?? PosDatabasePath.Resolve();
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
         if (await HasMissingStableIdsAsync(path, cancellationToken))
