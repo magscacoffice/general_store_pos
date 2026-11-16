@@ -14,6 +14,7 @@ public sealed class PurchaseService
 
  public async Task<int> RecordAsync(int productId,int quantity,double unitCost,double? salePrice,string databasePath,CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   if(quantity<=0||!double.IsFinite(unitCost)||unitCost<0||(salePrice is not null&&(!double.IsFinite(salePrice.Value)||salePrice.Value<0)))throw new InvalidOperationException("Quantity, purchase cost aur optional sale price valid honi chahiye.");
   var path=databasePath;await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);
