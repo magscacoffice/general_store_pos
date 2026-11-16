@@ -391,6 +391,7 @@ public partial class MainWindow : Window
         DiscountPreviewText.Text = $"Discount: Rs. {CalculatedDiscount:N2}";
         CartCountText.Text = $"{CartLines.Sum(x => x.Quantity)} units • {CartLines.Count} lines";
         CheckoutButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
+        PrintBillButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
         var saleType = SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in";
         var walkIn = saleType == "Walk-in";
         if (CartGrid.Columns.Count > 3)
@@ -556,7 +557,7 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
-    private void PrintCurrentBill_Click(object sender, RoutedEventArgs e)
+    private async void PrintCurrentBill_Click(object sender, RoutedEventArgs e)
     {
         if (CartLines.Count == 0)
         {
@@ -620,7 +621,9 @@ public partial class MainWindow : Window
             line.LineTotal,
             line.PurchasePrice * line.Quantity)).ToList();
 
-        // Draft preview/printing is read-only: it does not post a sale or alter stock/Khata.
+        // Persist the current draft before opening print preview. This is still a
+        // pending bill only; stock and the sales ledger change only on Complete Sale.
+        await PersistActiveBillAsync();
         new PrinterInvoiceWindow(sale, items) { Owner = this }.ShowDialog();
         FocusScanner();
     }
