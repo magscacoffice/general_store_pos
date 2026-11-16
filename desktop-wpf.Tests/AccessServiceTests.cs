@@ -58,6 +58,15 @@ public sealed class AccessServiceTests : IDisposable
     }
 
     [Fact]
+    public void ExpiredSessionCannotAuthorizeAnyAction()
+    {
+        var service = new AccessService(StorePath, TimeSpan.FromMilliseconds(1));
+        service.ProvisionFirstAdmin("owner", "Owner", "StrongPass!2026");
+        Thread.Sleep(20);
+        Assert.Throws<UnauthorizedAccessException>(() => service.RequireAdmin());
+    }
+
+    [Fact]
     public void RepeatedFailuresApplyTemporaryLockout()
     {
         var service = new AccessService(StorePath);
