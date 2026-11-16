@@ -122,7 +122,15 @@ class SalesScreenState extends State<SalesScreen> {
       final rows = await DBHelper.getSaleItems(id);
       if (!mounted) return;
       final partyId = (selected['customer_id'] as num?)?.toInt();
-      final customer = partyId == null ? null : customers.where((c) => (c['id'] as num?)?.toInt() == partyId).firstOrNull;
+      Map<String, dynamic>? customer;
+      if (partyId != null) {
+        for (final candidate in customers) {
+          if ((candidate['id'] as num?)?.toInt() == partyId) {
+            customer = candidate;
+            break;
+          }
+        }
+      }
       setState(() {
         cart = rows.map((row) => <String, dynamic>{
           'barcode': row['barcode']?.toString() ?? '', 'name': row['product_name']?.toString() ?? 'Product',
