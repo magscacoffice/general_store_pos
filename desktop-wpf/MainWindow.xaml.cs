@@ -118,6 +118,30 @@ public partial class MainWindow : Window
         }
         RefreshTotals();
         FocusScanner();
+        _ = CheckForUpdatesOnStartupAsync();
+    }
+
+    private async Task CheckForUpdatesOnStartupAsync()
+    {
+        try
+        {
+            var updater = new NativeUpdateService();
+            var update = await updater.CheckForUpdateAsync();
+            if (update is null) return;
+
+            UpdateButton.Content = $"⬆ Update {update.Version} available";
+            UpdateButton.Background = new SolidColorBrush(Color.FromRgb(220, 239, 226));
+            UpdateButton.Foreground = new SolidColorBrush(Color.FromRgb(23, 75, 49));
+            UpdateStatusText.Text = "A newer Windows version is available. Admin can open Check for Updates.";
+            UpdateStatusText.Foreground = Brushes.SeaGreen;
+        }
+        catch (Exception ex)
+        {
+            // Update checks are best-effort and must never block offline billing.
+            UpdateStatusText.Text = "Update check unavailable (offline or release not published).";
+            UpdateStatusText.Foreground = Brushes.Gray;
+            System.Diagnostics.Debug.WriteLine("Khan Baba update check: " + ex.Message);
+        }
     }
 
     private void ApplyCustomerTypeFilter()
@@ -167,6 +191,8 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // Cashier shortcuts are handled at the window level so they work from
+        // the scanner, grid and payment controls without requiring mouse clicks.
         if (e.Key == Key.F2)
         {
             FocusScanner();
@@ -181,6 +207,34 @@ public partial class MainWindow : Window
         else if (e.Key == Key.F5 && !_checkoutInProgress)
         {
             _ = CreateNewBillAsync();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F6)
+        {
+            DiscountValueBox.Focus();
+            DiscountValueBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F7)
+        {
+            PartialAmountBox.Focus();
+            PartialAmountBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F8)
+        {
+            PaymentModeBox.Focus();
+            PaymentModeBox.IsDropDownOpen = true;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F9 || (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control))
+        {
+            PrintCurrentBill_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F10 && !_checkoutInProgress)
+        {
+            Checkout_Click(this, new RoutedEventArgs());
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
