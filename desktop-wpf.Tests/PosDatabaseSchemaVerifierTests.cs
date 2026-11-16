@@ -11,6 +11,16 @@ namespace KhanBabaPos.Wpf.Tests;
 
 public sealed class PosDatabaseSchemaVerifierTests
 {
+    private static readonly AccessService TestAccess = CreateTestAccess();
+
+    private static AccessService CreateTestAccess()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "khan-baba-sale-tests-" + Guid.NewGuid().ToString("N") + ".dat");
+        var access = new AccessService(path);
+        access.ProvisionFirstAdmin("testadmin", "Local Windows User", "TestPassword!2026");
+        return access;
+    }
+
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -222,7 +232,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
-            var service = new SalePostingService();
+            var service = new SalePostingService(TestAccess);
             var partial = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -232,7 +242,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     10,
                     true,
                     "Wholesale",
-                    "WPF Test Cashier"),
+                    "Local Windows User"),
                 path);
             Assert.Equal(36, partial.Subtotal, 2);
             Assert.Equal(3.6, partial.Discount, 2);
