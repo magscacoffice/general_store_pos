@@ -827,9 +827,9 @@ public sealed class PosDatabaseSchemaVerifierTests
         var validated = DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(envelope);
         Assert.Equal("android-fixture", validated.DeviceId);
         Assert.Equal(hash, validated.SnapshotHash);
-        Assert.Contains("\\"barcode\\":\\"A-1\\"", validated.CompactJson);
+        Assert.Contains("\"barcode\":\"A-1\"", validated.CompactJson);
 
-        var tampered = envelope.Replace("\\"A-1\\"", "\\"A-2\\"", StringComparison.Ordinal);
+        var tampered = envelope.Replace("\"A-1\"", "\"A-2\"", StringComparison.Ordinal);
         Assert.Throws<FormatException>(() => DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(tampered));
     }
 
