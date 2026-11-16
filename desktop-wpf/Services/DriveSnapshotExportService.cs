@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Encodings.Web;
 using Microsoft.Data.Sqlite;
 using KhanBabaPos.Wpf.Data;
 
@@ -68,7 +69,7 @@ public sealed class DriveSnapshotExportService
         snapshot["tombstones"] = await ReadRowsAsync(
             connection, "drive_sync_tombstones", [], cancellationToken);
 
-        var json = JsonSerializer.Serialize(snapshot);
+        var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)))
             .ToLowerInvariant();
         return new DriveSnapshotPayload(snapshot, hash, json);

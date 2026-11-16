@@ -732,4 +732,59 @@ public sealed class PosDatabaseSchemaVerifierTests
             File.Delete(path);
         }
     }
+ 
+    [Fact]
+    public async Task DriveSnapshotExportCreatesSafetyCopyAndRepairsStableReferences()
+    {
+        var fixture = await CreateFixtureAsync();
+        var directory = Path.Combine(Path.GetTempPath(), "khan-baba-drive-export-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var databasePath = Path.Combine(directory, "khan_baba_pos.db");
+        File.Copy(fixture, databasePath);
+        File.Delete(fixture);
+        try
+        {
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath, Pooling = false
+            }.ToString()))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText = """
+                    INSERT INTO products (name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
+                    VALUES ('Milk <Fresh>','DRIVE-EXP-1',20,10,18,0,5,1,'pcs');
+                    INSERT INTO parties (name,phone,type,customer_type,sync_id,balance)
+                    VALUES ('Drive Customer','03000000001','customer','Khata',NULL,0);
+                    INSERT INTO sales (total_amount,discount,final_amount,payment_type,customer_id,customer_type,received_amount,balance_due,sync_id,customer_sync_id,date)
+                    VALUES (20,0,20,'Cash',last_insert_rowid(),'Khata',20,0,NULL,NULL,'2026-11-16 10:00:00');
+                    """;
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            var payload = await new DriveSnapshotExportService().ExportAsync(databasePath);
+            using var json = JsonDocument.Parse(payload.Json);
+            Assert.Equal(2, json.RootElement.GetProperty("schemaVersion").GetInt32());
+            var product = json.RootElement.GetProperty("products")[0];
+            Assert.Equal("Milk <Fresh>", product.GetProperty("name").GetString());
+            Assert.False(product.TryGetProperty("id", out _));
+            var party = json.RootElement.GetProperty("parties")[0];
+            var partySyncId = party.GetProperty("sync_id").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(partySyncId));
+            Assert.False(party.TryGetProperty("id", out _));
+            var sale = json.RootElement.GetProperty("sales")[0];
+            Assert.Equal(partySyncId, sale.GetProperty("customer_sync_id").GetString());
+            Assert.False(sale.TryGetProperty("customer_id", out _));
+            Assert.False(payload.Json.Contains("\\u003C", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload.Json))).ToLowerInvariant(), payload.Sha256);
+            var backups = Directory.GetFiles(Path.Combine(directory, "Backups"), "*.db");
+            Assert.Single(backups);
+            Assert.True(File.Exists(backups[0] + ".sha256"));
+            await PosDatabaseSchemaVerifier.VerifyAsync(databasePath);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
 }
