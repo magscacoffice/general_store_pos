@@ -13,6 +13,23 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class AccessService
 {
+    private static AccessService? _processAccess;
+
+    public static void RegisterProcess(AccessService access) =>
+        Interlocked.Exchange(ref _processAccess, access ?? throw new ArgumentNullException(nameof(access)));
+
+    public static void ClearProcess(AccessService access) =>
+        Interlocked.CompareExchange(ref _processAccess, null, access);
+
+    public static void RequireCurrentAdmin() => RequireCurrentRole(AccessRole.Admin);
+
+    public static void RequireCurrentRole(params AccessRole[] roles)
+    {
+        var access = Volatile.Read(ref _processAccess)
+            ?? throw new UnauthorizedAccessException("Windows access session is not initialized. Login required.");
+        access.RequireRole(roles);
+    }
+
     private const int CurrentHashVersion = 1;
     private const int Iterations = 310_000;
     private const int SaltBytes = 16;
