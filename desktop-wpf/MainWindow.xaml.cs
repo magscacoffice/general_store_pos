@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private readonly SalePostingService _sales;
     private readonly AccessService _access;
     private readonly AccessSession _session;
+    private readonly WindowsDriveSyncService _driveSync;
     private IReadOnlyList<CustomerLookup> _allCustomers = [];
     private readonly PendingBillService _pendingBills = new();
     private readonly DispatcherTimer _searchTimer;
@@ -37,6 +38,9 @@ public partial class MainWindow : Window
         _access = access;
         _session = session;
         _sales = new SalePostingService(access);
+        _driveSync = new WindowsDriveSyncService();
+        _driveSync.StartAutoSync();
+        Closed += (_, _) => _driveSync.StopAutoSync();
         InitializeComponent();
         DataContext = this;
 
@@ -762,6 +766,13 @@ public partial class MainWindow : Window
         }
         else Application.Current.Shutdown();
         Close();
+    }
+
+    private void DriveSync_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureAdminAccess()) return;
+        new DriveSyncWindow(_driveSync, _access) { Owner = this }.ShowDialog();
+        FocusScanner();
     }
 
     private void Staff_Click(object sender, RoutedEventArgs e)
