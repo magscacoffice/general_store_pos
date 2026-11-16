@@ -625,3 +625,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Implement Drive v3 orchestration on WPF: list/download device envelopes, verify hashes, create verified pre-merge backups, merge into Windows master, persist processedSnapshots/preMergeBackups, upload master envelope, and apply approved master state to Windows/Android-compatible snapshots.
 - [ ] Add transactional integration tests for all merge paths, idempotency, duplicate snapshots, missing foreign references, tombstone conflicts, rollback and backup recovery using disposable schema-v18 databases.
 - [ ] Add WPF conflict review, connection/sync status, offline/retry scheduling and explicit user-visible errors. Physical Windows runtime and Google OAuth acceptance remain separate pending gates.
+## Work log — 2026-11-16 (Drive envelope validation CI fix)
+
+- [x] Fixed WPF test compile failure by making the shared Dart-compatible JSON double converter public for the protocol test fixture.
+- [x] Windows WPF CI passed on commit `4b42cdcf47ec63986e2c85db509fc51e4623e1b7`: Release build succeeded; 17 tests passed, 0 failed, 0 skipped (run `43811531846`).
+- [x] Android validation passed on preceding source-equivalent commit `0bc0a5b78b21daf09351a7af0546ea799e2e7648` (run `43811259207`); latest converter visibility change is WPF-only.
+- [ ] Continue with transactional SQLite v18 merge engine; no Drive import/merge is enabled yet.
