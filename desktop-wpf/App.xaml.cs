@@ -14,6 +14,7 @@ public partial class App : Application
         try
         {
             _access = new AccessService();
+            AccessService.RegisterProcess(_access);
             var login = new LoginWindow(_access);
             if (login.ShowDialog() != true || login.Session is null)
             {
@@ -34,7 +35,11 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _access?.Logout();
+        if (_access is not null)
+        {
+            _access.Logout();
+            AccessService.ClearProcess(_access);
+        }
         base.OnExit(e);
     }
 }
