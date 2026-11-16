@@ -657,6 +657,8 @@ public partial class MainWindow : Window
         try
         {
             _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
+            // Preserve the active unsaved cart as a pending bill before replacing it with a recalled invoice.
+            await PersistActiveBillAsync();
             var history = new SalesHistoryService();
             var records = await history.GetSalesAsync();
             if (records.Count == 0)
