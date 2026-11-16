@@ -2578,7 +2578,11 @@ class DBHelper {
       if (returns.isNotEmpty) throw Exception('Is bill par return mojood hai. Sirf Save as New Bill karein.');
       final partyId = (old['customer_id'] as num?)?.toInt();
       if ((sale['customer_id'] as num?)?.toInt() != partyId) throw Exception('Existing bill ka customer change nahi ho sakta. Save as New Bill karein.');
+      final oldCustomerType = old['customer_type']?.toString() ?? (partyId == null ? 'Walk-in' : 'Khata');
+      if ((sale['customer_type']?.toString() ?? 'Walk-in') != oldCustomerType) throw Exception('Existing bill ka customer type change nahi ho sakta. Save as New Bill karein.');
       if (partyId != null) {
+        final accounts = await txn.query('parties', columns: ['customer_type'], where: "id = ? AND type = 'customer'", whereArgs: [partyId], limit: 1);
+        if (accounts.isEmpty || (accounts.first['customer_type']?.toString() ?? 'Khata') != oldCustomerType) throw Exception('Original customer account verify nahi ho saka.');
         final receipts = await txn.query('khata_transactions', where: "party_id = ? AND type = 'receipt' AND note != ?", whereArgs: [partyId, 'Cash received at sale #' + saleId.toString()]);
         if (receipts.isNotEmpty) throw Exception('Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.');
       }
