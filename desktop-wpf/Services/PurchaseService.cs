@@ -6,8 +6,16 @@ public sealed class PurchaseService
  public async Task<IReadOnlyList<PurchaseRow>> GetAllAsync(CancellationToken ct=default)
  {
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
-  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="SELECT id,product_name,barcode,quantity,unit_cost,total_cost,date FROM purchases ORDER BY id DESC;";
-  await using var rd=await cmd.ExecuteReaderAsync(ct);var rows=new List<PurchaseRow>();while(await rd.ReadAsync(ct))rows.Add(new(rd.GetInt32(0),rd.GetString(1),rd.GetString(2),rd.GetInt32(3),rd.GetDouble(4),rd.GetDouble(5),rd.GetString(6)));return rows;
+  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="""
+   SELECT p.id,p.product_name,p.barcode,p.quantity,p.unit_cost,p.total_cost,p.date,
+          COALESCE(s.name,'Quick Stock Entry'),COALESCE(p.invoice_number,''),COALESCE(p.invoice_date,''),
+          COALESCE(p.invoice_total,0),COALESCE(p.invoice_paid_amount,0),COALESCE(p.invoice_balance_due,0)
+   FROM purchases p LEFT JOIN parties s ON s.id=p.supplier_id ORDER BY p.id DESC;
+   """;
+  await using var rd=await cmd.ExecuteReaderAsync(ct);var rows=new List<PurchaseRow>();
+  while(await rd.ReadAsync(ct))rows.Add(new(rd.GetInt32(0),rd.GetString(1),rd.GetString(2),rd.GetInt32(3),rd.GetDouble(4),rd.GetDouble(5),rd.GetString(6),
+   rd.GetString(7),rd.GetString(8),rd.GetString(9),rd.GetDouble(10),rd.GetDouble(11),rd.GetDouble(12)));
+  return rows;
  }
  public Task<int> RecordAsync(int productId,int quantity,double unitCost,double? salePrice,CancellationToken ct=default) =>
   RecordAsync(productId,quantity,unitCost,salePrice,PosDatabasePath.Resolve(requireExisting:true),ct);
@@ -209,7 +217,8 @@ public sealed class PurchaseService
 
  static async Task<SqliteConnection> Open(string path,bool ro,CancellationToken ct){var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=path,Mode=ro?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWrite,Pooling=false}.ToString());await db.OpenAsync(ct);return db;}
 }
-public sealed record PurchaseRow(int Id,string ProductName,string Barcode,int Quantity,double UnitCost,double TotalCost,string Date);
+public sealed record PurchaseRow(int Id,string ProductName,string Barcode,int Quantity,double UnitCost,double TotalCost,string Date,
+ string SupplierName,string InvoiceNumber,string InvoiceDate,double InvoiceTotal,double InvoicePaidAmount,double InvoiceBalanceDue);
 public sealed record PurchaseInvoiceRequest(int SupplierId,string InvoiceNumber,DateTime InvoiceDate,double InvoiceTotal,
  double InvoiceDiscount,double InvoiceTax,double PaidAmount,IReadOnlyList<PurchaseInvoiceLineInput> Items);
 public sealed record PurchaseInvoiceLineInput(int? ProductId,string? NewProductName,string? NewProductBarcode,int Quantity,

@@ -687,7 +687,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Audited WPF data-mutation service entry points: Admin-only operations enforce the role inside the service layer; cashier sale posting, pending-bill operations and receipt printing explicitly permit Admin/Salesman as intended.
 - [x] Added a Windows regression test proving a logged-in Salesman is rejected by expense, reminder, party/customer-type, Khata receipt, purchase, sale-return, backup/restore and printer-settings mutation entry points before database/file operations begin.
-- [ ] Run the new role-boundary regression test in Windows WPF CI; retain physical Windows account/role acceptance as a separate gate.
+- [x] Windows WPF CI passed with the Salesman mutation-boundary regression test (run `43850825344`); physical Windows account/role acceptance remains a separate gate.
 
 
 ## Work log — 2026-11-16 (sale-return quantity integrity)
@@ -703,7 +703,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] The first sale-return regression run compiled cleanly and passed the new duplicate-line rollback test, but exposed an existing test-suite race: separate test classes mutate the process-wide AccessService test session while Drive merge tests require Admin.
 - [x] Disabled xUnit test parallelization for this Windows integration test assembly because the application intentionally uses a single process-wide authenticated session. This keeps the tests representative and removes cross-test authentication races without changing production session behaviour.
-- [ ] Re-run Windows WPF CI and confirm all 30 tests pass.
+- [x] Re-ran Windows WPF CI after test isolation; 30 tests passed, 0 failed, 0 skipped (run `43851872671`).
 
 
 ## Work log — 2026-11-16 (Windows supplier invoice transaction)
@@ -712,5 +712,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Stock updates, purchase rows, supplier payable balance and supplier purchase/payment ledger entries are committed in one SQLite transaction.
 - [x] Duplicate supplier invoice numbers are rejected; invalid pack conversions, mismatched stock units, missing suppliers/products, and retail prices below allocated cost are rejected before commit.
 - [x] Added regression tests for a converted pack invoice with partial payment and for duplicate/invalid invoice rollback.
-- [ ] Run WPF CI and confirm the invoice tests pass.
+- [x] Windows WPF CI passed on commit `96b0f153123ba09ed13ae02602fab326321a3b07` (run `43852607335`): Release build succeeded with 0 warnings and 0 errors; 32 tests passed, 0 failed, 0 skipped.
 - [ ] Add the desktop invoice-entry UI and supplier invoice history/ledger presentation after service tests pass.
+
+
+## Work log — 2026-11-16 (supplier invoice desktop UI)
+
+- [x] Added a WPF supplier invoice dialog supporting multiple invoice lines, existing/new products, invoice unit-to-stock conversion, unit rates, optional line totals and retail sale price.
+- [x] Added supplier and invoice metadata entry, invoice discount/tax, paid amount and automatic due balance posting through the transactional invoice service.
+- [x] Expanded purchase history to display supplier, invoice number, invoice total, paid and outstanding amounts.
+- [ ] Run WPF Release build and all regression tests for the new desktop UI. Mobile OCR/camera capture has not been ported to Windows.
