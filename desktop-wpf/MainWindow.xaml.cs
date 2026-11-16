@@ -150,6 +150,7 @@ public partial class MainWindow : Window
 
     private void FocusScanner()
     {
+        SuggestionsPopup.IsOpen = false;
         ScannerBox.Focus();
         Keyboard.Focus(ScannerBox);
         ScannerBox.CaretIndex = ScannerBox.Text.Length;
@@ -187,6 +188,7 @@ public partial class MainWindow : Window
     {
         _searchTimer.Stop();
         _searchCts?.Cancel();
+        SuggestionsPopup.IsOpen = false;
         SuggestionsList.ItemsSource = null;
         if (string.IsNullOrWhiteSpace(ScannerBox.Text))
         {
@@ -209,6 +211,7 @@ public partial class MainWindow : Window
             if (token.IsCancellationRequested || !string.Equals(query, ScannerBox.Text.Trim(), StringComparison.Ordinal))
                 return;
             SuggestionsList.ItemsSource = results;
+            SuggestionsPopup.IsOpen = results.Count > 0;
             SearchStatusText.Text = results.Count == 0
                 ? "No matching product found."
                 : $"{results.Count} matching product(s). Press Enter to add the highlighted result.";
@@ -220,10 +223,14 @@ public partial class MainWindow : Window
 
     private async void ScannerBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Down && SuggestionsList.Items.Count > 0)
+        if ((e.Key == Key.Down || e.Key == Key.Up) && SuggestionsList.Items.Count > 0)
         {
+            SuggestionsPopup.IsOpen = true;
+            SuggestionsList.SelectedIndex = e.Key == Key.Down
+                ? Math.Clamp(SuggestionsList.SelectedIndex < 0 ? 0 : SuggestionsList.SelectedIndex, 0, SuggestionsList.Items.Count - 1)
+                : SuggestionsList.Items.Count - 1;
             SuggestionsList.Focus();
-            SuggestionsList.SelectedIndex = 0;
+            SuggestionsList.ScrollIntoView(SuggestionsList.SelectedItem);
             e.Handled = true;
             return;
         }
@@ -299,6 +306,7 @@ public partial class MainWindow : Window
             existing.Quantity = Math.Min(existing.Quantity + 1, product.Quantity);
 
         ScannerBox.Clear();
+        SuggestionsPopup.IsOpen = false;
         SuggestionsList.ItemsSource = null;
         SearchStatusText.Text = $"{product.Name} added. Scan the next item.";
         RefreshTotals();
@@ -482,6 +490,75 @@ public partial class MainWindow : Window
     private void ClearBill_Click(object sender, RoutedEventArgs e)
     {
         CartLines.Clear();
+        FocusScanner();
+    }
+
+    private void PrintCurrentBill_Click(object sender, RoutedEventArgs e)
+    {
+        if (CartLines.Count == 0)
+        {
+            MessageBox.Show("Print/Preview ke liye pehle bill mein item add karein.",
+                "Current Bill", MessageBoxButton.OK, MessageBoxImage.Information);
+            FocusScanner();
+            return;
+        }
+
+        if (!double.TryParse(DiscountValueBox.Text, NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var discountValue) ||
+            !double.IsFinite(discountValue) || discountValue < 0 ||
+            (IsPercentageDiscount && discountValue > 100) ||
+            (!IsPercentageDiscount && discountValue > Subtotal))
+        {
+            MessageBox.Show("Bill discount ki value check karein.",
+                "Current Bill", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var paymentMode = PaymentModeBox.SelectedItem?.ToString() ?? "Cash";
+        var received = paymentMode switch
+        {
+            "Cash" => FinalTotal,
+            "Partial" when double.TryParse(PartialAmountBox.Text, NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var partial) && double.IsFinite(partial) && partial >= 0 => partial,
+            _ => 0d
+        };
+        if (paymentMode == "Partial" && (received <= 0 || received > FinalTotal))
+        {
+            MessageBox.Show("Partial received amount 0 se zyada aur net total se kam ya barabar hona chahiye.",
+                "Current Bill", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var customerName = CustomerBox.SelectedItem is CustomerLookup customer
+            ? customer.Name
+            : "Walk-in Customer";
+        var sale = new SaleHistoryRecord(
+            0,
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            customerName,
+            SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
+            paymentMode,
+            Subtotal,
+            CalculatedDiscount,
+            FinalTotal,
+            received,
+            Math.Max(0d, FinalTotal - received),
+            "Local Windows User",
+            0,
+            0);
+        var items = CartLines.Select((line, index) => new SaleHistoryItem(
+            index + 1,
+            line.Barcode,
+            line.Name,
+            line.Quantity,
+            line.StockUnit,
+            line.Price,
+            line.PurchasePrice,
+            line.LineTotal,
+            line.PurchasePrice * line.Quantity)).ToList();
+
+        // Draft preview/printing is read-only: it does not post a sale or alter stock/Khata.
+        new PrinterInvoiceWindow(sale, items) { Owner = this }.ShowDialog();
         FocusScanner();
     }
 
