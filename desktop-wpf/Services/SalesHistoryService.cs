@@ -15,7 +15,7 @@ public sealed class SalesHistoryService
         await using var db = await OpenReadOnlyAsync(path, cancellationToken);
         await using var cmd = db.CreateCommand();
         cmd.CommandText = """
-            SELECT s.id, s.date, COALESCE(p.name,'Walk-in Customer'),
+            SELECT s.id, s.date, s.customer_id, COALESCE(p.name,'Walk-in Customer'),
                    COALESCE(s.customer_type,'Walk-in'), COALESCE(s.payment_type,'Cash'),
                    COALESCE(s.total_amount,0), COALESCE(s.discount,0), s.final_amount,
                    COALESCE(s.received_amount,0), COALESCE(s.balance_due,0),
@@ -37,12 +37,13 @@ public sealed class SalesHistoryService
         var result = new List<SaleHistoryRecord>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var total = reader.GetDouble(5);
-            var discount = reader.GetDouble(6);
-            var finalRaw = reader.IsDBNull(7) ? 0d : reader.GetDouble(7);
-            var payment = reader.GetString(4);
-            var receivedRaw = reader.GetDouble(8);
-            var balanceRaw = reader.GetDouble(9);
+            var customerId = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
+            var total = reader.GetDouble(6);
+            var discount = reader.GetDouble(7);
+            var finalRaw = reader.IsDBNull(8) ? 0d : reader.GetDouble(8);
+            var payment = reader.GetString(5);
+            var receivedRaw = reader.GetDouble(9);
+            var balanceRaw = reader.GetDouble(10);
             var final = !reader.IsDBNull(7) && (finalRaw > 0 || total <= 0)
                 ? finalRaw
                 : discount > 0 ? Math.Max(0d, total - discount) : total;
@@ -50,8 +51,8 @@ public sealed class SalesHistoryService
             var balance = balanceRaw > 0 ? balanceRaw :
                 payment is "Khata" or "Partial" ? Math.Max(0d, final - received) : balanceRaw;
             result.Add(new SaleHistoryRecord(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
-                reader.GetString(3), payment, total, discount, final, received, balance,
-                reader.GetString(10), reader.GetDouble(11), reader.GetInt32(12)));
+                reader.GetString(4), payment, total, discount, final, received, balance,
+                reader.GetString(11), reader.GetDouble(12), reader.GetInt32(13), customerId));
         }
         return result;
     }
@@ -88,6 +89,6 @@ public sealed class SalesHistoryService
 
 public sealed record SaleHistoryRecord(int SaleId,string Date,string CustomerName,string CustomerType,
     string PaymentType,double Subtotal,double Discount,double FinalAmount,double Received,double BalanceDue,
-    string Cashier,double ReturnedAmount,int ReturnedCount);
+    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId);
 public sealed record SaleHistoryItem(int Id,string Barcode,string ProductName,int Quantity,string StockUnit,
     double SalePrice,double PurchasePrice,double LineTotal,double CostTotal);
