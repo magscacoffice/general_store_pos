@@ -16,6 +16,7 @@ namespace KhanBabaPos.Wpf.Services;
 public sealed class WindowsDriveSyncService
 {
     private static readonly byte[] DeviceEntropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.DriveDeviceId.v1");
+    private readonly AccessService _access;
     private readonly GoogleDriveAuthService _auth = new();
     private readonly GoogleDriveApiClient _drive;
     private readonly DriveSnapshotExportService _export = new();
@@ -30,10 +31,15 @@ public sealed class WindowsDriveSyncService
     public bool HasSavedCredentials => _auth.HasSavedCredentials;
     public event Action? StatusChanged;
 
-    public WindowsDriveSyncService() => _drive = new GoogleDriveApiClient(_auth);
+    public WindowsDriveSyncService(AccessService access)
+    {
+        _access = access ?? throw new ArgumentNullException(nameof(access));
+        _drive = new GoogleDriveApiClient(_auth);
+    }
 
     public async Task<DriveSyncSummary> ConnectAndSyncAsync(string? databasePath = null, CancellationToken cancellationToken = default)
     {
+        _access.RequireAdmin();
         await _auth.GetAccessTokenAsync(promptForLogin: true, cancellationToken);
         StartAutoSync();
         return await SyncNowAsync(databasePath, cancellationToken);
@@ -41,6 +47,7 @@ public sealed class WindowsDriveSyncService
 
     public async Task<DriveSyncSummary> SyncNowAsync(string? databasePath = null, CancellationToken cancellationToken = default)
     {
+        _access.RequireAdmin();
         await _syncGate.WaitAsync(cancellationToken);
         try
         {
@@ -143,11 +150,15 @@ public sealed class WindowsDriveSyncService
         }
     }
 
-    public async Task<IReadOnlyList<DriveConflictRow>> GetPendingConflictsAsync(string? databasePath = null, CancellationToken cancellationToken = default) =>
-        await _merge.GetPendingConflictsAsync(databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+    public async Task<IReadOnlyList<DriveConflictRow>> GetPendingConflictsAsync(string? databasePath = null, CancellationToken cancellationToken = default)
+    {
+        _access.RequireAdmin();
+        return await _merge.GetPendingConflictsAsync(databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+    }
 
     public async Task ResolveConflictAsync(long conflictId, bool useRemote, string? databasePath = null, CancellationToken cancellationToken = default)
     {
+        _access.RequireAdmin();
         await _merge.ResolveConflictAsync(conflictId, useRemote,
             databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
         var count = (await GetPendingConflictsAsync(databasePath, cancellationToken)).Count;
@@ -156,6 +167,7 @@ public sealed class WindowsDriveSyncService
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
+        _access.RequireAdmin();
         StopAutoSync();
         await _auth.DisconnectAsync(cancellationToken);
         LastError = null;
@@ -164,10 +176,11 @@ public sealed class WindowsDriveSyncService
 
     public void StartAutoSync()
     {
-        if (!HasSavedCredentials || _timer is not null) return;
+        if (!HasSavedCredentials || _timer is not null || _access.CurrentSession?.Role != AccessRole.Admin) return;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
         _timer.Tick += async (_, _) =>
         {
+            if (_access.CurrentSession?.Role != AccessRole.Admin) { StopAutoSync(); SetStatus("Admin session expired — Drive auto-sync paused."); return; }
             if (_syncGate.CurrentCount == 0) return;
             if (!NetworkInterface.GetIsNetworkAvailable())
             {
