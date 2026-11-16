@@ -789,3 +789,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Is liye implementation ke darmiyan har choti tabdeeli ke baad build/test chalana zaroori nahi. Pehle tamam agreed code changes mukammal karne hain; phir aik consolidated review, build aur tests commit/push se pehle ya us waqt available environment mein chalaye jayenge.
 - [ ] Yeh ijazat accounting/data safety ko bypass karne ki ijazat nahi: Recall Bill overwrite ke liye return ya baad ki Khata receipt/payment ki pabandi, stock aur Khata ki aik SQLite transaction, rollback par original bill ki hifazat, sync/outbox identity aur existing discount/printing behavior preserve karna lazmi hai.
 - [ ] Agar local terminal ya CI run available na ho to tests skip hone ki wajah sachai se note karni hai; test pass hone ka dawa nahi karna.
+
+
+## Work log — 2026-11-16 (Recall / Recent Bills — initial implementation)
+
+- [x] Android `DBHelper.updateSaleFromRecall(...)` add kiya: original bill ko SQLite transaction mein update karta hai, purana stock reverse karke edited cart ka stock validate/deduct karta hai, sale/items update karta hai, Khata ledger aur party balance adjust karta hai, aur Android sync queue mein updated rows/tombstones queue karta hai.
+- [x] Android POS screen par `Recall Bills` action add kiya: recent saved bills se bill select karke items, customer, payment mode aur stored discount amount cart mein load hotay hain.
+- [x] Android checkout par recalled bill ke liye `Update Existing Bill` aur `Save as New Bill` ka choice add kiya. Save as New Bill existing `completeSale` flow use karta hai; successful save/update ke baad existing receipt printing flow chalta hai.
+- [x] Android overwrite service return record aur original checkout receipt ke ilawa kisi bhi customer receipt/payment history ko dekh kar overwrite rokta hai; customer change bhi existing bill par block hai. Transaction fail ho to SQLite rollback hota hai.
+- [x] Windows WPF `SalePostingService.UpdateSaleFromRecallAsync(...)` add kiya: backup/schema verification ke baad SQLite transaction mein return/payment safety, stock restore/validation, sale/items update, Khata ledger aur party balance adjustment karta hai.
+- [x] WPF `SalesHistoryService` mein recall dialog ke liye customer ID expose ki aur POS screen par `Recall Bills` button/dialog add kiya. Checkout par existing bill update ya new bill save ka option diya.
+- [x] Windows mein recalled bill ko update karne ke waqt original customer aur customer type change karna allowed nahi; return ya extra receipt/payment record ho to update block hota hai aur Save as New Bill option available rehta hai.
+- [ ] **Validation Pending:** owner ki hidayat ke mutabiq darmiyani build/tests skip kiye gaye. Android Flutter analysis/build, WPF Release build aur regression tests consolidated final pass mein chalane hain. Is waqt in changes ko tested/pass ya production-ready declare nahi kiya ja raha.
+- [ ] **Code review pending:** consolidated compile review mein schema column names, sync tombstones, customer/payment edge cases, return/payment lock checks, discount calculations aur printing flow verify karne hain. Koi test result abhi available nahi.
