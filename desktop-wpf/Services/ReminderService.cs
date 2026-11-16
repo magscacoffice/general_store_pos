@@ -11,6 +11,7 @@ public sealed class ReminderService
  }
  public async Task AddAsync(string title,string details,CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   title=title.Trim();if(title.Length==0)throw new InvalidOperationException("Reminder title zaroori hai.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);await using var cmd=db.CreateCommand();cmd.Transaction=(SqliteTransaction)tx;
