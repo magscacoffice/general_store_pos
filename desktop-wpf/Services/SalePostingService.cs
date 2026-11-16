@@ -10,6 +10,9 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class SalePostingService
 {
+    private readonly AccessService _access;
+
+    public SalePostingService(AccessService access) => _access = access ?? throw new ArgumentNullException(nameof(access));
     public Task<SalePostingResult> CompleteSaleAsync(
         SaleCheckoutRequest request,
         CancellationToken cancellationToken = default) =>
@@ -21,6 +24,12 @@ public sealed class SalePostingService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
+        var activeSession = _access.CurrentSession
+            ?? throw new UnauthorizedAccessException("Session expire ho gaya. Dobara login karein.");
+        if (!string.Equals(request.CashierUid, activeSession.UserId, StringComparison.Ordinal) ||
+            !string.Equals(request.CashierName, activeSession.DisplayName, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Sale cashier identity active login se match nahi karti.");
         if (string.IsNullOrWhiteSpace(databasePath))
             throw new ArgumentException("Database path is required.", nameof(databasePath));
         if (request.Items.Count == 0) throw new InvalidOperationException("Cart is empty.");
