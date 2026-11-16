@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     private readonly ProductLookupService _products = new();
     private readonly CustomerLookupService _customers = new();
     private readonly SalePostingService _sales = new();
+    private readonly AccessService _access;
+    private readonly AccessSession _session;
     private IReadOnlyList<CustomerLookup> _allCustomers = [];
     private readonly PendingBillService _pendingBills = new();
     private readonly DispatcherTimer _searchTimer;
@@ -30,8 +32,10 @@ public partial class MainWindow : Window
     private bool _suppressPendingSelection;
     private bool _checkoutInProgress;
 
-    public MainWindow()
+    public MainWindow(AccessService access, AccessSession session)
     {
+        _access = access;
+        _session = session;
         InitializeComponent();
         DataContext = this;
 
@@ -594,7 +598,8 @@ public partial class MainWindow : Window
                 discountValue,
                 IsPercentageDiscount,
                 SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
-                "Local Windows User");
+                _session.DisplayName,
+                _session.UserId);
             var result = await _sales.CompleteSaleAsync(request);
             await _pendingBills.DeleteAsync(_activeBillId);
 
@@ -630,6 +635,7 @@ public partial class MainWindow : Window
 
     private void Khata_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var khata = new KhataWindow { Owner = this };
         khata.ShowDialog();
         FocusScanner();
@@ -637,6 +643,7 @@ public partial class MainWindow : Window
 
     private void SalesHistory_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var history = new SalesHistoryWindow { Owner = this };
         history.ShowDialog();
         FocusScanner();
@@ -644,6 +651,7 @@ public partial class MainWindow : Window
 
     private void Inventory_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var inventory = new InventoryWindow { Owner = this };
         inventory.ShowDialog();
         FocusScanner();
@@ -651,6 +659,7 @@ public partial class MainWindow : Window
 
     private void Reports_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var reports = new SalesReportsWindow { Owner = this };
         reports.ShowDialog();
         FocusScanner();
@@ -658,6 +667,7 @@ public partial class MainWindow : Window
 
     private void Expenses_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var expenses = new ExpensesWindow { Owner = this };
         expenses.ShowDialog();
         FocusScanner();
@@ -665,6 +675,7 @@ public partial class MainWindow : Window
 
     private void Reminders_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var reminders = new RemindersWindow { Owner = this };
         reminders.ShowDialog();
         FocusScanner();
@@ -672,6 +683,7 @@ public partial class MainWindow : Window
 
     private void Purchases_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var purchases = new PurchasesWindow { Owner = this };
         purchases.ShowDialog();
         FocusScanner();
@@ -679,6 +691,7 @@ public partial class MainWindow : Window
 
     private void ProfitLoss_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var report = new ProfitLossWindow { Owner = this };
         report.ShowDialog();
         FocusScanner();
@@ -686,6 +699,7 @@ public partial class MainWindow : Window
 
     private void Parties_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         var parties = new PartiesWindow { Owner = this };
         parties.ShowDialog();
         FocusScanner();
@@ -716,6 +730,7 @@ public partial class MainWindow : Window
 
     private async void BackupRestore_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         try
         {
             await FlushActiveBillBeforeRestoreAsync();
@@ -729,8 +744,26 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private void Staff_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureAdminAccess()) return;
+        new StaffManagementWindow(_access) { Owner = this }.ShowDialog();
+        FocusScanner();
+    }
+
+    private bool EnsureAdminAccess()
+    {
+        try { _access.RequireAdmin(); return true; }
+        catch (UnauthorizedAccessException ex)
+        {
+            MessageBox.Show(ex.Message, "Access denied", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+    }
+
     private void ComingSoon_Click(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAdminAccess()) return;
         MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
             "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
         FocusScanner();
