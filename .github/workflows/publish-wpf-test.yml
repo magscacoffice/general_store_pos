@@ -1,12 +1,6 @@
 name: Publish Native WPF Test Build
 
 on:
-  push:
-    branches: [integration/wpf-mainline]
-    paths:
-      - 'desktop-wpf/**'
-      - 'desktop-wpf.Tests/**'
-      - '.github/workflows/publish-wpf-test.yml'
   workflow_dispatch:
 
 permissions:
