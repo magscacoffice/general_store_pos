@@ -39,6 +39,7 @@ class SalesScreenState extends State<SalesScreen> {
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
   bool isCheckingOut = false;
+  int? _recalledSaleId;
 
   @override
   void initState() {
@@ -93,6 +94,55 @@ class SalesScreenState extends State<SalesScreen> {
     });
   }
 
+  Future<void> _recallRecentBill() async {
+    if (cart.isNotEmpty) {
+      final choice = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Current bill save karein?'),
+        content: const Text('Recall se pehle current cart clear ho jayega. Kya aap continue karna chahte hain?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue'))],
+      ));
+      if (choice != true || !mounted) return;
+    }
+    try {
+      final bills = await DBHelper.getSales();
+      if (!mounted) return;
+      if (bills.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abhi koi saved bill nahi hai.'))); return; }
+      final selected = await showDialog<Map<String, dynamic>>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Recall / Recent Bills'),
+        content: SizedBox(width: 560, height: 420, child: ListView.builder(itemCount: bills.length > 100 ? 100 : bills.length, itemBuilder: (ctx, index) {
+          final bill = bills[index];
+          return ListTile(dense: true, title: Text('Bill #${bill['id']}  •  Rs. ${bill['effective_amount'] ?? bill['final_amount'] ?? bill['total_amount']}'),
+            subtitle: Text('${bill['date']}  |  ${bill['customer_type'] ?? 'Walk-in'}  |  ${bill['payment_type'] ?? 'Cash'}'),
+            onTap: () => Navigator.pop(ctx, Map<String, dynamic>.from(bill)));
+        })),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))],
+      ));
+      if (selected == null || !mounted) return;
+      final id = (selected['id'] as num).toInt();
+      final rows = await DBHelper.getSaleItems(id);
+      if (!mounted) return;
+      final partyId = (selected['customer_id'] as num?)?.toInt();
+      final customer = partyId == null ? null : customers.where((c) => (c['id'] as num?)?.toInt() == partyId).firstOrNull;
+      setState(() {
+        cart = rows.map((row) => <String, dynamic>{
+          'barcode': row['barcode']?.toString() ?? '', 'name': row['product_name']?.toString() ?? 'Product',
+          'purchasePrice': (row['purchase_price'] as num?)?.toDouble() ?? 0,
+          'salePrice': (row['sale_price'] as num?)?.toDouble() ?? 0,
+          'stockUnit': row['stock_unit']?.toString() ?? 'pcs', 'quantity': (row['quantity'] as num?)?.toInt() ?? 1,
+        }).toList();
+        selectedSaleType = selected['customer_type']?.toString() ?? 'Walk-in';
+        selectedCustomerId = customer == null ? null : partyId;
+        overallDiscount = (selected['discount'] as num?)?.toDouble() ?? 0;
+        isPercentageDiscount = false;
+        customerPaymentMode = selected['payment_type'] == 'Khata' ? 'Credit' : (selected['payment_type'] == 'Partial' ? 'Partial' : 'Cash');
+        receivedAmountController.text = (selected['received_amount'] as num?)?.toString() ?? '';
+        _recalledSaleId = id;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill #$id recall ho gaya. Update ya Save as New Bill choose karein.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill recall nahi ho saka: $e')));
+    }
+  }
   Future<void> _addKhataCustomer() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
@@ -1060,11 +1110,13 @@ class SalesScreenState extends State<SalesScreen> {
                 ),
               );
 
-  Widget _buildBillReviewHeading() =>
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
-              );
+  Widget _buildBillReviewHeading() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+    child: Row(children: [
+      const Expanded(child: Text('Bill Review - Save/Print se pehle items check karein', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
+      OutlinedButton.icon(onPressed: _recallRecentBill, icon: const Icon(Icons.history), label: const Text('Recall Bills')),
+    ]),
+  );
 
   Widget _buildCartList() => Expanded(
     child: cart.isEmpty
