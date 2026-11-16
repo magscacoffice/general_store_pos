@@ -614,3 +614,14 @@ Future improvements: add new ideas here when the owner requests them.
 - POS sync and invoice conversion regression tests passed on the same commit (run `43717393051`).
 - These runs did not publish APK, EXE, or release artifacts.
 - The latest scanner/printer and four FAB cleanup commits are now recorded above as completed. Remaining Flutter Windows branches are still explicitly pending; the Windows-master Drive sync and database path branches are shared data behaviour and must not be removed merely because they mention Windows.
+
+## Work log — 2026-11-16 (Drive protocol validation)
+
+- [x] Added native WPF DriveSnapshotEnvelopeValidator to validate schema-v2 device envelopes before any database merge: required metadata, all 11 required collections, and SHA-256 integrity over the compact data payload.
+- [x] Added Windows-master envelope validation for masterDeviceId, processed-snapshot manifest entries, and the same schema-v2 data/hash contract.
+- [x] Added three protocol tests: valid Android envelope + tamper rejection, missing-collection rejection, and valid Windows master manifest acceptance.
+- [ ] Run Windows CI for this change and fix any compile/test failures before proceeding.
+- [ ] Implement the actual SQLite v18 reconciliation engine ported from Android DBHelper.mergeDriveSnapshot: stable party aliases, product/party conflicts, append-only sales/purchases/Khata/returns, tombstones and explicit resolution.
+- [ ] Implement Drive v3 orchestration on WPF: list/download device envelopes, verify hashes, create verified pre-merge backups, merge into Windows master, persist processedSnapshots/preMergeBackups, upload master envelope, and apply approved master state to Windows/Android-compatible snapshots.
+- [ ] Add transactional integration tests for all merge paths, idempotency, duplicate snapshots, missing foreign references, tombstone conflicts, rollback and backup recovery using disposable schema-v18 databases.
+- [ ] Add WPF conflict review, connection/sync status, offline/retry scheduling and explicit user-visible errors. Physical Windows runtime and Google OAuth acceptance remain separate pending gates.
