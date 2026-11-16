@@ -94,6 +94,22 @@ public sealed class DriveSnapshotExportService
             if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0)
                 return true;
         }
+        var relationChecks = new[]
+        {
+            "SELECT COUNT(*) FROM sales WHERE customer_sync_id IS NOT (SELECT sync_id FROM parties WHERE parties.id = sales.customer_id) OR customer_type IS NOT CASE WHEN customer_id IS NULL THEN 'Walk-in' ELSE COALESCE(NULLIF(customer_type, ''), 'Khata') END;",
+            "SELECT COUNT(*) FROM sale_items WHERE sale_sync_id IS NOT (SELECT sync_id FROM sales WHERE sales.id = sale_items.sale_id);",
+            "SELECT COUNT(*) FROM purchases WHERE supplier_sync_id IS NOT (SELECT sync_id FROM parties WHERE parties.id = purchases.supplier_id);",
+            "SELECT COUNT(*) FROM khata_transactions WHERE party_sync_id IS NOT (SELECT sync_id FROM parties WHERE parties.id = khata_transactions.party_id);",
+            "SELECT COUNT(*) FROM sale_returns WHERE sale_sync_id IS NOT (SELECT sync_id FROM sales WHERE sales.id = sale_returns.sale_id) OR party_sync_id IS NOT (SELECT sync_id FROM parties WHERE parties.id = sale_returns.customer_id);",
+            "SELECT COUNT(*) FROM sale_return_items WHERE return_sync_id IS NOT (SELECT sync_id FROM sale_returns WHERE sale_returns.id = sale_return_items.return_id) OR sale_item_sync_id IS NOT (SELECT sync_id FROM sale_items WHERE sale_items.id = sale_return_items.sale_item_id);"
+        };
+        foreach (var sql in relationChecks)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0)
+                return true;
+        }
         return false;
     }
 
@@ -133,12 +149,12 @@ public sealed class DriveSnapshotExportService
 
         var relations = new[]
         {
-            "UPDATE sales SET customer_sync_id = (SELECT sync_id FROM parties WHERE parties.id = sales.customer_id), customer_type = COALESCE(NULLIF(customer_type, ''), CASE WHEN customer_id IS NULL THEN 'Walk-in' ELSE 'Khata' END) WHERE customer_id IS NOT NULL;",
-            "UPDATE sale_items SET sale_sync_id = (SELECT sync_id FROM sales WHERE sales.id = sale_items.sale_id) WHERE sale_id IS NOT NULL;",
-            "UPDATE purchases SET supplier_sync_id = (SELECT sync_id FROM parties WHERE parties.id = purchases.supplier_id) WHERE supplier_id IS NOT NULL;",
-            "UPDATE khata_transactions SET party_sync_id = (SELECT sync_id FROM parties WHERE parties.id = khata_transactions.party_id) WHERE party_id IS NOT NULL;",
+            "UPDATE sales SET customer_sync_id = (SELECT sync_id FROM parties WHERE parties.id = sales.customer_id), customer_type = COALESCE(NULLIF(customer_type, ''), CASE WHEN customer_id IS NULL THEN 'Walk-in' ELSE 'Khata' END) ;",
+            "UPDATE sale_items SET sale_sync_id = (SELECT sync_id FROM sales WHERE sales.id = sale_items.sale_id) ;",
+            "UPDATE purchases SET supplier_sync_id = (SELECT sync_id FROM parties WHERE parties.id = purchases.supplier_id) ;",
+            "UPDATE khata_transactions SET party_sync_id = (SELECT sync_id FROM parties WHERE parties.id = khata_transactions.party_id) ;",
             "UPDATE sale_returns SET sale_sync_id = (SELECT sync_id FROM sales WHERE sales.id = sale_returns.sale_id), party_sync_id = (SELECT sync_id FROM parties WHERE parties.id = sale_returns.customer_id) WHERE sale_id IS NOT NULL;",
-            "UPDATE sale_return_items SET return_sync_id = (SELECT sync_id FROM sale_returns WHERE sale_returns.id = sale_return_items.return_id), sale_item_sync_id = (SELECT sync_id FROM sale_items WHERE sale_items.id = sale_return_items.sale_item_id) WHERE return_id IS NOT NULL AND sale_item_id IS NOT NULL;"
+            "UPDATE sale_return_items SET return_sync_id = (SELECT sync_id FROM sale_returns WHERE sale_returns.id = sale_return_items.return_id), sale_item_sync_id = (SELECT sync_id FROM sale_items WHERE sale_items.id = sale_return_items.sale_item_id) ;"
         };
         foreach (var sql in relations)
         {
