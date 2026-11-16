@@ -630,7 +630,8 @@ public partial class MainWindow : Window
             Math.Max(0d, FinalTotal - received),
             "Local Windows User",
             0,
-            0);
+            0,
+            SelectedCustomerId);
         var items = CartLines.Select((line, index) => new SaleHistoryItem(
             index + 1,
             line.Barcode,
