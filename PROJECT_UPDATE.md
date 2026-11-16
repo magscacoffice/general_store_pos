@@ -353,6 +353,14 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Pending Updates
 
+### [URGENT — 2026-11-16] Billing calculations, New Sale and Windows test artifact
+
+- [ ] **Billing calculation audit and completion:** compare WPF checkout with the existing Flutter implementation using the same disposable schema-v18 database and test fixtures. Verify line totals (quantity × rate), subtotal, fixed discount, percentage discount, net/final total, cash received, credit/partial received amount, balance due, customer/Khata ledger entries, stock deduction and transaction rollback. Preserve existing discount behaviour and all Walk-in/Khata/Wholesale customer types.
+- [ ] **Resolve cashier calculation inconsistencies:** reconcile checkout validation with bill preview/receipt calculations, especially Partial payment boundary rules; ensure displayed received/balance values match the values actually posted to SQLite.
+- [ ] **New Sale acceptance:** verify New Sale button and F5 create a clean pending bill without losing the previous bill; scanner focus returns after adding an item and after checkout; repeated barcode scans increment the same cart line; pending bills restore customer type, customer, payment mode, discount mode/value and partial received amount.
+- [ ] **Regression tests:** add/verify automated tests for the above calculations and New Sale/cart/pending-bill behaviour. Do not mark this work complete from a successful compile alone.
+- [ ] **Windows artifact:** produce a self-contained Windows x64 WPF test artifact from this integration branch after Release build and tests pass. Artifact is for owner testing only; unsigned and not a production release. Keep the existing installer/signing and real-PC acceptance gates separate.
+
 <!-- This is the canonical live task list. The earlier roadmap sections describe requirements/architecture; Completed Updates records finished work. Source implementation, automated validation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
 
 ### [Windows] Native WPF cashier and inventory
@@ -391,6 +399,14 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
 - [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
+
+## New notes from user (2026-11-16)
+
+- [ ] **Immediate priority: billing calculations + New Sale + Windows artifact.** Owner requested that remaining essential billing calculations and the New Sale cashier workflow be completed first, then a Windows x64 WPF test artifact be generated. This priority does not authorize removing the current discount/percentage-discount behaviour, changing SQLite schema, restoring Flutter Windows, or introducing WinUI 3.
+- [x] **Initial source audit:** MainWindow.xaml.cs already contains the New Sale button handler, F5 shortcut, pending-bill persistence/restore, scanner focus handling and duplicate-barcode quantity increment. SalePostingService.cs already contains transactional sale posting, fixed/percentage discount arithmetic, stock deduction and customer Khata/receipt/balance updates. These are source observations only; they are not owner acceptance or calculation parity proof.
+- [ ] **Calculation discrepancy to verify/fix:** checkout rejects a Partial received amount equal to the final bill total (it requires received < finalAmount), while the draft bill preview currently permits received <= FinalTotal. Make the cashier/preview validation consistent with the Flutter business rule and test zero, exact-total and over-total boundaries.
+- [ ] **Artifact gap identified:** the latest validation run 43849520403 completed Release build and WPF tests successfully, but produced no downloadable artifact because build-wpf.yml had no publish/upload-artifact steps. Add a self-contained Windows x64 test-artifact step and verify a successful Actions run before sharing an artifact link.
+- [ ] **Acceptance still required:** calculations must be compared with Flutter using a disposable copy of the real schema-v18 database; target Windows scanner, printer, runtime, data safety and physical cashier acceptance remain separate gates.
 
 ## New notes from user (2026-11-13)
 
