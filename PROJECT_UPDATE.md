@@ -48,8 +48,8 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 | `salesmen_management_screen.dart` | WPF staff/access window — pending | Preserve existing role/access rules; do not invent a new local identity model or Firebase business sync |
 | `printer_screen.dart` | `PrinterInvoiceWindow.cs`, `Services/PrinterSettingsService.cs` | Printer queue selection/persistence, 80mm ESC/POS test/receipt source, invoice preview and PDF save/open implemented; physical BC-86AC acceptance pending |
 | `backup_screen.dart` | `BackupRestoreWindow.cs`, `Services/DatabaseBackupService.cs` | Verified backup and staged restore with SHA-256, schema validation and atomic active-pointer switch implemented and tested |
-| `cloud_sync_screen.dart` | WPF Cloud Sync window/service — pending | Port the existing Google Drive Windows-master protocol, sync status and conflict review; no Firebase/Firestore business sync |
-| `drive_sync_service.dart` | WPF Drive snapshot service — pending | OAuth, secure token storage, snapshot hashing, upload/download, Windows-master merge, conflict/tombstone rules and auto-sync |
+| `cloud_sync_screen.dart` | WPF Cloud Sync window/service — pending | Add native sync/status/conflict-review UI and wire it to WPF Drive orchestration; no Firebase/Firestore business sync |
+| `drive_sync_service.dart` | WPF Drive snapshot service — in progress | OAuth/DPAPI token storage, Drive v3 transport, schema-v2 export/validation and SQLite merge engine exist; upload/download orchestration, auto-sync and status UI remain pending |
 | `update_manager.dart`, `windows/windows_update_service.dart` | `Services/UpdateService.cs`, `Views/UpdateDialog.xaml` | Stable release detection, checksum verification, staged update and safe restart without touching user data |
 | `windows/system_tray_service.dart`, `windows/pos_windows.dart` | `Services/SystemTrayService.cs`, `Services/WindowCoordinator.cs` | Tray menu, dashboard and cashier window lifecycle, multiple pending bills, minimize/restore and close handling |
 | `windows/desktop_theme.dart`, `windows/desktop_app_bar.dart` | `Themes/Colors.xaml`, `Themes/Controls.xaml`, `Styles/DataGrid.xaml` | Consistent desktop typography, controls, focus/hover states, scrolling and shared visual language |
@@ -440,6 +440,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 | 2026-11-16 | Added Windows-only offline Admin/Salesman authentication: first-run Admin setup, PBKDF2-SHA256 credential hashing, DPAPI CurrentUser-protected credential/audit store, staff create/disable/password reset, last-Admin protection, login/logout, lockout, sliding session expiry, MainWindow Admin navigation gates and authenticated sale attribution. Added authentication and cashier-identity tests; disabled automatic portable test-package publishing while production tasks remain pending. | Auth implementation commits through `2f2bc1e`; CI run `43831153534` | .NET 10 WPF Release build and all WPF tests passed. Target-PC login/role acceptance and remaining service-level authorization audit are still pending. |
 
+| 2026-11-16 | Added WPF transactional SQLite v18 Drive merge engine: product/party conflict detection, stable party aliases, idempotent append-only sales/purchases/Khata/returns/expenses/reminders, tombstone conflict handling, safe deletion guards, explicit Keep Windows / Use Other Device resolution and pending conflict retrieval. Added disposable-v18 tests for product conflict resolution and stocked-product delete protection. | Merge service commit `7ecd4ca`; tests commit `eab672a`; Actions run `43832118175` | WPF Release build and all tests passed. Full merge-path matrix, Drive v3 orchestration, sync UI, auto-sync/offline retry and owner acceptance remain pending. |
+
 ## Completed Updates
 
 <!-- Sirf woh kaam yahan likhein jo waqai complete/verify hua ho. Completed items are moved here so the Pending Updates section contains only unfinished work. -->
@@ -626,24 +628,24 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added native WPF DriveSnapshotEnvelopeValidator to validate schema-v2 device envelopes before any database merge: required metadata, all 11 required collections, and SHA-256 integrity over the compact data payload.
 - [x] Added Windows-master envelope validation for masterDeviceId, processed-snapshot manifest entries, and the same schema-v2 data/hash contract.
 - [x] Added three protocol tests: valid Android envelope + tamper rejection, missing-collection rejection, and valid Windows master manifest acceptance.
-- [ ] Run Windows CI for this change and fix any compile/test failures before proceeding.
-- [ ] Implement the actual SQLite v18 reconciliation engine ported from Android DBHelper.mergeDriveSnapshot: stable party aliases, product/party conflicts, append-only sales/purchases/Khata/returns, tombstones and explicit resolution.
+- [x] Windows WPF CI passed for the merge engine and initial tests in run `43832118175`: Release build and all tests successful.
+- [x] Implement native SQLite v18 reconciliation engine source porting Android DBHelper.mergeDriveSnapshot: stable party aliases, product/party conflicts, append-only sales/purchases/Khata/returns/expenses/reminders, tombstones and explicit Keep Windows / Use Other Device resolution. No schema version or Android table layout changed.
 - [ ] Implement Drive v3 orchestration on WPF: list/download device envelopes, verify hashes, create verified pre-merge backups, merge into Windows master, persist processedSnapshots/preMergeBackups, upload master envelope, and apply approved master state to Windows/Android-compatible snapshots.
-- [ ] Add transactional integration tests for all merge paths, idempotency, duplicate snapshots, missing foreign references, tombstone conflicts, rollback and backup recovery using disposable schema-v18 databases.
+- [ ] Expand transactional integration tests to all merge paths, idempotency/duplicate snapshots, missing foreign references, party aliases/re-adds, rollback and backup recovery using disposable schema-v18 databases. Initial product conflict and protected product-delete tests pass.
 - [ ] Add WPF conflict review, connection/sync status, offline/retry scheduling and explicit user-visible errors. Physical Windows runtime and Google OAuth acceptance remain separate pending gates.
 ## Work log — 2026-11-16 (Drive envelope validation CI fix)
 
 - [x] Fixed WPF test compile failure by making the shared Dart-compatible JSON double converter public for the protocol test fixture.
 - [x] Windows WPF CI passed on commit `4b42cdcf47ec63986e2c85db509fc51e4623e1b7`: Release build succeeded; 17 tests passed, 0 failed, 0 skipped (run `43811531846`).
 - [x] Android validation passed on preceding source-equivalent commit `0bc0a5b78b21daf09351a7af0546ea799e2e7648` (run `43811259207`); latest converter visibility change is WPF-only.
-- [ ] Continue with transactional SQLite v18 merge engine; no Drive import/merge is enabled yet.
+- [x] Added transactional SQLite v18 merge/conflict/tombstone engine source; Drive imports remain disabled until orchestration, full regression coverage and target-PC acceptance are complete.
 ## Work log — 2026-11-16 (WPF master manifest foundation)
 
 - [x] Added `DriveMasterManifest` matching Android master envelope fields: `masterDeviceId`, `processedSnapshots`, `preMergeBackups`, `data`, `snapshotHash`, and `updatedAt`.
 - [x] Added idempotent processed-hash lookup/mark/pending operations and backup filename tracking; cloud manifest rejects local absolute backup paths to avoid leaking Windows profile paths.
 - [x] Added round-trip and manifest-state tests; latest WPF and Android CI for commit `167f276a0b9e4bd7c5b34bf9bdb02cbb2e0a2c08` is running (run IDs `43811887867`, `43811887929`).
-- [ ] Await CI result and fix any regression before implementing database merge operations.
-- [ ] Full transactional SQLite v18 merge, conflict review/resolution, aliases, tombstones, Drive orchestration, auto-sync/offline retry and WPF sync UI remain pending.
+- [x] Merge engine and initial product conflict/tombstone tests were added after the manifest foundation; Release build and tests passed in run `43832118175`.
+- [ ] Finish Drive v3 orchestration, sync/conflict UI, 1–5 minute auto-sync/offline retry and target-PC acceptance. The merge engine and initial conflict/tombstone tests are implemented; broad parity tests remain pending.
 
 ## 2026-11-16 — Portable Windows test packaging
 
