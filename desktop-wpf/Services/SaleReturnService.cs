@@ -22,6 +22,7 @@ public sealed class SaleReturnService
 
  public async Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,string databasePath,CancellationToken ct=default)
  {
+        AccessService.RequireCurrentAdmin();
   if(items.Count==0)throw new InvalidOperationException("Return ke liye kam az kam aik item select karein.");
   if(string.IsNullOrWhiteSpace(reason))throw new InvalidOperationException("Return reason likhna zaroori hai.");
   if(refundMethod is not ("Cash" or "Khata"))throw new InvalidOperationException("Refund method Cash ya Khata hona chahiye.");
