@@ -688,3 +688,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Audited WPF data-mutation service entry points: Admin-only operations enforce the role inside the service layer; cashier sale posting, pending-bill operations and receipt printing explicitly permit Admin/Salesman as intended.
 - [x] Added a Windows regression test proving a logged-in Salesman is rejected by expense, reminder, party/customer-type, Khata receipt, purchase, sale-return, backup/restore and printer-settings mutation entry points before database/file operations begin.
 - [ ] Run the new role-boundary regression test in Windows WPF CI; retain physical Windows account/role acceptance as a separate gate.
+
+
+## Work log — 2026-11-16 (sale-return quantity integrity)
+
+- [x] Found and fixed a duplicate-line validation gap: repeated entries for the same original sale item are now cumulatively checked against the sold quantity within one return transaction.
+- [x] Reject zero/negative return quantities and unsupported return conditions instead of silently treating them as saleable.
+- [x] Require stock and customer-balance updates to affect exactly one row so a stale reference cannot silently produce an incomplete return.
+- [x] Added a regression test proving an over-quantity duplicate-line return is rejected and the return header/items, stock and Khata balance all remain unchanged.
+- [ ] Run Windows WPF CI and confirm the full regression suite.

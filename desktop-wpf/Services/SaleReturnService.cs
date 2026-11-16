@@ -23,6 +23,8 @@ public sealed class SaleReturnService
  public async Task<SaleReturnResult> RecordAsync(int saleId,string reason,string refundMethod,IReadOnlyList<SaleReturnLineInput> items,string databasePath,CancellationToken ct=default)
  {
         AccessService.RequireCurrentAdmin();
+  ArgumentNullException.ThrowIfNull(items);
+  if(saleId<=0)throw new InvalidOperationException("Valid original invoice select karein.");
   if(items.Count==0)throw new InvalidOperationException("Return ke liye kam az kam aik item select karein.");
   if(string.IsNullOrWhiteSpace(reason))throw new InvalidOperationException("Return reason likhna zaroori hai.");
   if(refundMethod is not ("Cash" or "Khata"))throw new InvalidOperationException("Refund method Cash ya Khata hona chahiye.");
@@ -39,14 +41,18 @@ public sealed class SaleReturnService
   if(customerId is not null){await using var party=db.CreateCommand();party.Transaction=(SqliteTransaction)tx;party.CommandText="SELECT sync_id FROM parties WHERE id=$id LIMIT 1;";party.Parameters.AddWithValue("$id",customerId.Value);var v=await party.ExecuteScalarAsync(ct);partySync=v is null or DBNull?null:Convert.ToString(v,CultureInfo.InvariantCulture);}
   if(refundMethod=="Khata"&&customerId is null)throw new InvalidOperationException("Walk-in sale ka refund Khata mein adjust nahi ho sakta.");
   var prepared=new List<PreparedReturnLine>();var gross=0d;
+  var requestedQuantities=new Dictionary<int,int>();
   foreach(var request in items){
-   if(request.Quantity<=0)continue;
+   if(request.Quantity<=0)throw new InvalidOperationException("Return quantity zero se zyada honi chahiye.");
+   if(request.Condition is not ("saleable" or "damaged"))throw new InvalidOperationException("Return condition Saleable ya Damaged select karein.");
    await using var lookup=db.CreateCommand();lookup.Transaction=(SqliteTransaction)tx;lookup.CommandText="SELECT sync_id,product_id,barcode,product_name,quantity,sale_price,purchase_price FROM sale_items WHERE id=$item AND sale_id=$sale LIMIT 1;";lookup.Parameters.AddWithValue("$item",request.SaleItemId);lookup.Parameters.AddWithValue("$sale",saleId);
    await using var rd=await lookup.ExecuteReaderAsync(ct);if(!await rd.ReadAsync(ct))throw new InvalidOperationException("Selected item original invoice ka hissa nahi hai.");
    var sync=rd.IsDBNull(0)?null:rd.GetString(0);var product=rd.IsDBNull(1)?(int?)null:rd.GetInt32(1);var barcode=rd.GetString(2);var name=rd.GetString(3);var sold=rd.GetInt32(4);var price=rd.GetDouble(5);var cost=rd.GetDouble(6);await rd.DisposeAsync();
    await using var returned=db.CreateCommand();returned.Transaction=(SqliteTransaction)tx;returned.CommandText="SELECT COALESCE(SUM(quantity),0) FROM sale_return_items WHERE sale_item_id=$id;";returned.Parameters.AddWithValue("$id",request.SaleItemId);var already=Convert.ToInt32(await returned.ExecuteScalarAsync(ct),CultureInfo.InvariantCulture);
-   if(request.Quantity>sold-already)throw new InvalidOperationException("Return quantity sold quantity se zyada hai: "+name);
-   var condition=request.Condition=="damaged"?"damaged":"saleable";var line=price*request.Quantity;gross+=line;
+   var requestedBefore=requestedQuantities.GetValueOrDefault(request.SaleItemId);
+   if(request.Quantity>sold-already-requestedBefore)throw new InvalidOperationException("Return quantity sold quantity se zyada hai: "+name);
+   requestedQuantities[request.SaleItemId]=checked(requestedBefore+request.Quantity);
+   var condition=request.Condition;var line=price*request.Quantity;gross+=line;
    prepared.Add(new PreparedReturnLine(request.SaleItemId,sync,product,barcode,name,request.Quantity,price,cost,line,cost*request.Quantity,condition));
   }
   if(prepared.Count==0)throw new InvalidOperationException("Return quantity select karein.");
@@ -69,10 +75,10 @@ public sealed class SaleReturnService
     ins.Transaction=(SqliteTransaction)tx;ins.CommandText="INSERT INTO sale_return_items(return_id,return_sync_id,sale_item_id,sale_item_sync_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,condition,sync_id) VALUES($return,$returnSync,$saleItem,$saleItemSync,$product,$barcode,$name,$qty,$price,$cost,$line,$costTotal,$condition,$sync);";
     ins.Parameters.AddWithValue("$return",returnId);ins.Parameters.AddWithValue("$returnSync",returnSync);ins.Parameters.AddWithValue("$saleItem",item.SaleItemId);ins.Parameters.AddWithValue("$saleItemSync",(object?)item.SaleItemSyncId??DBNull.Value);ins.Parameters.AddWithValue("$product",item.ProductId is null?DBNull.Value:item.ProductId.Value);ins.Parameters.AddWithValue("$barcode",item.Barcode);ins.Parameters.AddWithValue("$name",item.ProductName);ins.Parameters.AddWithValue("$qty",item.Quantity);ins.Parameters.AddWithValue("$price",item.SalePrice);ins.Parameters.AddWithValue("$cost",item.PurchasePrice);ins.Parameters.AddWithValue("$line",item.LineTotal);ins.Parameters.AddWithValue("$costTotal",item.CostTotal);ins.Parameters.AddWithValue("$condition",item.Condition);ins.Parameters.AddWithValue("$sync",NewSyncId());await ins.ExecuteNonQueryAsync(ct);
    }
-   if(item.ProductId is not null){await using var stock=db.CreateCommand();stock.Transaction=(SqliteTransaction)tx;stock.CommandText=item.Condition=="saleable"?"UPDATE products SET quantity=quantity+$qty WHERE id=$id;":"UPDATE products SET damaged_quantity=COALESCE(damaged_quantity,0)+$qty WHERE id=$id;";stock.Parameters.AddWithValue("$qty",item.Quantity);stock.Parameters.AddWithValue("$id",item.ProductId.Value);await stock.ExecuteNonQueryAsync(ct);}
+   if(item.ProductId is not null){await using var stock=db.CreateCommand();stock.Transaction=(SqliteTransaction)tx;stock.CommandText=item.Condition=="saleable"?"UPDATE products SET quantity=quantity+$qty WHERE id=$id;":"UPDATE products SET damaged_quantity=COALESCE(damaged_quantity,0)+$qty WHERE id=$id;";stock.Parameters.AddWithValue("$qty",item.Quantity);stock.Parameters.AddWithValue("$id",item.ProductId.Value);if(await stock.ExecuteNonQueryAsync(ct)!=1)throw new InvalidOperationException("Returned product stock could not be updated.");}
   }
   if(refundMethod=="Khata"&&customerId is not null&&refund>0){
-   await using(var update=db.CreateCommand()){update.Transaction=(SqliteTransaction)tx;update.CommandText="UPDATE parties SET balance=balance-$amount WHERE id=$id;";update.Parameters.AddWithValue("$amount",refund);update.Parameters.AddWithValue("$id",customerId.Value);await update.ExecuteNonQueryAsync(ct);}
+   await using(var update=db.CreateCommand()){update.Transaction=(SqliteTransaction)tx;update.CommandText="UPDATE parties SET balance=balance-$amount WHERE id=$id;";update.Parameters.AddWithValue("$amount",refund);update.Parameters.AddWithValue("$id",customerId.Value);if(await update.ExecuteNonQueryAsync(ct)!=1)throw new InvalidOperationException("Customer Khata balance could not be adjusted.");}
    await using(var entry=db.CreateCommand()){entry.Transaction=(SqliteTransaction)tx;entry.CommandText="INSERT INTO khata_transactions(party_id,party_sync_id,sync_id,type,amount,note,date) VALUES($id,$partySync,$sync,'return_adjustment',$amount,$note,$date);";entry.Parameters.AddWithValue("$id",customerId.Value);entry.Parameters.AddWithValue("$partySync",(object?)partySync??DBNull.Value);entry.Parameters.AddWithValue("$sync",NewSyncId());entry.Parameters.AddWithValue("$amount",refund);entry.Parameters.AddWithValue("$note",$"Return #{returnId} against Bill #{saleId}");entry.Parameters.AddWithValue("$date",date);await entry.ExecuteNonQueryAsync(ct);}
   }
   await tx.CommitAsync(ct);return new SaleReturnResult(returnId,refund,prepared.Count);

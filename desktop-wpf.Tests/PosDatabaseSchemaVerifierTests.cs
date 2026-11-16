@@ -504,6 +504,78 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+
+    [Fact]
+    public async Task WpfSaleReturnRejectsDuplicateLinesThatExceedSoldQuantityAndRollsBack()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
+                new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 2, 18)],
+                    customerId,
+                    "Credit",
+                    null,
+                    0,
+                    false,
+                    "Wholesale"),
+                path);
+
+            int saleItemId;
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await connection.OpenAsync();
+                await using var find = connection.CreateCommand();
+                find.CommandText = "SELECT id FROM sale_items WHERE sale_id=$sale;";
+                find.Parameters.AddWithValue("$sale", sale.SaleId);
+                saleItemId = Convert.ToInt32(await find.ExecuteScalarAsync());
+            }
+
+            var service = new SaleReturnService();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.RecordAsync(
+                sale.SaleId,
+                "Duplicate line quantity must not exceed sold quantity",
+                "Khata",
+                [
+                    new SaleReturnLineInput(saleItemId, 2, "saleable"),
+                    new SaleReturnLineInput(saleItemId, 1, "damaged")
+                ],
+                path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var returns = db.CreateCommand();
+            returns.CommandText = "SELECT COUNT(*) FROM sale_returns WHERE sale_id=$sale;";
+            returns.Parameters.AddWithValue("$sale", sale.SaleId);
+            Assert.Equal(0, Convert.ToInt32(await returns.ExecuteScalarAsync()));
+
+            await using var returnItems = db.CreateCommand();
+            returnItems.CommandText = "SELECT COUNT(*) FROM sale_return_items WHERE sale_item_id=$item;";
+            returnItems.Parameters.AddWithValue("$item", saleItemId);
+            Assert.Equal(0, Convert.ToInt32(await returnItems.ExecuteScalarAsync()));
+
+            await using var stock = db.CreateCommand();
+            stock.CommandText = "SELECT quantity,damaged_quantity FROM products WHERE barcode='WPF-WH-1';";
+            await using var stockReader = await stock.ExecuteReaderAsync();
+            Assert.True(await stockReader.ReadAsync());
+            Assert.Equal(8, stockReader.GetInt32(0));
+            Assert.Equal(0, stockReader.GetInt32(1));
+            await stockReader.DisposeAsync();
+
+            await using var party = db.CreateCommand();
+            party.CommandText = "SELECT balance FROM parties WHERE id=$id;";
+            party.Parameters.AddWithValue("$id", customerId);
+            Assert.Equal(36, Convert.ToDouble(await party.ExecuteScalarAsync()), 2);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task WpfSalesReportAndProfitLossIncludeDiscountsReturnsPurchasesAndExpenses()
     {
