@@ -22,7 +22,7 @@ Owner wants Windows WPF to remain usable for daily billing while other Windows m
 - [ ] Publish a versioned Windows installer and `khan-baba-release.json` manifest as GitHub Release assets after Windows runtime tests, code signing, checksum generation and installer/data-preservation tests pass. Only then can the app notify, download and install future feature updates safely.
 - [ ] Verify F2/F4/F5/F6/F7/F8/F9/F10 and Ctrl+P on a real Windows cashier PC; verify barcode scanner focus and the saved default printer with the physical SpeedX SP60D and Black Copper BC-86AC.
 - [ ] Confirm startup update notification against a real published test release; confirm offline startup does not delay billing.
-- [ ] Run Windows Release build and all WPF regression tests after these changes; verify the uploaded Windows x64 artifact. Do not merge Draft PR #5 or declare production-ready until the independent migration, sync, auth, printer and owner acceptance gates are passed.
+- [x] Windows Release build, WPF regression tests, self-contained win-x64 publish and artifact upload passed on GitHub Actions run #390 (2026-11-16). Artifact: `KhanBabaPOS-Windows-x64-390` (artifact ID `14222191243`, expires 2026-12-16); run: https://github.com/magscacoffice/general_store_pos/actions/runs/43857899968. This is an unsigned test artifact, not a signed production installer. Do not merge Draft PR #5 or declare production-ready until the independent migration, sync, auth, printer and owner acceptance gates are passed.
 
 ## 1. Non-negotiable compatibility rules
 
