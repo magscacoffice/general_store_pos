@@ -13,6 +13,8 @@ public sealed class PosDatabaseSchemaVerifierTests
 {
     private static readonly AccessService TestAccess = CreateTestAccess();
 
+    public PosDatabaseSchemaVerifierTests() => AccessService.RegisterProcess(TestAccess);
+
     private static AccessService CreateTestAccess()
     {
         var path = Path.Combine(Path.GetTempPath(), "khan-baba-sale-tests-" + Guid.NewGuid().ToString("N") + ".dat");
