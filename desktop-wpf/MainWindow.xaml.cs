@@ -624,7 +624,7 @@ public partial class MainWindow : Window
         // Persist the current draft before opening print preview. This is still a
         // pending bill only; stock and the sales ledger change only on Complete Sale.
         await PersistActiveBillAsync();
-        new PrinterInvoiceWindow(sale, items) { Owner = this }.ShowDialog();
+        new PrinterInvoiceWindow(sale, items, printImmediately: true) { Owner = this }.ShowDialog();
         FocusScanner();
     }
 
