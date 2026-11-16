@@ -747,6 +747,23 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
+    private async void Logout_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show("Logout karna hai? Current bill save kar diya jayega.", "Logout", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        try { await FlushActiveBillBeforeRestoreAsync(); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Logout", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        _access.Logout();
+        var login = new LoginWindow(_access);
+        if (login.ShowDialog() == true && login.Session is not null)
+        {
+            var next = new MainWindow(_access, login.Session);
+            Application.Current.MainWindow = next;
+            next.Show();
+        }
+        else Application.Current.Shutdown();
+        Close();
+    }
+
     private void Staff_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdminAccess()) return;
