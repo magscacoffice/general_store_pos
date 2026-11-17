@@ -108,6 +108,6 @@ public sealed class SalesHistoryService
 
 public sealed record SaleHistoryRecord(int SaleId,string Date,string CustomerName,string CustomerType,
     string PaymentType,double Subtotal,double Discount,double FinalAmount,double Received,double BalanceDue,
-    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId,string CashierUid = "");
+    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId,[property: System.ComponentModel.Browsable(false)] string CashierUid = "");
 public sealed record SaleHistoryItem(int Id,string Barcode,string ProductName,int Quantity,string StockUnit,
     double SalePrice,double PurchasePrice,double LineTotal,double CostTotal);
