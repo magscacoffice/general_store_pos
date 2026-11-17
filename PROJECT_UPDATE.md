@@ -1025,3 +1025,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Read-only pending-bill list load par unnecessary backup removed; Save/Delete se pehle verified backup retained.
 - [x] Disposable schema-v18 test add kiya jo Admin/Salesman visibility, ownership, overwrite/delete restrictions aur Admin full access verify karta hai.
 - [ ] WPF final manual Release build/test mein pending-bill ownership regression test validate karna hai.
+
+## New owner UI requirements — Windows startup sizing and one-screen New Sale (2026-11-17)
+
+- [ ] **Startup window must fit the visible display/work area:** WPF app currently opens larger than the usable screen area on the owner's Windows display, with part of the window beyond the top/visible boundary and difficult/impossible to drag back down. On startup, detect the active display work area (including taskbar/DPI scaling), position the window fully inside it, and cap initial width/height to available bounds. Keep standard title-bar move/resize/maximize/restore behaviour; do not force an oversized fixed window.
+- [ ] **New Sale must be a true single-screen cashier layout:** rearrange and compact every New Sale option/control so all essential billing controls and actions are visible together at the supported minimum/target display size, without requiring vertical scrolling. Prioritize scanner/search, customer/type, payment/received amount, discount, cart, totals and checkout/print/pending-bill actions. Use responsive grid sizing, compact spacing and sensible DataGrid sizing; preserve keyboard shortcuts, scanner focus, all calculations and existing features. Do not hide or remove controls to achieve the fit.
+- [ ] Verify startup positioning and the complete New Sale layout at the owner's actual display resolution and Windows scaling, plus 980×650, 1280×720, maximized and restored/resized states. Record any genuinely smaller unsupported work area rather than allowing controls to clip.
+- [ ] These are requirements to implement and validate in the next grouped WPF UI milestone; do not trigger a separate Actions workflow for this documentation-only update.
