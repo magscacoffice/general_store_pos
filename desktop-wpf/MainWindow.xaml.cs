@@ -44,6 +44,18 @@ public partial class MainWindow : Window
         _driveSync.StartAutoSync();
         Closed += (_, _) => _driveSync.StopAutoSync();
         InitializeComponent();
+        // Keep the complete window inside the usable display area (excluding the taskbar).
+        // WPF dimensions and SystemParameters.WorkArea are both device-independent units.
+        var workArea = SystemParameters.WorkArea;
+        var availableWidth = Math.Max(480, workArea.Width - 16);
+        var availableHeight = Math.Max(480, workArea.Height - 16);
+        MinWidth = Math.Min(760, availableWidth);
+        MinHeight = Math.Min(560, availableHeight);
+        Width = Math.Min(1360, availableWidth);
+        Height = Math.Min(860, availableHeight);
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = workArea.Left + Math.Max(0, (workArea.Width - Width) / 2);
+        Top = workArea.Top + Math.Max(0, (workArea.Height - Height) / 2);
         AdminNavigationPanel.Visibility = session.Role == AccessRole.Admin
             ? Visibility.Visible
             : Visibility.Collapsed;
