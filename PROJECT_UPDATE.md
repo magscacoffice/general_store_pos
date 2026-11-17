@@ -409,8 +409,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ### [Windows] Flutter Windows retirement and final cutover
 
 - [ ] Audit and remove remaining Flutter Windows-only UI/window lifecycle hooks in reminders, profit/loss, purchases, inventory, sale returns, backup, cloud sync and sales. Preserve Android workflows and shared Drive-sync/database logic.
-- [ ] Implement the native WPF update checker: stable-channel release detection, compatible version comparison, one notification per version, manual check and release notes.
-- [ ] Implement native WPF package download/checksum verification and safe installer handoff; never overwrite the running executable or touch the live database/settings/backups.
+- [x] Native WPF update checker source implemented: GitHub latest stable release endpoint, installed-version comparison, one notification per version, manual check and release notes. Real release-feed acceptance remains pending.
+- [x] Native WPF updater source now validates safe .exe asset names, HTTPS GitHub release URLs, declared file size (500 MB cap), SHA-256 and pinned Authenticode; downloads to a unique temporary file with progress/retry, verifies before atomic staging under LocalAppData\\KhanBabaPOS\\Updates, and launches the installer without touching the live app/database/settings/backups. Production download remains disabled until the owner certificate thumbprint is pinned.
 - [ ] Verify full-ledger and period-statement PDF/print on Windows, including date boundaries, Unicode customer/product names and Microsoft Print to PDF.
 - [ ] Verify WPF scrollbar visibility/hit targets, combined scan/search focus, modal keyboard navigation and responsive layouts on the target PC.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
@@ -443,10 +443,10 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ## Automatic app-update notifications and in-app download note from user (2026-11-13)
 
-- [ ] **Native WPF update checker and notification — pending.** The previous Windows implementation was tied to the retired Flutter Windows runner; port release detection, stable-channel filtering, version comparison and non-spam notification to WPF. Do not assume GitHub release publication automatically notifies installed WPF apps.
-- [ ] **WPF stable release detection and update prompt — pending.** Implement launch/periodic check, compatible stable version comparison, one notification per version, manual check and release notes.
-- [ ] **WPF package download and checksum verification — pending.** Implement download progress, retry, version/size and integrity validation for the native WPF package.
-- [ ] **WPF update staging/installer handoff — pending.** Create a safe native update flow that never overwrites the running executable and preserves SQLite, settings, backups and offline operation.
+- [x] **Native WPF update checker and notification — source implemented.** WPF checks GitHub's latest stable release, compares installed version, stores a one-time notification marker and exposes manual Check for Updates with release notes. Real published-release/old-version acceptance remains pending.
+- [x] **WPF stable release detection and update prompt — source implemented.** Startup check is best-effort/offline-safe; manual check and one-time notification are present. Target-PC release-feed validation remains pending.
+- [x] **WPF package download and checksum verification — source implemented.** Includes download progress, transient retry, strict release asset URL/name, declared size limit and SHA-256 verification. Production download is still disabled pending certificate pin.
+- [x] **WPF update staging/installer handoff — source implemented.** Verified installer is staged separately in LocalAppData\\KhanBabaPOS\\Updates and launched; live executable/database/settings/backups are not overwritten by the updater. Signed release and upgrade/uninstall acceptance remain pending.
 - [ ] **Release metadata and platform assets lookup — end-to-end validation pending.** Android release metadata/download code exists; native WPF package channel does not yet exist. Ensure stable releases publish correct compatible assets and checksums; exclude failed/draft/prerelease builds and verify installed-old-version upgrade on both platforms.
 
 ## Bugs
@@ -853,6 +853,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 
 ## Work log — 2026-11-17 (Recall billing parity source fixes)
+
+- [x] Native WPF updater ko harden kiya: path-traversal safe asset-name check, HTTPS GitHub release URL restriction, asset size validation, 3-attempt transient retry, download progress, temporary staging, SHA-256 + pinned Authenticode verification aur verified installer ka separate Updates folder mein handoff. Production thumbprint blank hi hai, is liye download/install disabled rahega.
 
 - [x] Owner ki safety hidayat ke mutabiq WPF Google Drive ka sirf remote import nahi, balkeh upload/download/manual sync/auto-sync aur conflict resolution bhi default se disabled kar diya. UI par paused status aur disabled sync/resolution controls dikhte hain; local POS offline kaam karta rahega. Regression test source mein add hai. Is gate ko owner acceptance ke baghair enable nahi karna.
 

@@ -957,8 +957,20 @@ public partial class MainWindow : Window
                 return;
             }
             if (MessageBox.Show(message + "\\n\\nUpdate install karna hai?", "Software Update", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            await updater.DownloadAndStartInstallerAsync(update);
-            Application.Current.Shutdown();
+            var progress = new Progress<NativeUpdateProgress>(value =>
+            {
+                UpdateStatusText.Text = $"Verified installer download: {value.Percentage:0}%";
+            });
+            UpdateButton.IsEnabled = false;
+            try
+            {
+                await updater.DownloadAndStartInstallerAsync(update, progress);
+                Application.Current.Shutdown();
+            }
+            finally
+            {
+                UpdateButton.IsEnabled = true;
+            }
         }
         catch (Exception ex)
         {

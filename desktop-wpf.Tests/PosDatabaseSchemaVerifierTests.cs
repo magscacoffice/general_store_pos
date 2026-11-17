@@ -1433,4 +1433,17 @@ public sealed class PosDatabaseSchemaVerifierTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => sync.SyncNowAsync());
     }
 
+
+    [Theory]
+    [InlineData("KhanBabaPOS-Setup-x64.exe", true)]
+    [InlineData("../KhanBabaPOS-Setup-x64.exe", false)]
+    [InlineData(@"..\\KhanBabaPOS-Setup-x64.exe", false)]
+    [InlineData(@"C:\\Temp\\KhanBabaPOS-Setup-x64.exe", false)]
+    [InlineData("release-notes.txt", false)]
+    [InlineData("", false)]
+    public void NativeUpdaterAcceptsOnlyPlainExeAssetNames(string name, bool expected)
+    {
+        Assert.Equal(expected, NativeUpdateService.IsSafeInstallerAssetName(name));
+    }
+
 }
