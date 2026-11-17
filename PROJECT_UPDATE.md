@@ -1009,3 +1009,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Integration branch ko main mein merge kiye baghair WPF workflow automatic push trigger nahi hota, kyun ke repository ka default branch main hai aur us par workflow file manual-only hi hai.
 - [x] Integration branch ka WPF workflow manual workflow_dispatch only rakha hai. Is session ke connected GitHub actions read/re-run operations support karte hain, lekin naya workflow_dispatch trigger create nahi karte.
 - [ ] Latest WPF source ka final build/test aur artifact owner ko GitHub Actions UI se Build and Test Native WPF POS + Windows x64 Artifact workflow manually run karna hoga, ya Work mode/terminal access dena hoga.
+
+
+## Work log — 2026-11-17 (Printer queue readiness reporting)
+
+- [x] Saved-printer status now also treats paused queues, paper-out/paper-problem, open door, user intervention and pending deletion as unavailable; app no longer reports these spooler states as ready.
+- [ ] Actual BC-86AC hardware status/cutter and spooler driver behaviour still require target Windows PC verification.
