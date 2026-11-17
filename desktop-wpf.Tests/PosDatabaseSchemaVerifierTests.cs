@@ -1446,4 +1446,64 @@ public sealed class PosDatabaseSchemaVerifierTests
         Assert.Equal(expected, NativeUpdateService.IsSafeInstallerAssetName(name));
     }
 
+
+    [Fact]
+    public async Task PartyDeleteAllowsOnlyEmptyZeroBalanceAccountAndWritesTombstone()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 0);
+            var service = new PartyService();
+            Assert.Equal(1, await service.DeleteAsync(customerId, "customer", path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var party = db.CreateCommand();
+            party.CommandText = "SELECT COUNT(*) FROM parties WHERE id=$id;";
+            party.Parameters.AddWithValue("$id", customerId);
+            Assert.Equal(0, Convert.ToInt32(await party.ExecuteScalarAsync()));
+            await using var tombstone = db.CreateCommand();
+            tombstone.CommandText = "SELECT COUNT(*) FROM drive_sync_tombstones WHERE entity_type='party' AND entity_key='wpf-wholesale-sync';";
+            Assert.Equal(1, Convert.ToInt32(await tombstone.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PartyDeleteBlocksCustomerLedgerHistoryAndSupplierPurchaseHistory()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 0);
+            var supplierId = await SeedSupplierAsync(path);
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var customerHistory = db.CreateCommand();
+                customerHistory.CommandText = "INSERT INTO khata_transactions(party_id,type,amount,note,date) VALUES($id,'receipt',1,'Existing history','2026-11-17 08:00:00');";
+                customerHistory.Parameters.AddWithValue("$id", customerId);
+                await customerHistory.ExecuteNonQueryAsync();
+                await using var supplierHistory = db.CreateCommand();
+                supplierHistory.CommandText = "INSERT INTO purchases(product_id,product_name,barcode,quantity,unit_cost,total_cost,supplier_id,date) VALUES(1,'History Item','HISTORY-1',1,5,5,$id,'2026-11-17 08:00:00');";
+                supplierHistory.Parameters.AddWithValue("$id", supplierId);
+                await supplierHistory.ExecuteNonQueryAsync();
+            }
+
+            var service = new PartyService();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(customerId, "customer", path));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(supplierId, "supplier", path));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
 }

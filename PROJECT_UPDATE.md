@@ -962,3 +962,5 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Sidebar mein New Sale sab staff ke liye visible rahega; tamam Admin-only modules Salesman login par hide honge. Existing click-handler/service authorization checks bhi barqarar hain, is liye UI visibility security boundary ka substitute nahi.
 - [x] Admin login par Inventory, History, Purchases, Khata, Parties, Reports, Expenses, Reminders, Drive, Backup, Profit/Loss, Staff aur Settings navigation available rehti hai.
 - [ ] Salesman cashier workflow aur role visibility ka target-PC acceptance final Windows testing mein pending hai.
+
+- [x] Flutter party account delete parity WPF mein add ki: sirf zero-balance aur bilkul transaction-history-free customer/supplier delete ho sakta hai; party tombstone future Drive protocol ke liye record hota hai. Parties UI mein selected-account delete action add kiya; disposable SQLite tests source mein add hain. Manual WPF validation pending hai.
