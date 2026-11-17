@@ -980,3 +980,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Latest WPF code after run #411 (same-second receipt guard, responsive/role-aware navigation, cashier/printer status, printer test preference role path and party deletion) still needs one manual Release build/test run. Run #411 is a baseline artifact from before these later WPF changes.
 - [ ] Latest Android code after run #98 includes the v3-to-v18 migration fix and new legacy upgrade test; run the manual Android workflow after this change.
 - [x] Both build/test workflows are manual-only; no code push should trigger Actions automatically.
+
+
+## Work log — 2026-11-17 (Sales History customer mapping and cashier scope)
+
+- [x] WPF SalesHistoryService ab customer_id aur customer_name columns ko sahi alag read karta hai; Walk-in bills ke liye Walk-in Customer aur named customers ke liye actual party name show hota hai.
+- [x] Sale history records mein authenticated salesman_uid expose hoti hai. Recall list Admin ko tamam bills aur Salesman ko sirf apni UID ke bills dikhati hai; service filter display name ke bajaye stable user ID use karta hai.
+- [x] Disposable schema-v18 regression test add kiya: Khata customer name, Walk-in name, multiple salesman records aur Admin-vs-Salesman recall scope verify karta hai.
+- [ ] WPF final manual Release build/test mein is history fix aur nayi regression test ko validate karna hai.

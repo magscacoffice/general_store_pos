@@ -6,11 +6,17 @@ namespace KhanBabaPos.Wpf.Services;
 
 public sealed class SalesHistoryService
 {
-    public async Task<IReadOnlyList<SaleHistoryRecord>> GetSalesAsync(
+    public Task<IReadOnlyList<SaleHistoryRecord>> GetSalesAsync(
         string search = "", DateTime? from = null, DateTime? to = null,
+        CancellationToken cancellationToken = default) =>
+        GetSalesAsync(search, from, to, PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+
+    public async Task<IReadOnlyList<SaleHistoryRecord>> GetSalesAsync(
+        string search, DateTime? from, DateTime? to, string databasePath,
         CancellationToken cancellationToken = default)
     {
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Database path is required.", nameof(databasePath));
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
         await using var db = await OpenReadOnlyAsync(path, cancellationToken);
         await using var cmd = db.CreateCommand();
@@ -21,7 +27,8 @@ public sealed class SalesHistoryService
                    COALESCE(s.received_amount,0), COALESCE(s.balance_due,0),
                    COALESCE(s.salesman_name,''), COALESCE((SELECT SUM(r.refund_amount)
                      FROM sale_returns r WHERE r.sale_id=s.id),0),
-                   (SELECT COUNT(*) FROM sale_returns r WHERE r.sale_id=s.id)
+                   (SELECT COUNT(*) FROM sale_returns r WHERE r.sale_id=s.id),
+                   COALESCE(s.salesman_uid,'')
             FROM sales s LEFT JOIN parties p ON p.id=s.customer_id
             WHERE ($search='' OR CAST(s.id AS TEXT) LIKE $like OR p.name LIKE $like
                    OR s.date LIKE $like OR s.payment_type LIKE $like)
@@ -50,11 +57,23 @@ public sealed class SalesHistoryService
             var received = receivedRaw > 0 ? receivedRaw : payment == "Cash" ? final : receivedRaw;
             var balance = balanceRaw > 0 ? balanceRaw :
                 payment is "Khata" or "Partial" ? Math.Max(0d, final - received) : balanceRaw;
-            result.Add(new SaleHistoryRecord(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
+            result.Add(new SaleHistoryRecord(reader.GetInt32(0), reader.GetString(1), reader.GetString(3),
                 reader.GetString(4), payment, total, discount, final, received, balance,
-                reader.GetString(11), reader.GetDouble(12), reader.GetInt32(13), customerId));
+                reader.GetString(11), reader.GetDouble(12), reader.GetInt32(13), customerId, reader.GetString(14)));
         }
         return result;
+    }
+
+    public async Task<IReadOnlyList<SaleHistoryRecord>> GetSalesForSessionAsync(
+        AccessSession session, string search = "", DateTime? from = null, DateTime? to = null,
+        string? databasePath = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var records = await GetSalesAsync(
+            search, from, to, databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+        return session.Role == AccessRole.Admin
+            ? records
+            : records.Where(x => string.Equals(x.CashierUid, session.UserId, StringComparison.Ordinal)).ToArray();
     }
 
     public async Task<IReadOnlyList<SaleHistoryItem>> GetSaleItemsAsync(int saleId, CancellationToken cancellationToken = default)
@@ -89,6 +108,6 @@ public sealed class SalesHistoryService
 
 public sealed record SaleHistoryRecord(int SaleId,string Date,string CustomerName,string CustomerType,
     string PaymentType,double Subtotal,double Discount,double FinalAmount,double Received,double BalanceDue,
-    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId);
+    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId,string CashierUid = "");
 public sealed record SaleHistoryItem(int Id,string Barcode,string ProductName,int Quantity,string StockUnit,
     double SalePrice,double PurchasePrice,double LineTotal,double CostTotal);

@@ -694,7 +694,7 @@ public partial class MainWindow : Window
             // Preserve the active unsaved cart as a pending bill before replacing it with a recalled invoice.
             await PersistActiveBillAsync();
             var history = new SalesHistoryService();
-            var records = await history.GetSalesAsync();
+            var records = await history.GetSalesForSessionAsync(_session);
             if (records.Count == 0)
             {
                 MessageBox.Show("Abhi koi saved bill mojood nahi.", "Recall Bill", MessageBoxButton.OK, MessageBoxImage.Information);

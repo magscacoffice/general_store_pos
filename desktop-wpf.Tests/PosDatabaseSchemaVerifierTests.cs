@@ -1516,4 +1516,53 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+    [Fact]
+    public async Task SalesHistoryMapsCustomerNameAndLimitsSalesmanRecallToOwnUserId()
+    {
+        var path = await CreateFixtureAsync();
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 0);
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var command = db.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO sales(total_amount,discount,final_amount,payment_type,customer_id,customer_type,
+                        received_amount,balance_due,sync_id,customer_sync_id,date,salesman_uid,salesman_name)
+                    VALUES
+                        (18,0,18,'Cash',$customer,'Khata',18,0,'history-sale-1','history-party','2026-11-16 10:00:00','salesman-1','Cashier One'),
+                        (18,0,18,'Cash',$customer,'Khata',18,0,'history-sale-2','history-party','2026-11-16 10:01:00','salesman-2','Cashier Two'),
+                        (12,0,12,'Cash',NULL,'Walk-in',12,0,'history-sale-3',NULL,'2026-11-16 10:02:00','salesman-1','Cashier One');
+                    """;
+                command.Parameters.AddWithValue("$customer", customerId);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var service = new SalesHistoryService();
+            var all = await service.GetSalesAsync("", null, null, path);
+            Assert.Equal(3, all.Count);
+            Assert.Contains(all, x => x.CustomerName == "WPF Wholesale Account" && x.CashierUid == "salesman-1");
+            Assert.Contains(all, x => x.CustomerName == "Walk-in Customer" && x.CashierUid == "salesman-1");
+
+            var salesman = new AccessSession(
+                "salesman-1", "cashier-one", "Cashier One", AccessRole.Salesman,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+            var own = await service.GetSalesForSessionAsync(salesman, databasePath: path);
+            Assert.Equal(2, own.Count);
+            Assert.All(own, x => Assert.Equal("salesman-1", x.CashierUid));
+
+            var admin = new AccessSession(
+                "admin-1", "admin", "Admin", AccessRole.Admin,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+            var adminRecords = await service.GetSalesForSessionAsync(admin, databasePath: path);
+            Assert.Equal(3, adminRecords.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+
 }
