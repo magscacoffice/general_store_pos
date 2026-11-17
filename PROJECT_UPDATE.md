@@ -924,3 +924,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF build/artifact workflow integration branch par automatic push se disabled hai; final milestone par manual run hi use hoga.
 - [x] Android sync/invoice/Recall test workflow bhi integration branch ke har push par automatic nahi chalega; default main push aur explicit workflow dispatch tak mahdood rakha hai.
 - [x] Is se code ke darmiyan choti commits ya documentation edits Actions ko bar-bar trigger nahi karengi. Final consolidated validation aik planned milestone par hogi.
+
+
+## Validation result — 2026-11-17 (Android Recall + WPF baseline)
+
+- [x] Android Flutter analyzer and selected sync/invoice/Recall regression suite passed on Ubuntu and Windows in run #98 (commit `a63921ac57197377427372c949fe237dc9778bd9`). All four new Recall tests passed on both runners, including same-second prior/later receipt ordering.
+- [x] Existing Drive reconciliation, invoice-unit conversion and supplier-invoice tests ran in the same workflow and passed on both runners.
+- [x] Removed the sole non-blocking unnecessary-import analyzer info from `test/recall_bill_test.dart` after the successful run.
+- [x] WPF baseline Release build and 41 regression tests passed in run #411 (commit `7bd17117630fddbca7264c028b2bb11824bf0780`); unsigned self-contained Windows x64 test artifact `KhanBabaPOS-Windows-x64-411` uploaded (artifact ID `14305821429`).
+- [ ] WPF same-second receipt-ordering refinement was added after run #411. Re-run WPF Release build/tests and produce the next consolidated Windows x64 artifact only after remaining source review is complete.
+- [ ] Physical Windows laptop/scanner/printer/PDF/backup acceptance and signed production updater remain owner-side release gates.
