@@ -1068,3 +1068,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #413 compile ne confirm kiya ke CurrentSession instance property hai; PendingBillService ab authenticated AccessService instance constructor se receive karta hai aur session usi instance se read karta hai.
 - [x] MainWindow aur disposable-database test dono explicit AccessService inject karte hain; process-level role guard existing authorization policy ke mutabiq rehta hai.
 - [ ] Is correction ke baad WPF build/tests ka next grouped rerun pending hai.
+
+
+## WPF run #414 test compilation correction — 2026-11-17
+
+- [x] Latest WPF application Release build passed in run #414.
+- [x] Test project compile then found the direct cashier-ownership fixture awaited synchronous ExecuteScalar() instead of ExecuteScalarAsync(); corrected the fixture to use ExecuteScalarAsync().
+- [ ] Run #415 will validate all latest WPF tests, including Sales History and cashier-scoped pending bills; no artifact until tests pass.

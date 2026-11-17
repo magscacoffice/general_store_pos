@@ -1587,7 +1587,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     SELECT last_insert_rowid();
                     """;
                 command.Parameters.AddWithValue("$customer", customerId);
-                saleId = Convert.ToInt32(await command.ExecuteScalar());
+                saleId = Convert.ToInt32(await command.ExecuteScalarAsync());
             }
 
             var access = new AccessService(accessPath);
