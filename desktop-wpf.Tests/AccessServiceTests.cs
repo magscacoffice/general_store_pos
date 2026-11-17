@@ -107,6 +107,7 @@ public sealed class AccessServiceTests : IDisposable
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new ReminderService().AddAsync("Test reminder", ""));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PartyService().AddAsync("Test party", "", "customer"));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PartyService().UpdateCustomerTypeAsync(1, "Khata"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PartyService().DeleteAsync(1, "customer", "unused.db"));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new KhataService().RecordReceiptAsync(1, 10, "", "unused.db"));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new PurchaseService().RecordAsync(1, 1, 10, null, "unused.db"));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => new SaleReturnService().RecordAsync(1, "Test return", "Cash", Array.Empty<SaleReturnLineInput>(), "unused.db"));
