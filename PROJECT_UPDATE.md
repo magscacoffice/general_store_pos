@@ -946,3 +946,5 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Printer Test Print action ko bhi `SaveWorkstationAsync` par shift kiya. Salesman ab printer selection/configuration ke sath test print preferences bhi save kar sakta hai; admin-only general `SaveAsync` security boundary unchanged hai.
 - [ ] Is UI role-path ki WPF compile/regression validation final manual WPF run mein hogi.
+
+- [x] Schema-v18 upgrade audit found and fixed migration ordering for databases older than v7: sale_items and sale_return_items are now created before the v18 stock_unit columns are added. A version-3 legacy-database preservation regression test was added; execution remains for the next manual Android validation milestone.

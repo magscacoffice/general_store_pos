@@ -1913,10 +1913,6 @@ class DBHelper {
         if (oldVersion < 16) {
           await _ensureColumn(db, 'purchases', 'unit_label', 'TEXT');
         }
-        if (oldVersion < 18) {
-          await _ensureColumn(db, 'sale_items', 'stock_unit', 'TEXT');
-          await _ensureColumn(db, 'sale_return_items', 'stock_unit', 'TEXT');
-        }
         if (oldVersion < 17) {
           await _ensureColumn(db, 'products', 'stock_unit', 'TEXT');
           await _ensureColumn(db, 'purchases', 'invoice_quantity', 'REAL');
@@ -2120,6 +2116,11 @@ class DBHelper {
             cost_total REAL NOT NULL,
             condition TEXT NOT NULL DEFAULT 'saleable'
           )''');
+        }
+
+        if (oldVersion < 18) {
+          await _ensureColumn(db, 'sale_items', 'stock_unit', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'stock_unit', 'TEXT');
         }
 
         if (oldVersion < 8) {
