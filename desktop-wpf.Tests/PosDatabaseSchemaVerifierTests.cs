@@ -1497,6 +1497,16 @@ public sealed class PosDatabaseSchemaVerifierTests
             }
 
             var service = new PartyService();
+            var balanceOnlyId = await SeedSaleAccountAsync(path, "Khata", 0);
+            await using (var balanceDb = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await balanceDb.OpenAsync();
+                await using var setBalance = balanceDb.CreateCommand();
+                setBalance.CommandText = "UPDATE parties SET balance=12 WHERE id=$id;";
+                setBalance.Parameters.AddWithValue("$id", balanceOnlyId);
+                await setBalance.ExecuteNonQueryAsync();
+            }
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(balanceOnlyId, "customer", path));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(customerId, "customer", path));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(supplierId, "supplier", path));
         }

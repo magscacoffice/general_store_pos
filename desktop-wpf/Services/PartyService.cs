@@ -52,7 +52,7 @@ public sealed class PartyService
    lookup.CommandText="SELECT type,COALESCE(balance,0),sync_id FROM parties WHERE id=$id LIMIT 1;";
    lookup.Parameters.AddWithValue("$id",id);
    await using var rd=await lookup.ExecuteReaderAsync(ct);
-   if(!await rd.ReadAsync(ct)){await tx.CommitAsync(ct);return 0;}
+   if(!await rd.ReadAsync(ct))return 0;
    actualType=rd.GetString(0);balance=rd.GetDouble(1);syncId=rd.IsDBNull(2)?null:rd.GetString(2);
   }
   if(!string.Equals(actualType,type,StringComparison.Ordinal))
