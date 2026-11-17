@@ -1129,3 +1129,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] The fixture verifies foreign-key remapping to local party IDs, sale-item links, and duplicate-free replay of the same snapshot.
 - [ ] Run the grouped WPF Release/test workflow and confirm the round-trip regression passes before treating the Drive import path as CI-validated.
 - [ ] Real Google Drive OAuth, separate Android account/device round-trip, offline recovery and owner acceptance remain target-device checks.
+
+
+## Work log — 2026-11-17 (Drive round-trip test fixture correction)
+
+- [x] Run #421 confirmed the WPF app Release build passes; the new round-trip test exposed a test-fixture type mismatch between DbTransaction and SqliteTransaction.
+- [x] Changed the disposable test fixture to use a strongly typed SQLite transaction; no production database or sync logic changed in this correction.
+- [ ] Re-run grouped WPF Release/tests and confirm the all-collections Drive round-trip test passes.
+- [x] Restored the previously added live Drive status indicator in MainWindow.xaml.cs; the round-trip test commit had been built on an older base tree and this correction preserves the status display.

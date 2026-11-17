@@ -1908,7 +1908,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             }.ToString()))
             {
                 await source.OpenAsync();
-                await using var transaction = await source.BeginTransactionAsync();
+                using var transaction = source.BeginTransaction();
 
                 async Task<long> InsertAsync(string sql, params (string Name, object Value)[] values)
                 {
