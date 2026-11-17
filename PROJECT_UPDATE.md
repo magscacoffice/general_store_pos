@@ -1172,3 +1172,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] On the target Windows PC, Admin must complete Google OAuth and test Drive sync using a disposable database copy before using a live store database.
 - [ ] Complete same-fixture Flutter/WPF row-by-row parity and owner-side scanner, printer, PDF, display/DPI and backup/restore acceptance.
 - [ ] Production installer/signing and merge to main remain blocked until the required owner gates are satisfied.
+
+## Work log — 2026-11-17 (Owner-approved automatic Windows Master conflict policy)
+
+- [x] Owner confirmed Windows Master must automatically win conflicting records; cashier/Admin should not be asked to choose Keep Windows / Use Other Device during routine sync.
+- [x] WPF Drive import now records detected conflicts as automatically resolved with `resolution='keep_local'` and keeps the existing Windows row unchanged. This preserves an audit trail without a pending decision.
+- [x] Android-created records and non-conflicting records continue through the normal import path; transactional safety backup, hash/schema validation, idempotency and tombstone rules remain in force.
+- [x] Removed the manual Keep Windows / Use Other Device controls from the routine Drive sync screen; conflict review controls are hidden.
+- [x] Added regression coverage proving a conflicting Android product update does not overwrite Windows stock, creates a resolved/keep_local audit record and leaves zero pending conflicts.
+- [ ] Await grouped WPF Release build and complete test result for this policy change. Do not treat it as production-accepted until the target Windows PC and Android round-trip are tested with a disposable database.
