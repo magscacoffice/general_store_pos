@@ -854,6 +854,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Work log — 2026-11-17 (Recall billing parity source fixes)
 
+- [x] WPF Recall service ko disposable database path inject karne ke qabil banaya (existing production overload wahi active DB resolve karta hai); Windows regression tests source mein add kiye gaye: edited subtotal/percentage discount/received/Khata balance/stock update, pehli receipt allowed, baad ki receipt par rejection aur stock unchanged. [ ] Test execution final consolidated validation mein pending hai.
+
 - [x] Recall ke liye disposable SQLite integration tests source mein add kiye: edited cart ka final total/discount/received/balance/stock/ledger reconciliation, pehle ki receipt par safe overwrite, aur baad ki receipt par overwrite rejection + rollback assertions. [ ] Flutter test execution abhi consolidated validation ke liye pending hai.
 
 - [x] Android Recall overwrite ab edited cart ka subtotal aur saved discount amount se final total dobara calculate karta hai; purane invoice ka final_amount edited bill par reuse nahi hota.

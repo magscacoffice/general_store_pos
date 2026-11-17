@@ -236,17 +236,24 @@ public sealed class SalePostingService
     }
 
 
+    public Task<SalePostingResult> UpdateSaleFromRecallAsync(
+        int saleId, SaleCheckoutRequest request, CancellationToken cancellationToken = default) =>
+        UpdateSaleFromRecallAsync(saleId, request, PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+
     public async Task<SalePostingResult> UpdateSaleFromRecallAsync(
-        int saleId, SaleCheckoutRequest request, CancellationToken cancellationToken = default)
+        int saleId, SaleCheckoutRequest request, string databasePath,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(databasePath))
+            throw new ArgumentException("Database path is required.", nameof(databasePath));
         _access.RequireRole(AccessRole.Admin, AccessRole.Salesman);
         var session = _access.CurrentSession ?? throw new UnauthorizedAccessException("Session expire ho gaya. Dobara login karein.");
         if (!string.Equals(request.CashierUid, session.UserId, StringComparison.Ordinal) ||
             !string.Equals(request.CashierName, session.DisplayName, StringComparison.Ordinal))
             throw new UnauthorizedAccessException("Sale cashier identity active login se match nahi karti.");
         if (request.Items.Count == 0) throw new InvalidOperationException("Cart is empty.");
-        var path = PosDatabasePath.Resolve(requireExisting: true);
+        var path = databasePath;
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
         await DatabaseSafetyService.EnsureVerifiedBackupAsync(path, cancellationToken);
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
