@@ -874,3 +874,27 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Coverage added for edited subtotal/discount/final total/received amount/Khata balance/ledger/stock reconciliation, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
 - [ ] Flutter test execution and analyzer validation are pending the consolidated Android validation run. These source tests are not yet reported as passing.
 - [ ] Before Drive snapshot imports are re-enabled, the append-only merge contract must be extended/tested for recalled sale updates and replaced sale-item identities; Windows Drive sync remains fully disabled until the owner safety gate is cleared.
+
+
+## Consolidated source-code audit — 2026-11-17
+
+### Implemented in this work session
+- [x] Android and WPF Recall Bill overwrite recalculates edited totals from the current cart and discount instead of reusing the previous invoice final total.
+- [x] Android and WPF overwrite safety checks only block a later Khata receipt/payment; an older receipt no longer blocks editing. Returns still force Save as New Bill.
+- [x] WPF Recall uses one SQLite transaction for sale, items, stock and Khata updates; disposable-database regression tests verify total, percentage discount, received, due, stock, ledger, prior receipt and later receipt rollback.
+- [x] Windows Google Drive upload/download/manual sync/auto-sync and conflict resolution are all disabled by default per owner instruction. The WPF UI shows the paused state; local offline POS remains usable. Do not enable Drive until the full schema-v18 merge/idempotency/alias/tombstone/recovery matrix and owner approval pass.
+- [x] Native WPF updater source now includes safe asset path/URL validation, size cap, retry/progress, SHA-256, pinned Authenticode check and separate installer staging. The production publisher thumbprint is intentionally blank, so downloading/installing remains disabled.
+- [x] Flutter Windows UI/window-lifecycle audit completed for the listed Android screens; shared database-directory and Drive protocol code was not removed.
+- [x] WPF service-level role guard review completed. Admin-only business-data mutations remain protected; sale posting and workstation settings have explicit role scopes.
+- [x] WPF Release build + regression suite passed in GitHub Actions run #411: 41 passed, 0 failed. Self-contained Windows x64 test ZIP artifact was uploaded. This is a test artifact only, not a signed production release.
+
+### Remaining code/acceptance gates
+- [ ] Run Flutter analyze and the new Android Recall integration tests in the final consolidated validation pass.
+- [ ] Complete cross-platform Drive snapshot reconciliation tests (existing sale updates, sale-item identity/deletions, Khata transaction identity, idempotency, aliases, missing references, rollback and recovery) before any Drive sync enablement.
+- [ ] Complete full schema-v18 and transaction-method parity audit; verify against disposable copy of the real store database.
+- [ ] Owner-side Windows laptop acceptance: responsive UI, scanner focus/SpeedX SP60D, saved printer and BC-86AC 80mm output/cutter, PDF/Print to PDF, backup/restore and startup/offline behaviour.
+- [ ] Production updater remains blocked until owner supplies the code-signing certificate and thumbprint; publish signed stable release assets only after upgrade/uninstall and data-preservation tests.
+- [ ] Do not merge to main or call the application production-ready until the above gates and owner sign-off are complete.
+
+### Validation cadence
+- [x] .github/workflows/build-wpf.yml is now manual workflow_dispatch only. Code edits/commits will no longer automatically start WPF build/test or upload an artifact; run it only at an agreed milestone/final validation.

@@ -1,10 +1,6 @@
 name: Build and Test Native WPF POS + Windows x64 Artifact
 
 on:
-  push:
-    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml', '.github/workflows/validate-windows-installer.yml']
-  pull_request:
-    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
   workflow_dispatch:
 
 concurrency:
