@@ -1574,6 +1574,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
+            int saleId;
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
             {
                 await db.OpenAsync();
@@ -1586,9 +1587,10 @@ public sealed class PosDatabaseSchemaVerifierTests
                     SELECT last_insert_rowid();
                     """;
                 command.Parameters.AddWithValue("$customer", customerId);
-                var saleId = Convert.ToInt32(await command.ExecuteScalarAsync());
+                saleId = Convert.ToInt32(await command.ExecuteScalar());
+            }
 
-                var access = new AccessService(accessPath);
+            var access = new AccessService(accessPath);
                 access.ProvisionFirstAdmin("testadmin", "Test Admin", "TestPassword!2026");
                 access.CreateStaff("cashier-one", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
                 var session = access.Authenticate("cashier-one", "CashierPass!2026");
