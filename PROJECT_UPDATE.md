@@ -964,3 +964,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Salesman cashier workflow aur role visibility ka target-PC acceptance final Windows testing mein pending hai.
 
 - [x] Flutter party account delete parity WPF mein add ki: sirf zero-balance aur bilkul transaction-history-free customer/supplier delete ho sakta hai; party tombstone future Drive protocol ke liye record hota hai. Parties UI mein selected-account delete action add kiya; disposable SQLite tests source mein add hain. Manual WPF validation pending hai.
+
+
+## Work log — 2026-11-17 (Draft receipt cashier attribution)
+
+- [x] Unposted draft receipt preview ab generic `Local Windows User` ke bajaye active authenticated Windows session ka display name dikhata hai; posted sale attribution ke sath preview consistency barqarar.
+- [ ] Final WPF build/XAML validation pending consolidated manual run.

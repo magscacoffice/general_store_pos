@@ -663,7 +663,7 @@ public partial class MainWindow : Window
             FinalTotal,
             received,
             Math.Max(0d, FinalTotal - received),
-            "Local Windows User",
+            _session.DisplayName,
             0,
             0,
             SelectedCustomerId);
