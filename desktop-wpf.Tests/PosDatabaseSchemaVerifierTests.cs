@@ -1853,6 +1853,43 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
+    public async Task DriveMergeAutomaticallyKeepsWindowsValueAndAuditsConflict()
+    {
+        var path = await CreateDriveMergeFixtureAsync();
+        try
+        {
+            await AddProductAsync(path, "Local Sugar", "CURRENT-1");
+            var merge = new DriveSnapshotMergeService();
+            var snapshot = CreateDriveProductSnapshot("Remote Sugar", 1, new string('c', 64));
+
+            var result = await merge.MergeAsync(snapshot, "android-device", path,
+                applyMasterState: false, detectConflicts: true,
+                autoResolveConflictsKeepWindows: true);
+
+            Assert.Equal(0, result.PendingConflicts);
+            Assert.True(result.SnapshotFullyAccepted);
+            Assert.Empty(await merge.GetPendingConflictsAsync(path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+            }.ToString());
+            await db.OpenAsync();
+            await using var command = db.CreateCommand();
+            command.CommandText = "SELECT quantity FROM products WHERE barcode='CURRENT-1';";
+            Assert.Equal(3L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+
+            await using var audit = db.CreateCommand();
+            audit.CommandText = "SELECT status || ':' || resolution FROM drive_sync_conflicts WHERE entity_type='product' AND entity_key='CURRENT-1' ORDER BY id DESC LIMIT 1;";
+            Assert.Equal("resolved:keep_local", Convert.ToString(await audit.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DriveMergeAppliesRemoteProductOnlyAfterAdminResolvesConflict()
     {
         var path = await CreateDriveMergeFixtureAsync();
