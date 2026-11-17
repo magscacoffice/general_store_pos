@@ -12,9 +12,17 @@ public sealed class PrinterSettingsService
  static string SettingsPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"KhanBabaPOS","printer-settings.json");
  public async Task<PrinterPreferences> LoadAsync(CancellationToken ct=default){try{if(!File.Exists(SettingsPath))return new PrinterPreferences();var json=await File.ReadAllTextAsync(SettingsPath,ct);return JsonSerializer.Deserialize<PrinterPreferences>(json)??new PrinterPreferences();}catch{return new PrinterPreferences();}}
  public async Task SaveAsync(PrinterPreferences value,CancellationToken ct=default){
-        // Printer selection and receipt layout are workstation preferences. Salesmen
-        // must be able to save these settings so the POS can print without admin login.
-        AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
+        // Administrative settings mutation remains restricted to Admin.
+        AccessService.RequireCurrentAdmin();
+        await WritePreferencesAsync(value,ct);
+    }
+ public async Task SaveWorkstationAsync(PrinterPreferences value,CancellationToken ct=default){
+        // Selecting a local printer and tuning receipt output are workstation
+        // preferences, not business-data mutations. Both staff roles may use them.
+        AccessService.RequireCurrentRole(AccessRole.Admin,AccessRole.Salesman);
+        await WritePreferencesAsync(value,ct);
+    }
+ async Task WritePreferencesAsync(PrinterPreferences value,CancellationToken ct){
         var dir=Path.GetDirectoryName(SettingsPath)!;
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(SettingsPath,JsonSerializer.Serialize(value,new JsonSerializerOptions{WriteIndented=true}),ct);
