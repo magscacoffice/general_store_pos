@@ -177,7 +177,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         {
             product.Transaction = (SqliteTransaction)transaction;
             product.CommandText = """
-                INSERT INTO products
+                INSERT OR IGNORE INTO products
                     (name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
                 VALUES ('Wholesale Test Item','WPF-WH-1',22,10,18,0,$stock,1,'pcs');
                 """;
@@ -1616,7 +1616,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     [Fact]
     public async Task PendingBillsAreIsolatedByCashierAndAdminRetainsAllAccess()
     {
-        var path = await CreateFixtureAsync();
+        var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
         var accessPath = Path.Combine(directory, "pending-bill-access.dat");
         try
