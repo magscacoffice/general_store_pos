@@ -839,3 +839,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] **Overall project completion abhi In Progress hai.** Repo mein mazeed pending code/acceptance items mojood hain: Google Drive v3 orchestration/reconciliation (remote import disabled), native updater download/progress/installer signing, WPF full-ledger/period-statement PDF validation, complete screen-by-screen responsive audit, schema/calculation parity, scanner/printer physical acceptance, supplier invoice UI ke baad CI, aur target-PC/owner sign-off.
 - [ ] Owner ki hidayat ke mutabiq abhi intermediate build/test run nahi hua. Android aur WPF ke tamam latest code changes final consolidated pass tak unverified hain. Koi production-ready ya tested claim nahi kiya ja raha.
 - [ ] Live business database ya production backup ko touch nahi kiya gaya.
+
+
+## Owner workflow instruction — commit, push aur GitHub Actions cadence (2026-11-17)
+
+- [x] Owner ki wazeh hidayat: har choti code update ko alag commit/push karna zaroori nahi; pehle aisa karna ghair-zaroori tha aur is se GitHub Actions workflows bhi be-wajah trigger ho rahe thay.
+- [x] Development ke darmiyan related code changes ko working set mein jama rakha jaye. Har choti edit, minor fix ya file change par commit/push na kiya jaye.
+- [x] Ek feature/module ya logically related kaam mukammal hone par changes ka consolidated review karke aik grouped commit banaya jaye.
+- [x] GitHub Actions sirf meaningful milestone, consolidated validation, ya final build/artifact ki zaroorat par chalaya jaye. Har minor update par workflow trigger na kiya jaye.
+- [x] Final validation se pehle tamam related pending code changes ko aik sath review kiya jaye; phir munasib consolidated commit/push aur required build/tests run kiye jayen.
+- [x] Agar kisi urgent fix, collaboration ya backup ke liye beech mein commit/push waqai zaroori ho to pehle us ki wajah wazeh ho; warna changes ko group kiya jaye.
+- [x] Yeh cadence project ke tamam future sessions aur WPF/Android implementation work par apply hoti hai. Owner ki alag explicit hidayat is par priority rakhegi.
