@@ -866,3 +866,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android aur WPF dono mein Recall overwrite guard ab usi customer ki original sale ke baad wali extra Khata receipt ko check karta hai. Original bill se pehle ki receipt history be-wajah overwrite ko block nahi karti; original checkout receipt apni note identity se exclude rehti hai.
 - [ ] **Validation Pending:** disposable SQLite v18 fixture par Cash, Credit, Partial, fixed/percentage discount, prior receipt, later receipt, return block, stock rollback aur Khata balance cases ki cross-platform regression tests; Flutter analyze/test aur WPF Release build/test consolidated run mein chalane hain.
 - [ ] Drive snapshot/Android sync parity aur real-device cashier acceptance alag pending gates rahenge. Is source-only fix ko tested ya production-ready nahi kaha ja raha.
+
+
+## Work log — 2026-11-17 (Android Recall disposable-database regression coverage)
+
+- [x] Added `test/recall_bill_test.dart` using a fresh temporary SQLite database per test; live store data and production backups are not used.
+- [x] Coverage added for edited subtotal/discount/final total/received amount/Khata balance/ledger/stock reconciliation, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
+- [ ] Flutter test execution and analyzer validation are pending the consolidated Android validation run. These source tests are not yet reported as passing.
+- [ ] Before Drive snapshot imports are re-enabled, the append-only merge contract must be extended/tested for recalled sale updates and replaced sale-item identities; Windows Drive sync remains fully disabled until the owner safety gate is cleared.
