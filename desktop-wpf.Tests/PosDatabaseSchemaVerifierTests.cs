@@ -1878,4 +1878,180 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+
+    [Fact]
+    public async Task DriveSnapshotRoundTripImportsAllBusinessCollectionsMapsPartyAliasesAndIsIdempotent()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "khan-baba-drive-roundtrip-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var sourceFixture = await CreateFixtureAsync();
+        var targetFixture = await CreateFixtureAsync();
+        var sourcePath = Path.Combine(directory, "source.db");
+        var targetPath = Path.Combine(directory, "target.db");
+        File.Copy(sourceFixture, sourcePath);
+        File.Copy(targetFixture, targetPath);
+        File.Delete(sourceFixture);
+        File.Delete(targetFixture);
+
+        try
+        {
+            long sourceCustomerId;
+            long sourceSupplierId;
+            long sourceProductId;
+            long sourceSaleId;
+            long sourceSaleItemId;
+            long sourceReturnId;
+
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = sourcePath, Pooling = false
+            }.ToString()))
+            {
+                await source.OpenAsync();
+                await using var transaction = await source.BeginTransactionAsync();
+
+                async Task<long> InsertAsync(string sql, params (string Name, object Value)[] values)
+                {
+                    await using var command = source.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = sql;
+                    foreach (var (name, value) in values) command.Parameters.AddWithValue(name, value);
+                    return Convert.ToInt64(await command.ExecuteScalarAsync());
+                }
+
+                sourceProductId = await InsertAsync("""
+                    INSERT INTO products(name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
+                    VALUES('Drive Roundtrip Tea','DRIVE-ROUND-1',20,10,18,0,8,1,'pcs');
+                    SELECT last_insert_rowid();
+                    """);
+                sourceCustomerId = await InsertAsync("""
+                    INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+                    VALUES('Drive Roundtrip Customer','03001234567','customer','Khata','remote-customer-sync',30);
+                    SELECT last_insert_rowid();
+                    """);
+                sourceSupplierId = await InsertAsync("""
+                    INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+                    VALUES('Drive Roundtrip Supplier','03007654321','supplier',NULL,'remote-supplier-sync',0);
+                    SELECT last_insert_rowid();
+                    """);
+                sourceSaleId = await InsertAsync("""
+                    INSERT INTO sales(total_amount,discount,final_amount,payment_type,customer_id,customer_type,received_amount,balance_due,sync_id,customer_sync_id,date)
+                    VALUES(40,0,40,'Partial',$customer,'Khata',10,30,'remote-sale-sync','remote-customer-sync','2026-11-17 10:00:00');
+                    SELECT last_insert_rowid();
+                    """, ("$customer", sourceCustomerId));
+                sourceSaleItemId = await InsertAsync("""
+                    INSERT INTO sale_items(sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit)
+                    VALUES($sale,$product,'DRIVE-ROUND-1','Drive Roundtrip Tea',2,20,10,40,20,'remote-sale-item-sync','remote-sale-sync','pcs');
+                    SELECT last_insert_rowid();
+                    """, ("$sale", sourceSaleId), ("$product", sourceProductId));
+                await InsertAsync("""
+                    INSERT INTO purchases(product_id,product_name,barcode,quantity,unit_cost,total_cost,supplier_id,sync_id,supplier_sync_id,date,unit_label,invoice_quantity,conversion_factor,base_unit,invoice_unit_cost)
+                    VALUES($product,'Drive Roundtrip Tea','DRIVE-ROUND-1',4,10,40,$supplier,'remote-purchase-sync','remote-supplier-sync','2026-11-17 10:05:00','pcs',4,1,'pcs',10);
+                    SELECT last_insert_rowid();
+                    """, ("$product", sourceProductId), ("$supplier", sourceSupplierId));
+                await InsertAsync("""
+                    INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
+                    VALUES($customer,'receipt',10,'Drive roundtrip receipt','2026-11-17 10:06:00','remote-khata-sync','remote-customer-sync');
+                    SELECT last_insert_rowid();
+                    """, ("$customer", sourceCustomerId));
+                await InsertAsync("""
+                    INSERT INTO expenses(title,amount,date,sync_id)
+                    VALUES('Drive roundtrip expense',5,'2026-11-17 10:07:00','remote-expense-sync');
+                    SELECT last_insert_rowid();
+                    """);
+                await InsertAsync("""
+                    INSERT INTO reminders(title,details,date,is_done,sync_id)
+                    VALUES('Drive roundtrip reminder','Test reminder','2026-11-18 10:00:00',0,'remote-reminder-sync');
+                    SELECT last_insert_rowid();
+                    """);
+                sourceReturnId = await InsertAsync("""
+                    INSERT INTO sale_returns(sale_id,customer_id,reason,refund_method,refund_amount,date,sync_id,sale_sync_id,party_sync_id)
+                    VALUES($sale,$customer,'Drive roundtrip test','Cash',5,'2026-11-17 10:08:00','remote-return-sync','remote-sale-sync','remote-customer-sync');
+                    SELECT last_insert_rowid();
+                    """, ("$sale", sourceSaleId), ("$customer", sourceCustomerId));
+                await InsertAsync("""
+                    INSERT INTO sale_return_items(return_id,sale_item_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,condition,sync_id,return_sync_id,sale_item_sync_id,stock_unit)
+                    VALUES($return,$saleItem,$product,'DRIVE-ROUND-1','Drive Roundtrip Tea',1,20,10,20,10,'saleable','remote-return-item-sync','remote-return-sync','remote-sale-item-sync','pcs');
+                    SELECT last_insert_rowid();
+                    """, ("$return", sourceReturnId), ("$saleItem", sourceSaleItemId), ("$product", sourceProductId));
+                await transaction.CommitAsync();
+            }
+
+            long targetCustomerId;
+            await using (var target = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Pooling = false
+            }.ToString()))
+            {
+                await target.OpenAsync();
+                await using var command = target.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+                    VALUES('Drive Roundtrip Customer','03001234567','customer','Khata','local-customer-sync',30);
+                    SELECT last_insert_rowid();
+                    """;
+                targetCustomerId = Convert.ToInt64(await command.ExecuteScalarAsync());
+            }
+
+            var exported = await new DriveSnapshotExportService().ExportAsync(sourcePath);
+            var snapshot = new ValidatedDriveSnapshot(
+                "android-roundtrip-device", exported.Sha256, exported.Data, exported.Json);
+            var service = new DriveSnapshotMergeService();
+
+            var first = await service.MergeAsync(snapshot, snapshot.DeviceId, targetPath);
+            Assert.True(first.SnapshotFullyAccepted);
+            Assert.Equal(0, first.PendingConflicts);
+
+            var second = await service.MergeAsync(snapshot, snapshot.DeviceId, targetPath);
+            Assert.True(second.SnapshotFullyAccepted);
+
+            await using var verify = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+            }.ToString());
+            await verify.OpenAsync();
+
+            async Task<long> CountAsync(string table)
+            {
+                await using var command = verify.CreateCommand();
+                command.CommandText = $"SELECT COUNT(*) FROM \"{table}\";";
+                return Convert.ToInt64(await command.ExecuteScalarAsync());
+            }
+
+            Assert.Equal(1, await CountAsync("products"));
+            Assert.Equal(2, await CountAsync("parties"));
+            Assert.Equal(1, await CountAsync("sales"));
+            Assert.Equal(1, await CountAsync("sale_items"));
+            Assert.Equal(1, await CountAsync("purchases"));
+            Assert.Equal(1, await CountAsync("khata_transactions"));
+            Assert.Equal(1, await CountAsync("expenses"));
+            Assert.Equal(1, await CountAsync("reminders"));
+            Assert.Equal(1, await CountAsync("sale_returns"));
+            Assert.Equal(1, await CountAsync("sale_return_items"));
+            Assert.Equal(1, await CountAsync("drive_sync_aliases"));
+
+            await using (var relations = verify.CreateCommand())
+            {
+                relations.CommandText = """
+                    SELECT
+                      (SELECT customer_id FROM sales WHERE sync_id='remote-sale-sync'),
+                      (SELECT party_id FROM khata_transactions WHERE sync_id='remote-khata-sync'),
+                      (SELECT supplier_id FROM purchases WHERE sync_id='remote-purchase-sync'),
+                      (SELECT sale_item_id FROM sale_return_items WHERE sync_id='remote-return-item-sync'),
+                      (SELECT id FROM sale_items WHERE sync_id='remote-sale-item-sync');
+                    """;
+                await using var reader = await relations.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(targetCustomerId, reader.GetInt64(0));
+                Assert.Equal(targetCustomerId, reader.GetInt64(1));
+                Assert.True(reader.GetInt64(2) > 0);
+                Assert.Equal(reader.GetInt64(4), reader.GetInt64(3));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
 }

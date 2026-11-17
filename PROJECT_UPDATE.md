@@ -1121,3 +1121,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #419 compiled the WPF Release app successfully. Its first test attempt reported 49/50 passing; the sole failure was the stale pause assertion, now corrected.
 - [ ] Re-run the complete WPF Release build/tests and upload a fresh test artifact.
 - [ ] Historical checklist entries saying Drive was paused are superseded by the owner approval and enablement entries dated 2026-11-17 above; real-account and cross-runtime acceptance are still open.
+
+
+## Work log — 2026-11-17 (Drive cross-collection round-trip regression)
+
+- [x] Added a disposable schema-v18 Windows Drive round-trip fixture covering products, customer/supplier identity aliasing, sales, sale items, purchases, Khata receipts, expenses, reminders, sale returns and return items.
+- [x] The fixture verifies foreign-key remapping to local party IDs, sale-item links, and duplicate-free replay of the same snapshot.
+- [ ] Run the grouped WPF Release/test workflow and confirm the round-trip regression passes before treating the Drive import path as CI-validated.
+- [ ] Real Google Drive OAuth, separate Android account/device round-trip, offline recovery and owner acceptance remain target-device checks.
