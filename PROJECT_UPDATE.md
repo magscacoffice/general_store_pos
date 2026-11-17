@@ -996,3 +996,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Direct service call se doosre cashier ki sale update karne ki koshish bhi UnauthorizedAccessException se reject hoti hai; UI filter ko security boundary nahi banaya gaya.
 - [x] Disposable SQLite regression test add kiya jo doosre cashier ki sale par direct overwrite reject hona verify karta hai.
 - [ ] WPF final manual Release build/test mein is service guard aur regression test ko validate karna hai.
+
+
+## Final WPF validation milestone — 2026-11-17
+
+- [x] Source review ke baad final WPF Release/test/artifact workflow ko sirf grouped WPF source/test changes aur explicit manual dispatch par enable kiya. Documentation-only updates aur Android-only edits WPF Actions ko trigger nahi karengi.
+- [ ] Is milestone run mein latest Recall receipt-ordering + cashier ownership, Sales History mapping, WPF sidebar/status/role navigation, printer workstation-role fix aur supplier invoice UI sab compile/test honge. Result aur test count run complete hone ke baad yahan update honge.
