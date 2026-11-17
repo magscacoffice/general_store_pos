@@ -80,7 +80,7 @@
                     <TextBlock Text="NATIVE WINDOWS CLIENT" Foreground="#B8D4C8" FontSize="10" FontWeight="Bold"/>
                     <TextBlock Text=".NET WPF • Local-first" Foreground="#B8D4C8" FontSize="10" Margin="0,4,0,0"/>
                 </StackPanel>
-            </Grid></DockPanel>
+            </Grid>
         </Border>
 
         <Grid Grid.Column="1" Margin="20">
