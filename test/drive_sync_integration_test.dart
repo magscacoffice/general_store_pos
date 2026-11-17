@@ -551,4 +551,136 @@ void main() {
     expect(await DBHelper.getDriveSyncConflictCount(), 0);
   });
 
+
+  test('Recall overwrite recalculates edited total, stock and Khata balance atomically', () async {
+    await DBHelper.insertProduct({
+      'name': 'Recall Test Item',
+      'barcode': 'KB-RECALL-1',
+      'price': 20.0,
+      'purchasePrice': 5.0,
+      'wholesalePrice': 18.0,
+      'damaged_quantity': 0,
+      'quantity': 10,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    final customerId = await DBHelper.insertParty({
+      'name': 'Recall Test Customer',
+      'phone': '03000000011',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+    final saleId = await DBHelper.completeSale(
+      sale: {
+        'total_amount': 20.0,
+        'discount': 0.0,
+        'final_amount': 20.0,
+        'payment_type': 'Partial',
+        'customer_type': 'Khata',
+        'customer_id': customerId,
+        'received_amount': 5.0,
+        'date': '2026-11-16 10:00:00',
+      },
+      items: [
+        {'barcode': 'KB-RECALL-1', 'name': 'Recall Test Item', 'quantity': 1, 'salePrice': 20.0, 'purchasePrice': 5.0},
+      ],
+    );
+
+    await DBHelper.updateSaleFromRecall(
+      saleId: saleId,
+      sale: {
+        'customer_id': customerId,
+        'customer_type': 'Khata',
+        'discount': 6.0,
+        'final_amount': 14.0,
+        'payment_type': 'Partial',
+        'received_amount': 10.0,
+      },
+      items: [
+        {'barcode': 'KB-RECALL-1', 'name': 'Recall Test Item', 'quantity': 3, 'salePrice': 20.0, 'purchasePrice': 5.0},
+      ],
+    );
+
+    final updatedSale = (await DBHelper.getSales()).single;
+    expect(updatedSale['total_amount'], 60.0);
+    expect(updatedSale['discount'], 6.0);
+    expect(updatedSale['final_amount'], 54.0);
+    expect(updatedSale['received_amount'], 10.0);
+    expect(updatedSale['balance_due'], 44.0);
+    expect((await DBHelper.getProducts()).single['quantity'], 7);
+    expect((await DBHelper.getParties('customer')).single['balance'], 44.0);
+    final ledger = await DBHelper.getKhataTransactions(customerId);
+    expect(ledger.length, 2);
+    expect(ledger.where((row) => row['type'] == 'credit').single['amount'], 54.0);
+    expect(ledger.where((row) => row['type'] == 'receipt').single['amount'], 10.0);
+  });
+
+  test('Recall overwrite allows earlier receipt but blocks a later receipt', () async {
+    await DBHelper.insertProduct({
+      'name': 'Recall Receipt Item',
+      'barcode': 'KB-RECALL-2',
+      'price': 20.0,
+      'purchasePrice': 5.0,
+      'wholesalePrice': 18.0,
+      'damaged_quantity': 0,
+      'quantity': 10,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    final customerId = await DBHelper.insertParty({
+      'name': 'Recall Receipt Customer',
+      'phone': '03000000012',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+    final db = await DBHelper.database;
+    await db.insert('khata_transactions', {
+      'party_id': customerId,
+      'type': 'receipt',
+      'amount': 1.0,
+      'note': 'Receipt before recalled bill',
+      'date': '2026-11-16 09:00:00',
+      'sync_id': 'recall-prior-receipt',
+    });
+    final saleId = await DBHelper.completeSale(
+      sale: {
+        'total_amount': 20.0,
+        'discount': 0.0,
+        'final_amount': 20.0,
+        'payment_type': 'Partial',
+        'customer_type': 'Khata',
+        'customer_id': customerId,
+        'received_amount': 5.0,
+        'date': '2026-11-16 10:00:00',
+      },
+      items: [
+        {'barcode': 'KB-RECALL-2', 'name': 'Recall Receipt Item', 'quantity': 1, 'salePrice': 20.0, 'purchasePrice': 5.0},
+      ],
+    );
+    final request = {
+      'customer_id': customerId,
+      'customer_type': 'Khata',
+      'discount': 0.0,
+      'payment_type': 'Partial',
+      'received_amount': 5.0,
+    };
+    final items = [
+      {'barcode': 'KB-RECALL-2', 'name': 'Recall Receipt Item', 'quantity': 1, 'salePrice': 20.0, 'purchasePrice': 5.0},
+    ];
+
+    // An older receipt must not prevent an otherwise safe invoice edit.
+    await DBHelper.updateSaleFromRecall(saleId: saleId, sale: request, items: items);
+    final stockBeforeLaterReceipt = (await DBHelper.getProducts()).single['quantity'];
+    await DBHelper.recordKhataReceipt(partyId: customerId, amount: 1.0, note: 'Later customer payment');
+
+    await expectLater(
+      DBHelper.updateSaleFromRecall(saleId: saleId, sale: request, items: items),
+      throwsException,
+    );
+    expect((await DBHelper.getProducts()).single['quantity'], stockBeforeLaterReceipt);
+    expect((await DBHelper.getSales()).single['final_amount'], 20.0);
+  });
+
 }

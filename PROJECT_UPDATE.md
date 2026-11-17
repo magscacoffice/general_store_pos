@@ -854,6 +854,8 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Work log — 2026-11-17 (Recall billing parity source fixes)
 
+- [x] Recall ke liye disposable SQLite integration tests source mein add kiye: edited cart ka final total/discount/received/balance/stock/ledger reconciliation, pehle ki receipt par safe overwrite, aur baad ki receipt par overwrite rejection + rollback assertions. [ ] Flutter test execution abhi consolidated validation ke liye pending hai.
+
 - [x] Android Recall overwrite ab edited cart ka subtotal aur saved discount amount se final total dobara calculate karta hai; purane invoice ka final_amount edited bill par reuse nahi hota.
 - [x] Android aur WPF dono mein Recall overwrite guard ab usi customer ki original sale ke baad wali extra Khata receipt ko check karta hai. Original bill se pehle ki receipt history be-wajah overwrite ko block nahi karti; original checkout receipt apni note identity se exclude rehti hai.
 - [ ] **Validation Pending:** disposable SQLite v18 fixture par Cash, Credit, Partial, fixed/percentage discount, prior receipt, later receipt, return block, stock rollback aur Khata balance cases ki cross-platform regression tests; Flutter analyze/test aur WPF Release build/test consolidated run mein chalane hain.
