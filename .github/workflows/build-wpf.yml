@@ -1,13 +1,6 @@
 name: Build and Test Native WPF POS + Windows x64 Artifact
 
 on:
-  push:
-    branches:
-      - integration/wpf-mainline
-    paths:
-      - 'desktop-wpf/**'
-      - 'desktop-wpf.Tests/**'
-      - '.github/workflows/build-wpf.yml'
   workflow_dispatch:
 
 concurrency:

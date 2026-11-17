@@ -1000,5 +1000,12 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Final WPF validation milestone — 2026-11-17
 
-- [x] Source review ke baad final WPF Release/test/artifact workflow ko sirf grouped WPF source/test changes aur explicit manual dispatch par enable kiya. Documentation-only updates aur Android-only edits WPF Actions ko trigger nahi karengi.
-- [ ] Is milestone run mein latest Recall receipt-ordering + cashier ownership, Sales History mapping, WPF sidebar/status/role navigation, printer workstation-role fix aur supplier invoice UI sab compile/test honge. Result aur test count run complete hone ke baad yahan update honge.
+- [x] WPF workflow ko manual workflow_dispatch only rakha gaya. Repo ka default branch main hai aur usay owner approval ke baghair change/merge nahi karna; integration branch par workflow trigger edit akela push run start nahi karta.
+- [ ] Final WPF Release/test/artifact run GitHub Actions UI se manually dispatch karna hoga; is session ke GitHub connector mein workflow-dispatch write action available nahi. Latest Recall receipt-ordering + cashier ownership, Sales History mapping, sidebar/status/role navigation, printer role fix aur supplier invoice UI us run mein validate honge.
+
+
+## WPF workflow dispatch limitation — 2026-11-17
+
+- [x] Integration branch ko main mein merge kiye baghair WPF workflow automatic push trigger nahi hota, kyun ke repository ka default branch main hai aur us par workflow file manual-only hi hai.
+- [x] Integration branch ka WPF workflow manual workflow_dispatch only rakha hai. Is session ke connected GitHub actions read/re-run operations support karte hain, lekin naya workflow_dispatch trigger create nahi karte.
+- [ ] Latest WPF source ka final build/test aur artifact owner ko GitHub Actions UI se Build and Test Native WPF POS + Windows x64 Artifact workflow manually run karna hoga, ya Work mode/terminal access dena hoga.
