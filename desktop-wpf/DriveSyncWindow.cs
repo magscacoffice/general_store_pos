@@ -41,7 +41,7 @@ public sealed class DriveSyncWindow : Window
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock { Text = "Google Drive — Windows Master", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(23, 59, 50)) });
         root.Children.Add(new TextBlock { Text = _sync.IsEnabled
-            ? "Windows local database master rahega. Doosre device ke stock/account conflicts par explicit faisla zaroori hai."
+            ? "Windows Master policy active hai: conflicting stock, prices aur Khata values mein Windows ka data automatically preserve hoga. Android ki new entries aur non-conflicting updates khud merge hongi."
             : "Google Drive sync is disabled in this build.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 5, 0, 10) });
         root.Children.Add(_status);
@@ -57,6 +57,7 @@ public sealed class DriveSyncWindow : Window
         actions.Children.Add(Action("Disconnect Drive", Disconnect_Click));
         root.Children.Add(actions);
         root.Children.Add(new TextBlock { Text = "Pending conflicts — local record aur remote record compare karein", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 16, 0, 0) });
+        _grid.Visibility = Visibility.Collapsed;
         root.Children.Add(_grid);
 
         var payloadGrid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
@@ -71,14 +72,15 @@ public sealed class DriveSyncWindow : Window
         payloadGrid.Children.Add(localPanel);
         Grid.SetColumn(remotePanel, 1);
         payloadGrid.Children.Add(remotePanel);
+        payloadGrid.Visibility = Visibility.Collapsed;
         root.Children.Add(payloadGrid);
 
-        var resolutions = new WrapPanel();
+        // Windows Master conflicts are auto-resolved during import. Keep the
+        // review controls out of the cashier/Admin workflow; history remains in SQLite.
+        var resolutions = new WrapPanel { Visibility = Visibility.Collapsed };
         var keepWindows = Action("Keep Windows", KeepWindows_Click);
-        keepWindows.IsEnabled = _sync.IsEnabled;
-        resolutions.Children.Add(keepWindows);
         var useRemote = Action("Use Other Device", UseRemote_Click);
-        useRemote.IsEnabled = _sync.IsEnabled;
+        resolutions.Children.Add(keepWindows);
         resolutions.Children.Add(useRemote);
         root.Children.Add(resolutions);
         Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
@@ -112,7 +114,7 @@ public sealed class DriveSyncWindow : Window
     {
         if (!EnsureAdmin()) return;
         if (MessageBox.Show(
-                "Google Drive par Windows database snapshot upload hoga aur doosre connected device ke records import/merge honge. Merge se pehle verified safety backup banega; stock aur account balance ke conflicts ko Admin review karega. Kya aap continue karna chahte hain?",
+                "Google Drive par Windows master snapshot upload hoga aur doosre device ki new entries/non-conflicting updates merge hongi. Stock, price aur Khata conflicts mein Windows ki value automatically preserve hogi; conflict history background mein save hogi. Merge se pehle verified safety backup banega. Kya aap continue karna chahte hain?",
                 Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         await RunAsync(() => _sync.ConnectAndSyncAsync());
         await RefreshConflictsAsync();
