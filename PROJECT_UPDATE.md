@@ -376,7 +376,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] **Resolve cashier calculation inconsistencies:** reconcile checkout validation with bill preview/receipt calculations, especially Partial payment boundary rules; ensure displayed received/balance values match the values actually posted to SQLite.
 - [ ] **New Sale acceptance:** verify New Sale button and F5 create a clean pending bill without losing the previous bill; scanner focus returns after adding an item and after checkout; repeated barcode scans increment the same cart line; pending bills restore customer type, customer, payment mode, discount mode/value and partial received amount.
 - [ ] **Regression tests:** add/verify automated tests for the above calculations and New Sale/cart/pending-bill behaviour. Do not mark this work complete from a successful compile alone.
-- [ ] **Windows artifact:** produce a self-contained Windows x64 WPF test artifact from this integration branch after Release build and tests pass. Artifact is for owner testing only; unsigned and not a production release. Keep the existing installer/signing and real-PC acceptance gates separate.
+- [x] **Windows test artifact produced:** run #416 completed WPF Release build, all 46/46 tests, self-contained win-x64 publish and artifact upload. `KhanBabaPOS-Windows-x64-416` (artifact ID `14309430623`, 65.4 MB, SHA-256 `96ee8f4d9499ba0533887fb3b97606aad0b9bdd9e77830792c8d81b0200513ef`, expires 2026-12-17). Unsigned owner-test package only; not a production installer/release. Real-PC acceptance and signing remain separate.
 
 <!-- This is the canonical live task list. The earlier roadmap sections describe requirements/architecture; Completed Updates records finished work. Source implementation, automated validation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
 
@@ -415,7 +415,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] Verify WPF scrollbar visibility/hit targets, combined scan/search focus, modal keyboard navigation and responsive layouts on the target PC.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
-- [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish an APK, EXE, installer or release artifact while pending tasks remain.
+- [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish a production installer/stable release while pending tasks remain. An unsigned Windows x64 test artifact is allowed only when explicitly requested by the owner, as in run #416.
 
 ## New notes from user (2026-11-16)
 
@@ -1028,10 +1028,10 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## New owner UI requirements — Windows startup sizing and one-screen New Sale (2026-11-17)
 
-- [ ] **Startup window must fit the visible display/work area:** WPF app currently opens larger than the usable screen area on the owner's Windows display, with part of the window beyond the top/visible boundary and difficult/impossible to drag back down. On startup, detect the active display work area (including taskbar/DPI scaling), position the window fully inside it, and cap initial width/height to available bounds. Keep standard title-bar move/resize/maximize/restore behaviour; do not force an oversized fixed window.
-- [ ] **New Sale must be a true single-screen cashier layout:** rearrange and compact every New Sale option/control so all essential billing controls and actions are visible together at the supported minimum/target display size, without requiring vertical scrolling. Prioritize scanner/search, customer/type, payment/received amount, discount, cart, totals and checkout/print/pending-bill actions. Use responsive grid sizing, compact spacing and sensible DataGrid sizing; preserve keyboard shortcuts, scanner focus, all calculations and existing features. Do not hide or remove controls to achieve the fit.
+- [x] **Startup window source implementation:** WPF startup now caps initial dimensions and centers the window within `SystemParameters.WorkArea` (taskbar-excluded work area), while retaining normal title-bar drag, resize and maximize/restore. Actual monitor/DPI acceptance remains pending.
+- [x] **New Sale single-screen source implementation:** customer/type, payment/received, discount, totals and print/checkout actions are now in a compact fixed grid instead of a vertically scrolling right pane; scanner/search, pending bill and New Bill remain in the header; cart remains visible beside the controls. Preserve all existing actions and calculations. Actual 980×650/1280×720/owner-display visual acceptance remains pending.
 - [ ] Verify startup positioning and the complete New Sale layout at the owner's actual display resolution and Windows scaling, plus 980×650, 1280×720, maximized and restored/resized states. Record any genuinely smaller unsupported work area rather than allowing controls to clip.
-- [ ] These are requirements to implement and validate in the next grouped WPF UI milestone; do not trigger a separate Actions workflow for this documentation-only update.
+- [x] Source implementation is included in run #416 and compiled successfully; the remaining task is target-display visual acceptance, not another documentation-only workflow.
 
 ## Work log — 2026-11-17 (Startup bounds and one-screen New Sale source update)
 
@@ -1045,7 +1045,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] GitHub Actions WPF run #412 mein WPF application Release compile pass hua, lekin test project compile `PosDatabaseSchemaVerifierTests.cs` line 1607 ke malformed `try/finally` block ki wajah se fail hua.
 - [x] `SalesmanCannotOverwriteAnotherCashiersSaleEvenWhenCallingServiceDirectly` test mein extra closing brace remove ki gayi; test ka intended `try/finally` cleanup structure restore kiya gaya.
 - [ ] Yeh source correction abhi run #412 mein validate nahi hui kyun ke run is fix se pehle ke commit par tha. Final grouped WPF Release/test run mein is test ko verify karna lazmi hai.
-- [ ] Is session ke latest WPF UI changes (startup work-area sizing aur compact New Sale panel) ka XAML/Release/test validation bhi pending hai; koi successful latest artifact abhi claim nahi kiya ja raha.
+- [x] Startup work-area sizing and compact New Sale XAML passed the WPF Release build in run #416; the same run uploaded the Windows x64 test artifact. Physical screen-size acceptance remains pending.
 
 
 ## WPF run #412 failure analysis and correction — 2026-11-17
@@ -1053,14 +1053,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #412 (commit bb961189b3586116acc7f409e34fef56316242e9): WPF Release application build succeeded with 0 errors; test project compilation failed in PosDatabaseSchemaVerifierTests.cs around line 1607.
 - [x] Root cause: Salesman direct-Recall test had an extra closing brace after the assertion, producing CS1524/CS1519. The current integration branch test source has that extra brace removed.
 - [x] The same test fixture's SQLite connection is now disposed before invoking SalePostingService, avoiding an open-file/backup interaction during the service test.
-- [ ] Corrected WPF test suite and latest code changes have not yet been rerun; manual workflow_dispatch is still required. Do not treat #412 as a passing artifact.
+- [x] Corrected WPF test suite and latest code changes passed in run #416; #412 remains a failed historical run and is not used as an artifact.
 
 
 ## WPF final rerun — 2026-11-17
 
 - [x] Run #412 test-file extra brace was corrected on the current branch; SalesHistory and cashier-scoped pending-bill regression tests were added after that failed run.
 - [x] One consolidated WPF validation attempt is now enabled for this grouped desktop source/test milestone only. After the run completes, the workflow will return to manual-only so ordinary edits do not trigger Actions.
-- [ ] Current branch build, all WPF tests and Windows x64 artifact result are pending run #413.
+- [x] Superseded by successful run #416: Release build + 46/46 tests + Windows x64 artifact upload passed.
 
 
 ## Work log — 2026-11-17 (Pending-bill AccessService injection)
@@ -1074,4 +1074,12 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Latest WPF application Release build passed in run #414.
 - [x] Test project compile then found the direct cashier-ownership fixture awaited synchronous ExecuteScalar() instead of ExecuteScalarAsync(); corrected the fixture to use ExecuteScalarAsync().
-- [ ] Run #415 will validate all latest WPF tests, including Sales History and cashier-scoped pending bills; no artifact until tests pass.
+- [x] Run #416 validated the test fixture corrections and latest branch snapshot: 46/46 WPF tests passed and the Windows x64 test artifact uploaded.
+
+## Windows test build — 2026-11-17 (run #416)
+
+- [x] WPF Release build succeeded; all 46/46 regression tests passed.
+- [x] Self-contained win-x64 publish and artifact upload succeeded. Artifact: `KhanBabaPOS-Windows-x64-416`, ID `14309430623`, SHA-256 `96ee8f4d9499ba0533887fb3b97606aad0b9bdd9e77830792c8d81b0200513ef`, 30-day retention (expires 2026-12-17).
+- [x] Fixed two test-harness defects exposed by run #415: the pending-bill test now uses an isolated disposable database directory rather than attempting to delete the shared system temp folder; repeated account seeding now avoids inserting the same test product barcode twice.
+- [x] This artifact includes the WPF startup work-area sizing and compact New Sale panel source changes.
+- [ ] Owner must extract and launch the ZIP on Windows 10/11 x64 using a disposable database copy; validate actual display/DPI fit, New Sale no-scroll layout, scanner, printer, PDF and backup/restore. This unsigned test artifact is not production-ready.
