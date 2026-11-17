@@ -913,7 +913,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android analyzer and existing sync/invoice tests passed on Ubuntu and Windows in run #97; the Recall suite and same-second ordering tests passed on both runners in run #98.
 - [x] Android Recall tests passed: edited bill total/discount/received/Khata/stock, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
 - [x] Windows WPF Release build passed and 41/41 regression tests passed in run #411. The self-contained Windows x64 test artifact was uploaded.
-- [x] WPF build/test workflow is manual workflow_dispatch only. Android sync/invoice workflow runs on main pushes or manual dispatch; integration branch pushes do not trigger it.
+- [x] WPF build/test workflow is manual workflow_dispatch only. Android sync/invoice workflow is manual workflow_dispatch only; no branch push triggers it.
 - [ ] Drive snapshot update/delete identity and full schema-v18 reconciliation matrix remain pending; Google Drive network sync remains disabled.
 - [ ] Physical Windows PC, SpeedX SP60D scanner, BC-86AC printer/cutter, PDF output, backup/restore and owner sign-off remain pending.
 - [ ] Production updater remains disabled until the production signing certificate and trusted thumbprint are provided.
@@ -922,7 +922,7 @@ Future improvements: add new ideas here when the owner requests them.
 ## Workflow cadence clarification — 2026-11-17
 
 - [x] WPF build/artifact workflow integration branch par automatic push se disabled hai; final milestone par manual run hi use hoga.
-- [x] Android sync/invoice/Recall test workflow bhi integration branch ke har push par automatic nahi chalega; default main push aur explicit workflow dispatch tak mahdood rakha hai.
+- [x] Android sync/invoice/Recall test workflow bhi manual workflow_dispatch only hai; kisi branch push par automatic nahi chalega.
 - [x] Is se code ke darmiyan choti commits ya documentation edits Actions ko bar-bar trigger nahi karengi. Final consolidated validation aik planned milestone par hogi.
 
 
@@ -970,3 +970,13 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Unposted draft receipt preview ab generic `Local Windows User` ke bajaye active authenticated Windows session ka display name dikhata hai; posted sale attribution ke sath preview consistency barqarar.
 - [ ] Final WPF build/XAML validation pending consolidated manual run.
+
+
+## Latest code snapshot — 2026-11-17
+
+- [x] Source audit: Flutter v18 DDL aur WPF schema verifier ke tamam 17 tables aur har table ke columns exact match karte hain. WPF verifier PKs, required NOT NULL columns, defaults, unique constraints aur foreign-key integrity bhi check karta hai.
+- [x] Legacy migration ordering fix committed: old schema v3-v6 databases mein sale_items aur sale_return_items pehle create honge, phir v18 stock_unit columns add honge. Version-3 preservation test source mein add hai.
+- [x] WPF customer/supplier account delete parity added with zero-balance/no-history guard, Windows-master party tombstone, selected-row UI action, balance/history tests and Admin-only role test.
+- [ ] Latest WPF code after run #411 (same-second receipt guard, responsive/role-aware navigation, cashier/printer status, printer test preference role path and party deletion) still needs one manual Release build/test run. Run #411 is a baseline artifact from before these later WPF changes.
+- [ ] Latest Android code after run #98 includes the v3-to-v18 migration fix and new legacy upgrade test; run the manual Android workflow after this change.
+- [x] Both build/test workflows are manual-only; no code push should trigger Actions automatically.
