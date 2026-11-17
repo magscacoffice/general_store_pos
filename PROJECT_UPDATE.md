@@ -917,3 +917,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Drive snapshot update/delete identity and full schema-v18 reconciliation matrix remain pending; Google Drive network sync remains disabled.
 - [ ] Physical Windows PC, SpeedX SP60D scanner, BC-86AC printer/cutter, PDF output, backup/restore and owner sign-off remain pending.
 - [ ] Production updater remains disabled until the production signing certificate and trusted thumbprint are provided.
+
+
+## Workflow cadence clarification — 2026-11-17
+
+- [x] WPF build/artifact workflow integration branch par automatic push se disabled hai; final milestone par manual run hi use hoga.
+- [x] Android sync/invoice/Recall test workflow bhi integration branch ke har push par automatic nahi chalega; default main push aur explicit workflow dispatch tak mahdood rakha hai.
+- [x] Is se code ke darmiyan choti commits ya documentation edits Actions ko bar-bar trigger nahi karengi. Final consolidated validation aik planned milestone par hogi.
