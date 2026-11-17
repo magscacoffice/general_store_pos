@@ -2583,7 +2583,8 @@ class DBHelper {
       if (partyId != null) {
         final accounts = await txn.query('parties', columns: ['customer_type'], where: "id = ? AND type = 'customer'", whereArgs: [partyId], limit: 1);
         if (accounts.isEmpty || (accounts.first['customer_type']?.toString() ?? 'Khata') != oldCustomerType) throw Exception('Original customer account verify nahi ho saka.');
-        final receipts = await txn.query('khata_transactions', where: "party_id = ? AND type = 'receipt' AND note != ?", whereArgs: [partyId, 'Cash received at sale #' + saleId.toString()]);
+        final originalSaleDate = old['date']?.toString() ?? '';
+        final receipts = await txn.query('khata_transactions', where: "party_id = ? AND type = 'receipt' AND note != ? AND date > ?", whereArgs: [partyId, 'Cash received at sale #' + saleId.toString(), originalSaleDate]);
         if (receipts.isNotEmpty) throw Exception('Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.');
       }
       final oldItems = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
@@ -2619,7 +2620,8 @@ class DBHelper {
         if (stock < e.value) throw Exception('Stock kam hai: ' + rows.first['name'].toString());
       }
       final discount = (sale['discount'] as num?)?.toDouble() ?? 0;
-      final finalAmount = (sale['final_amount'] as num?)?.toDouble() ?? (subtotal - discount);
+      // Recalculate from the edited cart. The stored final_amount belongs to the old invoice.
+      final finalAmount = subtotal - discount;
       final received = (sale['received_amount'] as num?)?.toDouble() ?? 0;
       if (!discount.isFinite || discount < 0 || discount > subtotal || !finalAmount.isFinite || finalAmount < 0 || finalAmount > subtotal || !received.isFinite || received < 0 || received > finalAmount) throw Exception('Discount, total ya received amount valid nahi.');
       final due = partyId == null ? 0.0 : finalAmount - received;

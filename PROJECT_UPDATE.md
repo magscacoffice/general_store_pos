@@ -850,3 +850,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Final validation se pehle tamam related pending code changes ko aik sath review kiya jaye; phir munasib consolidated commit/push aur required build/tests run kiye jayen.
 - [x] Agar kisi urgent fix, collaboration ya backup ke liye beech mein commit/push waqai zaroori ho to pehle us ki wajah wazeh ho; warna changes ko group kiya jaye.
 - [x] Yeh cadence project ke tamam future sessions aur WPF/Android implementation work par apply hoti hai. Owner ki alag explicit hidayat is par priority rakhegi.
+
+
+## Work log — 2026-11-17 (Recall billing parity source fixes)
+
+- [x] Android Recall overwrite ab edited cart ka subtotal aur saved discount amount se final total dobara calculate karta hai; purane invoice ka final_amount edited bill par reuse nahi hota.
+- [x] Android aur WPF dono mein Recall overwrite guard ab usi customer ki original sale ke baad wali extra Khata receipt ko check karta hai. Original bill se pehle ki receipt history be-wajah overwrite ko block nahi karti; original checkout receipt apni note identity se exclude rehti hai.
+- [ ] **Validation Pending:** disposable SQLite v18 fixture par Cash, Credit, Partial, fixed/percentage discount, prior receipt, later receipt, return block, stock rollback aur Khata balance cases ki cross-platform regression tests; Flutter analyze/test aur WPF Release build/test consolidated run mein chalane hain.
+- [ ] Drive snapshot/Android sync parity aur real-device cashier acceptance alag pending gates rahenge. Is source-only fix ko tested ya production-ready nahi kaha ja raha.

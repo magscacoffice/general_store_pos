@@ -302,9 +302,10 @@ public sealed class SalePostingService
                 }
                 await using var receipts = connection.CreateCommand();
                 receipts.Transaction = transaction;
-                receipts.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$party AND type='receipt' AND note != $ownReceipt;";
+                receipts.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$party AND type='receipt' AND note != $ownReceipt AND date > $saleDate;";
                 receipts.Parameters.AddWithValue("$party", oldCustomerId.Value);
                 receipts.Parameters.AddWithValue("$ownReceipt", $"Cash received at sale #{saleId}");
+                receipts.Parameters.AddWithValue("$saleDate", oldDate);
                 if (Convert.ToInt32(await receipts.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0)
                     throw new InvalidOperationException("Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.");
             }
