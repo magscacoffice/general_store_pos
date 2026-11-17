@@ -123,36 +123,81 @@ public sealed class GoogleDriveAuthService
         Process.Start(new ProcessStartInfo(authorizationUrl) { UseShellExecute = true });
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromMinutes(3));
-        using var client = await listener.AcceptTcpClientAsync(timeout.Token);
-        await using var stream = client.GetStream();
-        using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
-        var requestLine = await reader.ReadLineAsync(timeout.Token);
-        string? header;
-        do { header = await reader.ReadLineAsync(timeout.Token); }
-        while (!string.IsNullOrEmpty(header));
+        string? code = null;
+        string? returnedState = null;
+        string? error = null;
+        var callbackReceived = false;
 
-        var requestTarget = requestLine?.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .ElementAtOrDefault(1);
-        if (requestTarget is null || !Uri.TryCreate(new Uri(redirectUri), requestTarget, out var callback))
-            throw new InvalidDataException("Google OAuth callback was malformed.");
+        // Browsers may open the loopback socket for favicon/preflight requests
+        // before delivering Google's actual redirect. Ignore unrelated requests
+        // instead of treating the first TCP connection as the OAuth callback.
+        while (!callbackReceived)
+        {
+            using var client = await listener.AcceptTcpClientAsync(timeout.Token);
+            await using var stream = client.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+            var requestLine = await reader.ReadLineAsync(timeout.Token);
+            string? header;
+            do { header = await reader.ReadLineAsync(timeout.Token); }
+            while (!string.IsNullOrEmpty(header));
 
-        var callbackQuery = System.Web.HttpUtility.ParseQueryString(callback.Query);
-        var code = callbackQuery["code"];
-        var returnedState = callbackQuery["state"];
-        var error = callbackQuery["error_description"] ?? callbackQuery["error"];
-        var success = !string.IsNullOrWhiteSpace(code) &&
-                      CryptographicOperations.FixedTimeEquals(
-                          Encoding.UTF8.GetBytes(state),
-                          Encoding.UTF8.GetBytes(returnedState ?? string.Empty));
-        var html = success
-            ? "<html><body><h3>Khan Baba POS connected.</h3><p>You can return to the POS application.</p></body></html>"
-            : "<html><body><h3>Google Drive connection failed.</h3><p>You can close this tab and return to the POS application.</p></body></html>";
-        var responseBytes = Encoding.UTF8.GetBytes(
-            $"HTTP/1.1 {(success ? "200 OK" : "400 Bad Request")}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {Encoding.UTF8.GetByteCount(html)}\r\nConnection: close\r\n\r\n{html}");
-        await stream.WriteAsync(responseBytes, timeout.Token);
-        await stream.FlushAsync(timeout.Token);
-        if (!success)
-            throw new InvalidOperationException(error ?? "Google authorization was cancelled or returned an invalid state.");
+            var requestParts = requestLine?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (requestParts is not { Length: >= 3 } ||
+                !string.Equals(requestParts[0], "GET", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteLoopbackResponseAsync(stream, 400, "Bad Request",
+                    "Invalid browser request. Return to Khan Baba POS.", timeout.Token);
+                continue;
+            }
+
+            var requestTarget = requestParts[1];
+            Uri? callback = null;
+            if (Uri.TryCreate(requestTarget, UriKind.Absolute, out var absoluteTarget))
+                callback = absoluteTarget;
+            else if (Uri.TryCreate(new Uri(redirectUri), requestTarget, out var relativeTarget))
+                callback = relativeTarget;
+
+            if (callback is null ||
+                !string.Equals(callback.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                !IPAddress.TryParse(callback.Host, out var callbackAddress) ||
+                !IPAddress.IsLoopback(callbackAddress) ||
+                callback.Port != port)
+            {
+                await WriteLoopbackResponseAsync(stream, 400, "Bad Request",
+                    "Google OAuth callback URL was invalid. Return to Khan Baba POS and try again.", timeout.Token);
+                continue;
+            }
+
+            // Ignore browser-generated requests such as /favicon.ico; only the
+            // exact loopback redirect path can complete the authorization.
+            if (callback.AbsolutePath != "/")
+            {
+                await WriteLoopbackResponseAsync(stream, 404, "Not Found",
+                    "This is not the Khan Baba POS OAuth callback.", timeout.Token);
+                continue;
+            }
+
+            var callbackQuery = System.Web.HttpUtility.ParseQueryString(callback.Query);
+            code = callbackQuery["code"];
+            returnedState = callbackQuery["state"];
+            error = callbackQuery["error_description"] ?? callbackQuery["error"];
+            callbackReceived = true;
+
+            var stateMatches = !string.IsNullOrWhiteSpace(returnedState) &&
+                CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(state),
+                    Encoding.UTF8.GetBytes(returnedState));
+            var success = !string.IsNullOrWhiteSpace(code) && stateMatches && string.IsNullOrWhiteSpace(error);
+            var html = success
+                ? "<html><body><h3>Khan Baba POS connected.</h3><p>You can return to the POS application.</p></body></html>"
+                : "<html><body><h3>Google Drive connection failed.</h3><p>You can close this tab and return to the POS application.</p></body></html>";
+            await WriteLoopbackResponseAsync(stream, success ? 200 : 400,
+                success ? "OK" : "Bad Request", html, timeout.Token);
+
+            if (!success)
+                throw new InvalidOperationException(error ??
+                    "Google authorization was cancelled or returned an invalid state.");
+        }
 
         var form = new Dictionary<string, string>
         {
@@ -172,6 +217,22 @@ public sealed class GoogleDriveAuthService
             throw new HttpRequestException(
                 $"Google authorization exchange failed ({(int)tokenResponse.StatusCode}): {tokenBody}");
         return ParseTokenResponse(tokenBody);
+    }
+
+    private static async Task WriteLoopbackResponseAsync(
+        NetworkStream stream, int statusCode, string reason, string body,
+        CancellationToken cancellationToken)
+    {
+        var bodyBytes = Encoding.UTF8.GetBytes(body);
+        var headers = Encoding.ASCII.GetBytes(
+            $"HTTP/1.1 {statusCode} {reason}\r\n" +
+            "Content-Type: text/html; charset=utf-8\r\n" +
+            $"Content-Length: {bodyBytes.Length}\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Connection: close\r\n\r\n");
+        await stream.WriteAsync(headers, cancellationToken);
+        await stream.WriteAsync(bodyBytes, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
     }
 
     private async Task<DriveTokenSet?> ReadTokensAsync(CancellationToken cancellationToken)
