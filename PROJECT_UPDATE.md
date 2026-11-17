@@ -142,59 +142,59 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 - [ ] **Khata:** preserve customer balance, credit sale, partial/received payments, receipt history, ledger transactions, customer statement and due reminders exactly as implemented in the current source.
 - [ ] **Inventory:** product create/edit/delete rules, barcode uniqueness, stock quantity, damaged quantity, active/inactive, stock units, low stock display, purchase-cost floor and sale stock deductions.
 - [ ] **Purchases:** supplier association, invoice grouping/duplicate guard, discounts/tax/paid/balance fields, invoice-unit conversions, integer stock conversion, base-unit cost and review-before-posting.
-- [ ] **Sales history and returns:** bill details/reprint, eligible return quantities, return reason/refund method, saleable/damaged condition, stock restoration and return history.
+- [x] WPF sales history/details/reprint and sale-return flow are implemented; return quantity/condition, refund method, stock and Khata adjustments are covered by disposable-database tests.
 - [ ] **Reports:** sales range/grouping, profit/loss, expense totals and customer statements must match Flutter query results for the same database snapshot.
 - [ ] **Reminders and staff:** preserve reminder status and role-gated staff management; no new permissions model without approval.
-- [ ] **Backup/restore:** full database copy, integrity check, staged restore, active-file pointer, rollback and user-data preservation.
-- [ ] **Offline operation:** all local POS workflows work without internet; sync status must never block local checkout.
+- [x] WPF backup/restore uses verified backups, staged restore and active database pointer; disposable-database backup/restore regression tests pass. Real-store copy acceptance remains separate.
+- [x] WPF POS uses local SQLite and checkout does not depend on network. Google Drive sync is visibly paused and remains disabled until owner approval.
 
 ## 5. Native WPF desktop UI/UX strategy
 
 ### 5.1 Overall shell
 
-- [ ] Native WPF `ShellWindow` with standard Windows title bar/window controls, resizable/maximize/restore/minimize, sensible minimum size, DPI-aware layout and optional system tray.
-- [ ] Persistent left navigation sidebar with icon + label, selected state, role-aware menu items and compact/collapsible option.
-- [ ] Header/status strip for store name, current user/role, database status, sync status, printer status and update notification.
+- [x] Native WPF `MainWindow` shell uses standard Windows title bar/window controls, resizing/maximize/restore and sensible minimum size. Optional system tray is not in current scope.
+- [x] Persistent scrollable left navigation has icon+label actions and role-aware Admin menu visibility; New Sale remains visible to Salesman. Collapsible/compact sidebar is not implemented.
+- [x] Header shows store, signed-in user/role, SQLite status, Drive paused/enabled status, preferred printer availability and update status.
 - [ ] Consistent theme resources, typography, spacing, accessible contrast, keyboard focus visuals, hover/pressed/disabled states and confirmation dialogs.
 - [ ] No mobile-style cards as the primary way to navigate large desktop datasets. Use dense, sortable, filterable DataGrids with row selection and contextual actions.
 
 ### 5.2 Master-detail cashier screen
 
-- [ ] Dashboard opens directly into the POS billing workspace, not an empty dashboard landing page.
-- [ ] Left/master area: persistent scanner/search input, product suggestions, category/stock context and current bill item DataGrid.
-- [ ] Right/detail area: customer/account selector, subtotal, discount controls, grand total, received amount/balance, payment action and checkout.
+- [x] WPF opens directly into the New Sale cashier workspace.
+- [x] Cashier workspace includes persistent scanner/search, product suggestions, stock context and editable cart DataGrid.
+- [x] Cashier workspace includes customer type/account, discount, subtotal/final total, payment mode, received/balance and checkout.
 - [ ] Cart columns: barcode/item, quantity, unit, rate, discount where applicable, line amount; support keyboard edit and clear row selection.
-- [ ] Scanner input receives focus when the cashier workspace opens and after a completed scan/product add, unless the user deliberately moves focus to another control.
-- [ ] New Sale creates a fresh pending bill in the same workspace; pending bill switching is explicit and data-safe.
-- [ ] F2: focus barcode/product search; F4: customer selection; F5: new bill (only when no destructive/active modal action conflicts); Esc: close current dialog/drop-down or cancel current transient action. Add shortcuts for quantity, discount and checkout only after conflict review and document them in Help.
-- [ ] Enter selects the highlighted product suggestion; Up/Down navigate suggestions; repeated barcode scans increment the existing cart line quantity.
-- [ ] Do not install a global keyboard hook. Generic USB HID/keyboard-wedge scanners type into the focused field; minimized/background scanner capture is not safe for a generic keyboard device.
+- [x] Scanner receives initial focus and regains focus after product add/scan and New Sale; deliberate customer/payment field focus is respected.
+- [x] New Sale persists the current pending bill, creates a new bill identity, and restores pending customer/payment/discount details when switching.
+- [x] F2 scanner, F4 customer, F5 new bill, F6 discount, F7 partial received, F8 payment mode, F9/Ctrl+P print, F10 checkout and Esc transient-action shortcuts are implemented.
+- [x] Enter selects exact/highlighted product, arrow keys navigate suggestions, and repeated scans increment the existing barcode row subject to stock.
+- [x] No global keyboard hook is installed; scanner input is foreground-only in the focused cashier field.
 
 ### 5.3 Other windows
 
 - [ ] Inventory, history, purchases, parties, Khata, reports, expenses, reminders and returns use compact toolbar + search/filter row + dense DataGrid + detail/edit dialog.
 - [ ] Use master/detail split panels for customer statement, invoice preview and sync conflicts where it improves workflow.
 - [ ] Use standard WPF DatePicker, ComboBox, validation templates and modal dialogs; retain all current validations and confirmation steps.
-- [ ] Printer screen uses a responsive configuration/preview split: printer selection and paper/configuration on one side, independently scrollable 80mm receipt preview on the other.
+- [x] Printer screen uses a scrollable configuration column and independent receipt preview pane.
 - [ ] DataGrid columns should resize sensibly; avoid fixed widths that clip at 980×650. Provide empty/loading/error states and keyboard-accessible actions.
 
 ## 6. Hardware integration plan
 
 ### 6.1 USB barcode scanners
 
-- [ ] Default: keyboard-wedge/HID scanner sends barcode characters and Enter into the focused POS scanner field. Configure robust suffix handling, debounce/scan completion and prevent ordinary manual typing from being misclassified as a scan.
-- [ ] Maintain scanner focus within the active cashier workflow without stealing focus from another application or capturing unrelated keyboard input.
+- [x] Default foreground keyboard-wedge/HID scanner input uses the focused POS field; 180 ms search debounce, exact-barcode Enter handling and normal manual product search are implemented.
+- [x] Scanner focus returns on app load, after scan/product add/remove, New Sale and checkout; focus is managed only while the WPF cashier app is active.
 - [ ] Optional: serial/COM scanner adapter only for scanners explicitly configured as serial devices; enumerate ports, allow user selection and parse the device's configured terminator.
 - [ ] Test SpeedX SP60D as one sample device, but do not hard-code its VID/PID; generic foreground HID remains model-independent.
-- [ ] Background/minimized capture is not part of generic HID support. Only add it if a dedicated serial interface or documented vendor SDK is available and explicitly tested.
+- [x] Background/minimized capture is intentionally out of scope for generic HID; no global keyboard hook is installed. Optional serial adapter remains unimplemented unless a documented device interface is required.
 
 ### 6.2 80mm ESC/POS thermal printing
 
-- [ ] Use native Windows printer enumeration and Windows spooler APIs. Support normal installed Windows printer queues and a raw ESC/POS path when the printer/driver exposes it.
-- [ ] Build receipt bytes independently of UI using an `EscPosReceiptBuilder`: initialize, code page/encoding, alignment, bold/size, columns, separators, totals, feed and cut commands.
-- [ ] Preserve the current 80mm receipt format, store heading, bill metadata, single-row item descriptions, Qty/Description/Rate/Amount alignment, subtotal, discount, total/net amount, received and balance fields as applicable.
-- [ ] Persist the user's chosen printer identifier in local settings. On restart, restore the exact saved printer; if missing, show unavailable/disconnected and require explicit reselection. Never silently switch printers or claim a connection that was not verified.
-- [ ] Add print preview, test print, paper width/configuration and useful error reporting. Keep PDF save/preview/export separate from thermal print.
+- [x] Native Windows printer queue enumeration/status and RAW spooler ESC/POS output are implemented.
+- [x] `EscPosReceiptBuilder` independently creates ESC/POS bytes with initialize, alignment, bold/size, columns, totals, feed and auto-cutter commands; hardware/code-page acceptance remains pending.
+- [x] 80mm receipt source includes store heading/address/phone, bill/date/time/customer/cashier, Qty/Description/Rate/Amount, subtotal/discount/net total, received/balance/return fields.
+- [x] Preferred Windows printer name is saved per user and restored by exact queue name; missing/offline queues show unavailable and no silent fallback is selected.
+- [x] Printer UI has independent receipt preview scrolling, test print, 80mm width, configurable margins/header/total size, action errors and separate PDF save/open/share. Salesman test-print preferences use the workstation-scoped save path.
 - [ ] Test with the user's Black Copper BC-86AC 80mm printer, including cutter, margins, final-line clipping, encoding, driver and paper alignment. A successful build is not proof of physical print correctness.
 
 ## 7. Google Drive sync, authentication and update architecture
@@ -408,7 +408,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [Windows] Flutter Windows retirement and final cutover
 
-- [ ] Audit and remove remaining Flutter Windows-only UI/window lifecycle hooks in reminders, profit/loss, purchases, inventory, sale returns, backup, cloud sync and sales. Preserve Android workflows and shared Drive-sync/database logic.
+- [x] Flutter Windows runner/UI directory is absent from the integration branch; Android Flutter screens and shared SQLite/Drive code remain, while Windows UI is native WPF.
 - [x] Native WPF update checker source implemented: GitHub latest stable release endpoint, installed-version comparison, one notification per version, manual check and release notes. Real release-feed acceptance remains pending.
 - [x] Native WPF updater source now validates safe .exe asset names, HTTPS GitHub release URLs, declared file size (500 MB cap), SHA-256 and pinned Authenticode; downloads to a unique temporary file with progress/retry, verifies before atomic staging under LocalAppData\\KhanBabaPOS\\Updates, and launches the installer without touching the live app/database/settings/backups. Production download remains disabled until the owner certificate thumbprint is pinned.
 - [ ] Verify full-ledger and period-statement PDF/print on Windows, including date boundaries, Unicode customer/product names and Microsoft Print to PDF.
@@ -698,7 +698,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Implement first-run Admin account provisioning with a forced password setup; no default password is shipped. Login UI requires the owner to create the first Admin password.
 - [x] Store local credential verifier using versioned PBKDF2-HMAC-SHA256 (310,000 iterations, random 16-byte salt) and protect the local credential/audit store with Windows DPAPI CurrentUser scope. No plaintext password is stored.
 - [x] Add local user lifecycle: Admin can create/disable/reset staff accounts; roles are Admin and Salesman; disabling the last active Admin is blocked.
-- [ ] Complete role authorization in every mutating data service. MainWindow navigation/actions are Admin-gated, staff management is Admin-gated, and sale posting verifies the active session and records its actual user ID/display name in existing salesman_uid/salesman_name fields. Audit remaining service entry points before marking role parity complete.
+- [x] WPF mutating-service audit completed: business-data mutations are Admin-only; sale posting verifies and records active session; pending bills and workstation printer preferences have explicit Admin/Salesman scopes; admin navigation is hidden for Salesman.
 - [x] Add login/logout, five-failure temporary lockout, 30-minute sliding session expiry and protected audit events. Login works offline and credentials are scoped to the current Windows account via DPAPI.
 - [x] Add automated tests for first-run provisioning, password verification, role denial, disabled users, last-Admin protection, session expiry and sale attribution. WPF Release build and tests passed in GitHub Actions run 43831153534 (commit 2f2bc1e). [ ] Target-PC login/role acceptance remains required.
 - [x] Added the transactional SQLite v18 merge/conflict/tombstone engine and explicit resolution methods; initial disposable-database tests verify product conflict resolution and protection against deleting a stocked product. [ ] Complete the full Android-parity test matrix and target-PC acceptance before enabling Drive imports.
@@ -746,7 +746,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Duplicate supplier invoice numbers are rejected; invalid pack conversions, mismatched stock units, missing suppliers/products, and retail prices below allocated cost are rejected before commit.
 - [x] Added regression tests for a converted pack invoice with partial payment and for duplicate/invalid invoice rollback.
 - [x] Windows WPF CI passed on commit `96b0f153123ba09ed13ae02602fab326321a3b07` (run `43852607335`): Release build succeeded with 0 warnings and 0 errors; 32 tests passed, 0 failed, 0 skipped.
-- [ ] Add the desktop invoice-entry UI and supplier invoice history/ledger presentation after service tests pass.
+- [x] Native WPF supplier invoice entry UI and supplier invoice history/ledger presentation are implemented; service regression tests passed in WPF run #411.
 
 
 ## Work log — 2026-11-16 (supplier invoice desktop UI)
@@ -759,16 +759,16 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Work log — 2026-11-16 (Owner instruction: complete remaining Khan Baba POS work)
 
-- [ ] **Status: Pending.** Owner ki nayi hidayat: "Jab tak main Windows wala ready artifact try karta hun, aap is app ko ab mukamal kren." Is ka matlab hai ke `integration/wpf-mainline` par Khan Baba POS ke tamam baqi software/development tasks ka audit karke unhein complete karna hai, bina Windows artifact ki owner-side testing ka intezar kiye.
+- [x] **Status: In Progress.** Owner ki hidayat ke mutabiq `integration/wpf-mainline` par pending source-code tasks ka audit aur implementation jari hai; physical Windows acceptance ka intezar kiye baghair code review/implementation ki ja rahi hai.
 - [ ] Sab se pehle tamam pending items, incomplete implementations, build/test failures, platform parity gaps aur release blockers ka source-code aur CI ki bunyaad par audit karna hai. Existing completed features ko dobara ya ghair-zaroori tor par change nahi karna.
 - [ ] Har task ke liye pehle se mojood requirements aur safety conditions barqarar rakhni hain. Android Flutter aur Windows native C#/.NET WPF dono ko maintain karna hai; Windows ke liye WinUI 3 ya Flutter Windows UI dobara introduce nahi karni.
 - [ ] Offline-first SQLite schema, sales, stock, purchases, supplier invoices, returns, Khata, customer balances, discounts, payments, backup/restore, printer/scanner workflows aur existing sync/outbox contracts ko preserve karna hai. Windows Google Drive import/sync filhal disabled hi rahe jab tak us ke tamam safety gates pass na hon.
-- [ ] Pehle se approved "Recall Bill / Edit Previous Bill" feature abhi pending hai: Android aur WPF dono mein Recent/Recall Bills, saved bill items/customer/time details, safe edit/overwrite aur Save as New Bill. Overwrite sirf us bill par mumkin ho jahan return record ya baad ki Khata receipt/payment na ho; warna sirf Save as New Bill. Stock aur Khata ki tabdeeliyan aik SQLite transaction mein hon, failure par original bill mehfooz rahe, discount aur 80mm ESC/POS print flow preserve rahe. Is feature par code se pehle detailed audit aur schema verification lazmi hai.
-- [ ] Supplier invoice desktop UI ke baad WPF Release build aur tamam regression tests chalane hain; CI result aur test counts isi log mein record karne hain.
+- [x] **Recall Bill / Edit Previous Bill implemented:** Android aur WPF dono mein recent bills, safe overwrite aur Save as New Bill; return/later Khata receipt protection, same-second receipt ordering, transactional stock/Khata updates. Android tests passed on both runners; WPF baseline passed, latest WPF refinements await final manual build/test.
+- [x] Supplier invoice desktop UI and history/ledger are implemented; WPF baseline Release build + 41 tests passed in run #411. Latest WPF refinements await final manual validation.
 - [ ] Har implementation se pehle us feature ki tamam user requirements aur acceptance/safety conditions isi `PROJECT_UPDATE.md` mein Roman Urdu mein darj karni hain. Documentation-first commit ke baad hi code changes shuru hon. Har implementation ke baad status aur asal test/build results update karne hain.
 - [ ] Koi live store database, real customer/accounting record ya production backup development test ke liye use/modify nahi karna. Tests disposable database copies par chalane hain.
 - [ ] Owner-side physical Windows laptop, scanner, printer, real backup/restore aur operational acceptance ko software CI se alag pending gates ke tor par report karna hai; inhein bina owner verification ke Completed nahi kehna.
-- [ ] Is broad completion instruction ki implementation abhi shuru nahi hui; yeh entry sirf scope aur work order record karti hai.
+- [x] Broad completion instruction par implementation shuru ho chuki hai; Recall, printer role path, Drive safety gate, updater hardening aur WPF desktop UX updates source mein add kiye gaye hain.
 
 
 ## Work log — 2026-11-16 (Initial remaining-work source audit)
@@ -800,16 +800,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Windows WPF `SalePostingService.UpdateSaleFromRecallAsync(...)` add kiya: backup/schema verification ke baad SQLite transaction mein return/payment safety, stock restore/validation, sale/items update, Khata ledger aur party balance adjustment karta hai.
 - [x] WPF `SalesHistoryService` mein recall dialog ke liye customer ID expose ki aur POS screen par `Recall Bills` button/dialog add kiya. Checkout par existing bill update ya new bill save ka option diya.
 - [x] Windows mein recalled bill ko update karne ke waqt original customer aur customer type change karna allowed nahi; return ya extra receipt/payment record ho to update block hota hai aur Save as New Bill option available rehta hai.
-- [ ] **Validation Pending:** owner ki hidayat ke mutabiq darmiyani build/tests skip kiye gaye. Android Flutter analysis/build, WPF Release build aur regression tests consolidated final pass mein chalane hain. Is waqt in changes ko tested/pass ya production-ready declare nahi kiya ja raha.
-- [ ] **Code review pending:** consolidated compile review mein schema column names, sync tombstones, customer/payment edge cases, return/payment lock checks, discount calculations aur printing flow verify karne hain. Koi test result abhi available nahi.
+- [x] Android analyzer + sync/invoice/Recall regression suite passed on Ubuntu/Windows in run #98. [ ] WPF latest source changes (same-second receipt guard, sidebar/status/navigation and printer role path) await final manual Release build/test.
+- [ ] Partial code review completed for Recall, schema-v18 fixtures, role guards, printer flow and WPF UI; full schema-v18 transaction parity, Drive snapshot update/delete identities and real-store disposable-copy verification remain pending.
 
 
 ## Work item — Native WPF update notification refinement (2026-11-16)
 
-- [ ] **Status: Pending.** WPF app startup par latest stable GitHub release check honi chahiye; draft/prerelease ko ignore karna hai. Installed version se naya version ho to UI mein update status aur release notes show hon.
-- [ ] Har version ke liye notification sirf aik martaba show ho; same version ke liye har app restart par popup spam na ho. Manual "Check for Updates" hamesha current status dikha sake.
-- [ ] Download/install tabhi allow ho jab manifest SHA-256 aur Windows Authenticode signature pinned production certificate se verify ho. Certificate/thumbprint absent ho to download/install ko disabled hi rakhna hai aur user ko clear status dena hai.
-- [ ] Update ke dauran database, settings, invoice files aur backups ko touch nahi karna. Latest-version selection ko GitHub stable release endpoint tak mahdood rakhna hai.
+- [x] Native WPF updater source checks latest stable GitHub release, compares version, provides one-time startup notification and manual check/release notes; live release-feed acceptance remains pending.
+- [x] One-time per-version notification marker and manual Check for Updates are implemented; target-PC release-feed acceptance remains pending.
+- [x] Download/install requires manifest SHA-256 plus pinned Authenticode certificate; production thumbprint intentionally blank, so download/install remains disabled with clear UI status.
+- [x] Updater stages the verified installer separately under LocalAppData Updates and only queries GitHub stable release endpoint; live DB/settings/invoices/backups are not overwritten.
 
 
 ## Work log — 2026-11-16 (Native WPF update notification refinement)
@@ -818,7 +818,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] LocalAppData mein last-notified version save hota hai; aik hi version ka popup har restart par repeat nahi hota.
 - [x] Existing manual Check for Updates action barqarar hai.
 - [x] Installer/download tab tak disabled hai jab tak production signing certificate thumbprint configure nahi hota; SHA-256 aur Authenticode verification gates ko bypass nahi kiya.
-- [ ] Build/CI validation final consolidated pass mein pending hai. Real release feed, one-time popup aur signed installer handoff target PC par verify karna baqi hai.
+- [ ] WPF final build/CI after latest UI/receipt changes, real release-feed acceptance and signed installer handoff remain pending.
 
 
 ## Work log — 2026-11-16 (Recall workflow follow-up)
@@ -837,8 +837,8 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF startup par stable update notification per-version one-time display ke liye LocalAppData marker add kiya; manual update check aur signed-installer safety gate barqarar hai.
 - [x] Recall ke waqt WPF ka existing active pending cart pehle persist hota hai; recalled bill ke liye naya pending-bill identity use hota hai.
 - [ ] **Overall project completion abhi In Progress hai.** Repo mein mazeed pending code/acceptance items mojood hain: Google Drive v3 orchestration/reconciliation (remote import disabled), native updater download/progress/installer signing, WPF full-ledger/period-statement PDF validation, complete screen-by-screen responsive audit, schema/calculation parity, scanner/printer physical acceptance, supplier invoice UI ke baad CI, aur target-PC/owner sign-off.
-- [ ] Owner ki hidayat ke mutabiq abhi intermediate build/test run nahi hua. Android aur WPF ke tamam latest code changes final consolidated pass tak unverified hain. Koi production-ready ya tested claim nahi kiya ja raha.
-- [ ] Live business database ya production backup ko touch nahi kiya gaya.
+- [x] Android Recall/source tests passed on both runners in run #98; WPF baseline build/tests passed in #411. [ ] Latest WPF source changes remain unverified until final manual WPF run; no production-ready claim is made.
+- [x] Live business database and production backup were not used or modified; all new Recall tests use disposable SQLite databases.
 
 
 ## Owner workflow instruction — commit, push aur GitHub Actions cadence (2026-11-17)
@@ -932,7 +932,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Existing Drive reconciliation, invoice-unit conversion and supplier-invoice tests ran in the same workflow and passed on both runners.
 - [x] Removed the sole non-blocking unnecessary-import analyzer info from `test/recall_bill_test.dart` after the successful run.
 - [x] WPF baseline Release build and 41 regression tests passed in run #411 (commit `7bd17117630fddbca7264c028b2bb11824bf0780`); unsigned self-contained Windows x64 test artifact `KhanBabaPOS-Windows-x64-411` uploaded (artifact ID `14305821429`).
-- [ ] WPF same-second receipt-ordering refinement was added after run #411. Re-run WPF Release build/tests and produce the next consolidated Windows x64 artifact only after remaining source review is complete.
+- [ ] WPF same-second receipt-ordering, responsive sidebar, role-aware navigation, cashier status strip and printer test-role refinements were added after run #411. Run the next WPF Release build/tests and create a consolidated Windows x64 test artifact after source review is complete.
 - [ ] Physical Windows laptop/scanner/printer/PDF/backup acceptance and signed production updater remain owner-side release gates.
 
 
