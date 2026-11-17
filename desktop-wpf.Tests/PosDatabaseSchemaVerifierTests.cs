@@ -1302,7 +1302,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             var original = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
-                    customerId, "Partial", 10, 0, false, "Khata", "Local Windows User", "testadmin"),
+                    customerId, "Partial", 10, 0, false, "Khata", "Local Windows User", null),
                 path);
             Assert.Equal(26, original.BalanceDue, 2);
 
@@ -1310,7 +1310,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 original.SaleId,
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 3, 18)],
-                    customerId, "Partial", 20, 10, true, "Khata", "Local Windows User", "testadmin"),
+                    customerId, "Partial", 20, 10, true, "Khata", "Local Windows User", null),
                 path);
 
             Assert.Equal(54, updated.Subtotal, 2);
@@ -1385,12 +1385,12 @@ public sealed class PosDatabaseSchemaVerifierTests
             var original = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 1, 18)],
-                    customerId, "Partial", 5, 0, false, "Khata", "Local Windows User", "testadmin",
+                    customerId, "Partial", 5, 0, false, "Khata", "Local Windows User", null,
                     new DateTime(2026, 11, 16, 10, 0, 0)),
                 path);
             var request = new SaleCheckoutRequest(
                 [new SaleLineInput("WPF-WH-1", 1, 18)],
-                customerId, "Partial", 5, 0, false, "Khata", "Local Windows User", "testadmin");
+                customerId, "Partial", 5, 0, false, "Khata", "Local Windows User", null);
             await service.UpdateSaleFromRecallAsync(original.SaleId, request, path);
 
             await using (var later = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
