@@ -373,7 +373,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ### [URGENT — 2026-11-16] Billing calculations, New Sale and Windows test artifact
 
 - [ ] **Billing calculation audit and completion:** compare WPF checkout with the existing Flutter implementation using the same disposable schema-v18 database and test fixtures. Verify line totals (quantity × rate), subtotal, fixed discount, percentage discount, net/final total, cash received, credit/partial received amount, balance due, customer/Khata ledger entries, stock deduction and transaction rollback. Preserve existing discount behaviour and all Walk-in/Khata/Wholesale customer types.
-- [ ] **Resolve cashier calculation inconsistencies:** reconcile checkout validation with bill preview/receipt calculations, especially Partial payment boundary rules; ensure displayed received/balance values match the values actually posted to SQLite.
+- [x] **Resolve cashier calculation inconsistencies — source/test coverage complete:** checkout and draft preview enforce Partial received amount greater than zero and less than net total; live New Sale summary previews received/due for Cash, Credit and Partial. Fixed-discount and Partial-boundary regression tests verify stored totals and rollback. Owner visual/receipt acceptance remains separate.
 - [ ] **New Sale acceptance:** verify New Sale button and F5 create a clean pending bill without losing the previous bill; scanner focus returns after adding an item and after checkout; repeated barcode scans increment the same cart line; pending bills restore customer type, customer, payment mode, discount mode/value and partial received amount.
 - [x] **Regression tests:** automated tests cover fixed and percentage discounts, Partial payment boundaries (zero/exact/over-total), transaction rollback, stock/Khata values, cashier-owned pending bills and restoration of customer/payment/discount/received/cart fields. Run #418 passed 48/48 tests. Scanner focus/repeated scan visual acceptance remains a target-PC task.
 - [x] **Latest Windows test artifact produced:** run #418 completed WPF Release build, all 48/48 tests, self-contained win-x64 publish and artifact upload. `KhanBabaPOS-Windows-x64-418` (artifact ID `14309197761`, 65.4 MB, SHA-256 `5c60d75497dc2ca11a7b5f4c7e7c9a70d4946806be88fbbd2eb7ac6c257768c7`, expires 2026-12-17). Unsigned owner-test package only; not a production installer/release. Real-PC acceptance and signing remain separate.
@@ -932,20 +932,20 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Existing Drive reconciliation, invoice-unit conversion and supplier-invoice tests ran in the same workflow and passed on both runners.
 - [x] Removed the sole non-blocking unnecessary-import analyzer info from `test/recall_bill_test.dart` after the successful run.
 - [x] WPF baseline Release build and 41 regression tests passed in run #411 (commit `7bd17117630fddbca7264c028b2bb11824bf0780`); unsigned self-contained Windows x64 test artifact `KhanBabaPOS-Windows-x64-411` uploaded (artifact ID `14305821429`).
-- [ ] WPF same-second receipt-ordering, responsive sidebar, role-aware navigation, cashier status strip and printer test-role refinements were added after run #411. Run the next WPF Release build/tests and create a consolidated Windows x64 test artifact after source review is complete.
+- [x] WPF same-second receipt-ordering, responsive sidebar, role-aware navigation, cashier status strip and printer test-role refinements added after #411 were validated in run #418 (48/48 tests) and included in the Windows x64 artifact.
 - [ ] Physical Windows laptop/scanner/printer/PDF/backup acceptance and signed production updater remain owner-side release gates.
 
 
 ## Work log — 2026-11-17 (WPF navigation responsive layout)
 
 - [x] Main WPF navigation sidebar ko 3-row Grid layout mein convert kiya: brand/header aur footer stable rehte hain, jabke tamam navigation actions independently vertical-scrollable hain.
-- [x] 980×650 minimum window par long navigation list footer ko push/clip nahi karegi; horizontal scrolling disabled hai. Final WPF XAML/Release validation consolidated manual run mein pending hai.
+- [x] 980×650 minimum window par long navigation list footer ko push/clip nahi karegi; horizontal scrolling disabled hai. WPF XAML/Release build and tests passed in run #418; actual display acceptance remains owner-side.
 
 
 ## Work log — 2026-11-17 (Printer workstation-role parity)
 
 - [x] Printer Test Print action ko bhi `SaveWorkstationAsync` par shift kiya. Salesman ab printer selection/configuration ke sath test print preferences bhi save kar sakta hai; admin-only general `SaveAsync` security boundary unchanged hai.
-- [ ] Is UI role-path ki WPF compile/regression validation final manual WPF run mein hogi.
+- [x] Is UI role-path ki WPF compile/regression validation run #418 mein pass hui; actual Salesman login/test-print acceptance target PC par pending hai.
 
 - [x] Schema-v18 upgrade audit found and fixed migration ordering for databases older than v7: sale_items and sale_return_items are now created before the v18 stock_unit columns are added. A version-3 legacy-database preservation regression test was added; execution remains for the next manual Android validation milestone.
 
@@ -954,7 +954,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Main Sale workspace header ab active cashier ka display name/role, Google Drive ka actual paused/enabled state aur saved printer queue ki installed/available/unavailable state dikhata hai.
 - [x] Printer status background async load hota hai aur spooler enumeration failure ko local POS startup failure nahi banata; scanner focus ko status lookup se block nahi kiya jata.
-- [ ] Header status strip aur sidebar scrolling ka final WPF XAML/Release validation planned final manual run mein pending hai.
+- [x] Header status strip aur sidebar scrolling ka WPF XAML/Release validation run #418 mein pass hua; target display par visual acceptance abhi pending hai.
 
 
 ## Work log — 2026-11-17 (WPF role-aware navigation)
@@ -963,13 +963,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Admin login par Inventory, History, Purchases, Khata, Parties, Reports, Expenses, Reminders, Drive, Backup, Profit/Loss, Staff aur Settings navigation available rehti hai.
 - [ ] Salesman cashier workflow aur role visibility ka target-PC acceptance final Windows testing mein pending hai.
 
-- [x] Flutter party account delete parity WPF mein add ki: sirf zero-balance aur bilkul transaction-history-free customer/supplier delete ho sakta hai; party tombstone future Drive protocol ke liye record hota hai. Parties UI mein selected-account delete action add kiya; disposable SQLite tests source mein add hain. Manual WPF validation pending hai.
+- [x] Flutter party account delete parity WPF mein add ki: sirf zero-balance aur bilkul transaction-history-free customer/supplier delete ho sakta hai; party tombstone future Drive protocol ke liye record hota hai. Parties UI selected-row delete, balance/history tests and role checks run #418 mein validate hue; actual owner workflow acceptance pending hai.
 
 
 ## Work log — 2026-11-17 (Draft receipt cashier attribution)
 
 - [x] Unposted draft receipt preview ab generic `Local Windows User` ke bajaye active authenticated Windows session ka display name dikhata hai; posted sale attribution ke sath preview consistency barqarar.
-- [ ] Final WPF build/XAML validation pending consolidated manual run.
+- [x] Final WPF build/XAML validation run #418 mein pass hui; actual draft receipt/PDF print acceptance target Windows PC par pending hai.
 
 
 ## Latest code snapshot — 2026-11-17
@@ -977,7 +977,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Source audit: Flutter v18 DDL aur WPF schema verifier ke tamam 17 tables aur har table ke columns exact match karte hain. WPF verifier PKs, required NOT NULL columns, defaults, unique constraints aur foreign-key integrity bhi check karta hai.
 - [x] Legacy migration ordering fix committed: old schema v3-v6 databases mein sale_items aur sale_return_items pehle create honge, phir v18 stock_unit columns add honge. Version-3 preservation test source mein add hai.
 - [x] WPF customer/supplier account delete parity added with zero-balance/no-history guard, Windows-master party tombstone, selected-row UI action, balance/history tests and Admin-only role test.
-- [ ] Latest WPF code after run #411 (same-second receipt guard, responsive/role-aware navigation, cashier/printer status, printer test preference role path and party deletion) still needs one manual Release build/test run. Run #411 is a baseline artifact from before these later WPF changes.
+- [x] Latest WPF code after run #411 (same-second receipt guard, responsive/role-aware navigation, cashier/printer status, printer test preference role path and party deletion) was validated in run #418: Release build and 48/48 tests passed; artifact `KhanBabaPOS-Windows-x64-418` uploaded.
 - [ ] Latest Android code after run #98 includes the v3-to-v18 migration fix and new legacy upgrade test; run the manual Android workflow after this change.
 - [x] WPF workflow path-filtered grouped source/test pushes aur `workflow_dispatch` par chalta hai; Android sync/invoice workflow manual-only hai. Har choti file update push karne ke bajaye related code ko milestone commit mein group karna hai.
 
