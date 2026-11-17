@@ -45,12 +45,19 @@
         </Grid.ColumnDefinitions>
 
         <Border Background="#173B32">
-            <DockPanel Margin="18">
-                <StackPanel DockPanel.Dock="Top" Margin="0,8,0,28">
+            <Grid Margin="18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+<StackPanel Grid.Row="0" Margin="0,8,0,16">
                     <TextBlock Text="KHAN BABA" Foreground="White" FontSize="22" FontWeight="Bold"/>
                     <TextBlock Text="GENERAL STORE" Foreground="#B8D4C8" FontSize="11" FontWeight="SemiBold" Margin="1,3,0,0"/>
                 </StackPanel>
-                <StackPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" CanContentScroll="True">
+<StackPanel>
                     <TextBlock Text="WORKSPACE" Foreground="#A9C4B8" FontSize="10" FontWeight="Bold" Margin="4,0,0,12"/>
                     <Button Content="▣   New Sale" Background="#2D594B" Foreground="White" BorderBrush="#527667" FontWeight="SemiBold" Click="NewSale_Click"/>
                     <Button Content="▤   Inventory" Click="Inventory_Click"/>
@@ -68,11 +75,12 @@
                     <Button Content="↗   Profit / Loss" Click="ProfitLoss_Click"/>
                     <Button Content="⚙   Settings" Click="ComingSoon_Click"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,20,0,4">
+                </ScrollViewer>
+<StackPanel Grid.Row="2" Margin="0,12,0,4">
                     <TextBlock Text="NATIVE WINDOWS CLIENT" Foreground="#B8D4C8" FontSize="10" FontWeight="Bold"/>
                     <TextBlock Text=".NET WPF • Local-first" Foreground="#B8D4C8" FontSize="10" Margin="0,4,0,0"/>
                 </StackPanel>
-            </DockPanel>
+            </Grid></DockPanel>
         </Border>
 
         <Grid Grid.Column="1" Margin="20">

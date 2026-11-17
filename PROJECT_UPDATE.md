@@ -934,3 +934,9 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF baseline Release build and 41 regression tests passed in run #411 (commit `7bd17117630fddbca7264c028b2bb11824bf0780`); unsigned self-contained Windows x64 test artifact `KhanBabaPOS-Windows-x64-411` uploaded (artifact ID `14305821429`).
 - [ ] WPF same-second receipt-ordering refinement was added after run #411. Re-run WPF Release build/tests and produce the next consolidated Windows x64 artifact only after remaining source review is complete.
 - [ ] Physical Windows laptop/scanner/printer/PDF/backup acceptance and signed production updater remain owner-side release gates.
+
+
+## Work log — 2026-11-17 (WPF navigation responsive layout)
+
+- [x] Main WPF navigation sidebar ko 3-row Grid layout mein convert kiya: brand/header aur footer stable rehte hain, jabke tamam navigation actions independently vertical-scrollable hain.
+- [x] 980×650 minimum window par long navigation list footer ko push/clip nahi karegi; horizontal scrolling disabled hai. Final WPF XAML/Release validation consolidated manual run mein pending hai.
