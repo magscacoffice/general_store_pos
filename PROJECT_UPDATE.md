@@ -1046,3 +1046,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] `SalesmanCannotOverwriteAnotherCashiersSaleEvenWhenCallingServiceDirectly` test mein extra closing brace remove ki gayi; test ka intended `try/finally` cleanup structure restore kiya gaya.
 - [ ] Yeh source correction abhi run #412 mein validate nahi hui kyun ke run is fix se pehle ke commit par tha. Final grouped WPF Release/test run mein is test ko verify karna lazmi hai.
 - [ ] Is session ke latest WPF UI changes (startup work-area sizing aur compact New Sale panel) ka XAML/Release/test validation bhi pending hai; koi successful latest artifact abhi claim nahi kiya ja raha.
+
+
+## WPF run #412 failure analysis and correction — 2026-11-17
+
+- [x] Run #412 (commit bb961189b3586116acc7f409e34fef56316242e9): WPF Release application build succeeded with 0 errors; test project compilation failed in PosDatabaseSchemaVerifierTests.cs around line 1607.
+- [x] Root cause: Salesman direct-Recall test had an extra closing brace after the assertion, producing CS1524/CS1519. The current integration branch test source has that extra brace removed.
+- [x] The same test fixture's SQLite connection is now disposed before invoking SalePostingService, avoiding an open-file/backup interaction during the service test.
+- [ ] Corrected WPF test suite and latest code changes have not yet been rerun; manual workflow_dispatch is still required. Do not treat #412 as a passing artifact.
