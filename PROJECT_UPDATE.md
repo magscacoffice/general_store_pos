@@ -1155,3 +1155,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] If the backup file or checksum is missing, invalid or corrupted, Windows creates a fresh verified backup before importing the device snapshot.
 - [x] Added regression coverage for valid backup acceptance and corrupted checksum rejection. Snapshot hash is validated before manifest backup state is changed.
 - [ ] Run grouped WPF Release build/tests after backup integrity verification changes.
+
+
+## Work log — 2026-11-17 (Backup verification compile correction)
+
+- [x] Run #424 found a local-variable name collision in the Drive backup verification branch; the WPF Release build stopped at compile time before tests ran.
+- [x] Renamed the newly created backup path variable to avoid shadowing the existing candidate backup path. No sync semantics changed in this correction.
+- [ ] Re-run WPF Release build/tests and confirm the backup-integrity test passes.
