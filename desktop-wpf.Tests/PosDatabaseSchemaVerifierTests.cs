@@ -1420,4 +1420,17 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+
+    [Fact]
+    public async Task WindowsDriveSyncRemainsDisabledUntilSafetyMatrixAndOwnerAcceptance()
+    {
+        var sync = new WindowsDriveSyncService(TestAccess);
+        sync.StartAutoSync();
+
+        Assert.False(sync.IsEnabled);
+        Assert.Contains("paused", sync.Status.ToLowerInvariant());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sync.ConnectAndSyncAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sync.SyncNowAsync());
+    }
+
 }

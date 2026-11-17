@@ -40,12 +40,19 @@ public sealed class DriveSyncWindow : Window
 
         var root = new StackPanel { Margin = new Thickness(18) };
         root.Children.Add(new TextBlock { Text = "Google Drive — Windows Master", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(23, 59, 50)) });
-        root.Children.Add(new TextBlock { Text = "Windows local database master rahega. Doosre device ke stock/account conflicts par explicit faisla zaroori hai.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 5, 0, 10) });
+        root.Children.Add(new TextBlock { Text = _sync.IsEnabled
+            ? "Windows local database master rahega. Doosre device ke stock/account conflicts par explicit faisla zaroori hai."
+            : "Google Drive upload, download, auto-sync aur conflict resolution filhal band hain. Full v18 safety validation aur owner approval ke baad hi enable honge.",
+            TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 5, 0, 10) });
         root.Children.Add(_status);
 
         var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        actions.Children.Add(Action("Connect & Sync", Connect_Click));
-        actions.Children.Add(Action("Sync Now", Sync_Click));
+        var connect = Action("Connect & Sync", Connect_Click);
+        connect.IsEnabled = _sync.IsEnabled;
+        actions.Children.Add(connect);
+        var syncNow = Action("Sync Now", Sync_Click);
+        syncNow.IsEnabled = _sync.IsEnabled;
+        actions.Children.Add(syncNow);
         actions.Children.Add(Action("Refresh Conflicts", Refresh_Click));
         actions.Children.Add(Action("Disconnect Drive", Disconnect_Click));
         root.Children.Add(actions);
@@ -67,8 +74,12 @@ public sealed class DriveSyncWindow : Window
         root.Children.Add(payloadGrid);
 
         var resolutions = new WrapPanel();
-        resolutions.Children.Add(Action("Keep Windows", KeepWindows_Click));
-        resolutions.Children.Add(Action("Use Other Device", UseRemote_Click));
+        var keepWindows = Action("Keep Windows", KeepWindows_Click);
+        keepWindows.IsEnabled = _sync.IsEnabled;
+        resolutions.Children.Add(keepWindows);
+        var useRemote = Action("Use Other Device", UseRemote_Click);
+        useRemote.IsEnabled = _sync.IsEnabled;
+        resolutions.Children.Add(useRemote);
         root.Children.Add(resolutions);
         Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
         Loaded += async (_, _) => await RefreshConflictsAsync();

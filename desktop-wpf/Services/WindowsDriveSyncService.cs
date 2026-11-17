@@ -16,7 +16,9 @@ namespace KhanBabaPos.Wpf.Services;
 public sealed class WindowsDriveSyncService
 {
     private static readonly byte[] DeviceEntropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.DriveDeviceId.v1");
-    // Keep remote imports paused until the full SQLite v18 parity matrix and owner acceptance pass.
+    // Owner directive: keep ALL Google Drive network activity paused until the
+    // full SQLite v18 parity matrix and explicit owner acceptance are complete.
+    private static readonly bool EnableDriveSync = false;
     private static readonly bool EnableDeviceSnapshotImports = false;
     private readonly AccessService _access;
     private readonly GoogleDriveAuthService _auth = new();
@@ -27,7 +29,9 @@ public sealed class WindowsDriveSyncService
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private DispatcherTimer? _timer;
 
-    public string Status { get; private set; } = "Google Drive not connected";
+    public bool IsEnabled => EnableDriveSync;
+    public string Status { get; private set; } =
+        "Google Drive sync paused until full v18 safety validation and owner acceptance.";
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSyncAtUtc { get; private set; }
     public bool HasSavedCredentials => _auth.HasSavedCredentials;
@@ -42,6 +46,7 @@ public sealed class WindowsDriveSyncService
     public async Task<DriveSyncSummary> ConnectAndSyncAsync(string? databasePath = null, CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
+        EnsureDriveSyncEnabled();
         await _auth.GetAccessTokenAsync(promptForLogin: true, cancellationToken);
         StartAutoSync();
         return await SyncNowAsync(databasePath, cancellationToken);
@@ -50,6 +55,7 @@ public sealed class WindowsDriveSyncService
     public async Task<DriveSyncSummary> SyncNowAsync(string? databasePath = null, CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
+        EnsureDriveSyncEnabled();
         await _syncGate.WaitAsync(cancellationToken);
         try
         {
@@ -173,6 +179,7 @@ public sealed class WindowsDriveSyncService
     public async Task ResolveConflictAsync(long conflictId, bool useRemote, string? databasePath = null, CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
+        EnsureDriveSyncEnabled();
         await _merge.ResolveConflictAsync(conflictId, useRemote,
             databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
         var count = (await GetPendingConflictsAsync(databasePath, cancellationToken)).Count;
@@ -190,6 +197,12 @@ public sealed class WindowsDriveSyncService
 
     public void StartAutoSync()
     {
+        if (!EnableDriveSync)
+        {
+            StopAutoSync();
+            SetStatus("Google Drive sync paused until full v18 safety validation and owner acceptance. Local POS remains available offline.");
+            return;
+        }
         if (!HasSavedCredentials || _timer is not null || _access.CurrentSession?.Role != AccessRole.Admin) return;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
         _timer.Tick += async (_, _) =>
@@ -239,6 +252,12 @@ public sealed class WindowsDriveSyncService
         File.WriteAllBytes(temporary, encrypted);
         File.Move(temporary, path);
         return id;
+    }
+
+    private static void EnsureDriveSyncEnabled()
+    {
+        if (!EnableDriveSync)
+            throw new InvalidOperationException("Google Drive sync abhi paused hai. Pehle full SQLite v18 regression matrix aur owner acceptance complete honi zaroori hai.");
     }
 
     private void SetStatus(string value)
