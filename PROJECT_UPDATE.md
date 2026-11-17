@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Audited base / integration:** `main` at `2dbbf9ee4e89a29b69726ac33531c0b15c5f13de` (2026-11-15); WPF source and tracker updates are on `integration/wpf-mainline` and Draft PR #5, not yet merged to main.
-> **Current status (2026-11-17):** Android Flutter Recall/sync/invoice analyzer and regression tests passed on Ubuntu + Windows in Actions #98; four new disposable-SQLite Recall tests include same-second receipt ordering. WPF baseline Release build and 41/41 tests passed in Actions #411 and uploaded unsigned test artifact #411, but newer WPF changes (Recall same-second/ownership guards, Sales History customer mapping and cashier UID filtering, cashier-scoped pending bills without schema change, responsive/role-aware navigation, cashier status strip, printer Salesman test-print fix and draft cashier attribution) still require one final WPF Release/test run. Windows Google Drive sync has now been enabled in source after the owner's explicit approval (2026-11-17); Firebase business sync remains excluded. Real-account OAuth, Android round-trip and owner-side acceptance remain pending. Native updater source is implemented but download/install remains disabled until the production signing certificate/thumbprint is supplied. Physical Windows, SpeedX SP60D, BC-86AC printer/cutter, PDF/backup acceptance and owner sign-off remain pending. All work stays on `integration/wpf-mainline`; do not merge to main.
+> **Current status (2026-11-17):** Latest native WPF Release build/test passed on Actions run #425 (51/51 tests) and produced self-contained test artifact `KhanBabaPOS-Windows-x64-425` (artifact ID `14310647304`, SHA-256 `6c0528d286841c3cd50e7defb31c6e13820bef591f64c9e01a1136235ebb1761`, expires 2026-12-17). Windows Google Drive sync is enabled in source after explicit owner approval. It uses OAuth/DPAPI, Windows-master snapshots, schema-v2 hash validation, all-collection transactional import, explicit conflict review, per-snapshot verified pre-merge backups and two-minute offline retry. Target-PC OAuth/Android round-trip and physical acceptance are still pending. The Windows test ZIP is unsigned and is not a production installer. Native updater install remains blocked until the owner provides a production signing certificate/thumbprint. SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and full Flutter/WPF parity acceptance remain owner-side gates. All work stays on `integration/wpf-mainline`; do not merge to main.
 
 ## Immediate owner priority — Windows cashier-first operation (2026-11-16)
 
@@ -62,7 +62,7 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 | `sale_return_screen.dart` | `SaleReturnWindow.cs`, `Services/SaleReturnService.cs` | Return/refund transaction source implemented; disposable-database integration tests remain pending |
 | `return_history_screen.dart` | `Views/ReturnHistoryWindow.xaml` | Return list, details and audit trail |
 | `reminders_screen.dart` | `RemindersWindow.cs`, `Services/ReminderService.cs` | Reminder create/list/complete source implemented |
-| `salesmen_management_screen.dart` | WPF staff/access window — pending | Preserve existing role/access rules; do not invent a new local identity model or Firebase business sync |
+| `salesmen_management_screen.dart` | `StaffManagementWindow.cs`, `Services/AccessService.cs` | Native staff/access source and role-gated mutation guards implemented; real cashier role/permissions acceptance remains pending |
 | `printer_screen.dart` | `PrinterInvoiceWindow.cs`, `Services/PrinterSettingsService.cs` | Printer queue selection/persistence, 80mm ESC/POS test/receipt source, invoice preview and PDF save/open implemented; physical BC-86AC acceptance pending |
 | `backup_screen.dart` | `BackupRestoreWindow.cs`, `Services/DatabaseBackupService.cs` | Verified backup and staged restore with SHA-256, schema validation and atomic active-pointer switch implemented and tested |
 | `cloud_sync_screen.dart` | WPF Cloud Sync window/service — implemented in source | Native Drive connection/sync window, pending-conflict comparison and Keep Windows / Use Other Device actions added; target-PC Google OAuth and offline acceptance remain pending |
@@ -199,14 +199,15 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 
 ## 7. Google Drive sync, authentication and update architecture
 
-- [ ] Port the existing Drive API folder/file/snapshot protocol exactly: device identity, schema version, snapshot hash/checksum, upload/download ordering, Windows-master semantics, pre-merge backup, idempotent processing, conflict records, alias mapping, tombstones and ignored tombstones.
-- [ ] Keep the current conflict decision explicit: Keep Windows / Use Other Device. Do not silently overwrite newer records.
-- [ ] Port two-minute periodic sync and connectivity-aware retry only after local database transaction locking and cancellation are safely designed for WPF.
-- [ ] Store refresh/access credentials using Windows DPAPI or Windows Credential Manager; never store secrets in source, settings JSON or logs.
-- [ ] Reuse the existing approved Google OAuth client/configuration and GitHub secret handling. Verify authorization-code flow and refresh-token behaviour on a real Windows machine.
-- [ ] Windows business data stays in local SQLite + Drive snapshot; no Firebase/Firestore business-data sync is introduced.
+- [x] Port the existing Drive API folder/file/snapshot protocol: device identity, schema-v2 envelope/hash validation, Windows-master upload/import order, idempotent processing, conflict records, alias mapping, tombstones and ignored tombstones. WPF round-trip regression covers products, parties, sales, sale items, purchases, Khata receipts, expenses, reminders and returns.
+- [x] Keep the conflict decision explicit: Keep Windows / Use Other Device. Conflicting stock/pricing/account values are not silently overwritten; Admin review is required.
+- [x] Implement two-minute periodic sync, connectivity-aware retry, cancellation and a single-flight sync gate for WPF.
+- [x] Store refresh/access credentials using Windows DPAPI for the current Windows user; no token is written in plain text to settings or logs.
+- [x] Reuse the existing approved Google OAuth client configuration and PKCE authorization-code flow; optional client secret is read from the Windows environment, never committed.
+- [ ] Verify authorization-code flow, refresh-token renewal/revocation and separate Android-device round-trip on a real Windows machine.
+- [x] Windows business data stays in local SQLite + Drive snapshot; no Firebase/Firestore business-data sync is introduced.
 - [ ] Port stable update detection, SHA-256 verification and staged update handoff. Installer/update must preserve SQLite, settings, invoice images and backups.
-- [ ] Document online-only operations clearly; app must start and sell offline even if Google Drive/update endpoints are unavailable.
+- [x] Document online-only Drive/update operations; ordinary POS work remains local-first and does not require internet. Target-PC offline acceptance remains pending.
 
 ## 8. Proposed WPF solution structure
 
@@ -1162,3 +1163,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #424 found a local-variable name collision in the Drive backup verification branch; the WPF Release build stopped at compile time before tests ran.
 - [x] Renamed the newly created backup path variable to avoid shadowing the existing candidate backup path. No sync semantics changed in this correction.
 - [ ] Re-run WPF Release build/tests and confirm the backup-integrity test passes.
+
+
+## Work log — 2026-11-17 (Latest Drive safety build #425)
+
+- [x] Run #425 passed WPF Release build and 51/51 automated tests after adding backup integrity verification. A recorded pre-merge backup is reused only when its snapshot hash matches, its SHA-256 sidecar verifies, schema-v18 validation passes and SQLite integrity_check returns ok; otherwise a new backup is created before import.
+- [x] Latest self-contained Windows x64 test artifact: `KhanBabaPOS-Windows-x64-425`, artifact ID `14310647304`, size 68,597,130 bytes, SHA-256 `6c0528d286841c3cd50e7defb31c6e13820bef591f64c9e01a1136235ebb1761`, expires 2026-12-17. Run: https://github.com/magscacoffice/general_store_pos/actions/runs/44044130155.
+- [ ] On the target Windows PC, Admin must complete Google OAuth and test Drive sync using a disposable database copy before using a live store database.
+- [ ] Complete same-fixture Flutter/WPF row-by-row parity and owner-side scanner, printer, PDF, display/DPI and backup/restore acceptance.
+- [ ] Production installer/signing and merge to main remain blocked until the required owner gates are satisfied.
