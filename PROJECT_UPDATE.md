@@ -955,3 +955,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Main Sale workspace header ab active cashier ka display name/role, Google Drive ka actual paused/enabled state aur saved printer queue ki installed/available/unavailable state dikhata hai.
 - [x] Printer status background async load hota hai aur spooler enumeration failure ko local POS startup failure nahi banata; scanner focus ko status lookup se block nahi kiya jata.
 - [ ] Header status strip aur sidebar scrolling ka final WPF XAML/Release validation planned final manual run mein pending hai.
+
+
+## Work log — 2026-11-17 (WPF role-aware navigation)
+
+- [x] Sidebar mein New Sale sab staff ke liye visible rahega; tamam Admin-only modules Salesman login par hide honge. Existing click-handler/service authorization checks bhi barqarar hain, is liye UI visibility security boundary ka substitute nahi.
+- [x] Admin login par Inventory, History, Purchases, Khata, Parties, Reports, Expenses, Reminders, Drive, Backup, Profit/Loss, Staff aur Settings navigation available rehti hai.
+- [ ] Salesman cashier workflow aur role visibility ka target-PC acceptance final Windows testing mein pending hai.

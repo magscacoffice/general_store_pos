@@ -44,6 +44,9 @@ public partial class MainWindow : Window
         _driveSync.StartAutoSync();
         Closed += (_, _) => _driveSync.StopAutoSync();
         InitializeComponent();
+        AdminNavigationPanel.Visibility = session.Role == AccessRole.Admin
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         DataContext = this;
 
         SaleTypeBox.Items.Add("Walk-in");
