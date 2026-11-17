@@ -22,7 +22,8 @@ public sealed class DriveSnapshotMergeService
         string databasePath,
         bool applyMasterState = false,
         bool detectConflicts = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool autoResolveConflictsKeepWindows = false)
     {
         AccessService.RequireCurrentAdmin();
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -80,12 +81,15 @@ public sealed class DriveSnapshotMergeService
                 insert.Transaction = tx;
                 insert.CommandText = """
                     INSERT OR REPLACE INTO drive_sync_conflicts
-                    (source_device_id,snapshot_hash,entity_type,entity_key,local_payload,remote_payload,status,created_at)
-                    VALUES($device,$hash,$type,$key,$local,$remote,'pending',$created);
+                    (source_device_id,snapshot_hash,entity_type,entity_key,local_payload,remote_payload,status,resolution,resolved_at,created_at)
+                    VALUES($device,$hash,$type,$key,$local,$remote,$status,$resolution,$resolved,$created);
                     """;
                 Add(insert, ("$device", sourceDeviceId), ("$hash", snapshot.SnapshotHash),
                     ("$type", type), ("$key", key), ("$local", JsonSerializer.Serialize(local)),
                     ("$remote", JsonSerializer.Serialize(remote)),
+                    ("$status", autoResolveConflictsKeepWindows ? "resolved" : "pending"),
+                    ("$resolution", autoResolveConflictsKeepWindows ? "keep_local" : DBNull.Value),
+                    ("$resolved", autoResolveConflictsKeepWindows ? DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture) : DBNull.Value),
                     ("$created", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
                 await insert.ExecuteNonQueryAsync(cancellationToken);
                 conflicts++;
