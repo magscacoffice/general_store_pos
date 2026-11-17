@@ -113,11 +113,14 @@ public sealed class WindowsDriveSyncService
                     var backupName = manifest.GetPreMergeBackup(validated.DeviceId);
                     var backupExists = !string.IsNullOrWhiteSpace(backupName) &&
                                        File.Exists(Path.Combine(backupDirectory, backupName));
-                    if (!backupExists)
+                    var backupMatchesSnapshot = manifest.HasPreMergeBackupForSnapshot(
+                        validated.DeviceId, validated.SnapshotHash);
+                    if (!backupExists || !backupMatchesSnapshot)
                     {
-                        SetStatus($"Creating safety backup before importing {validated.DeviceId}...");
+                        SetStatus($"Creating verified safety backup before importing {validated.DeviceId}...");
                         var backupPath = await _backups.CreateBackupAsync(path, backupDirectory, cancellationToken);
-                        manifest.SetPreMergeBackup(validated.DeviceId, Path.GetFileName(backupPath));
+                        manifest.SetPreMergeBackup(validated.DeviceId,
+                            Path.GetFileName(backupPath), validated.SnapshotHash);
                     }
     
                     SetStatus($"Merging records from {validated.DeviceId}...");

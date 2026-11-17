@@ -1201,8 +1201,11 @@ public sealed class PosDatabaseSchemaVerifierTests
     {
         var manifest = DriveMasterManifest.Empty("windows-device-1");
         const string deviceHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        manifest.SetPreMergeBackup("android-device-1", "drive-premerge-android-device-1.db");
+        manifest.SetPreMergeBackup("android-device-1", "drive-premerge-android-device-1.db", deviceHash);
         Assert.Equal("drive-premerge-android-device-1.db", manifest.GetPreMergeBackup("android-device-1"));
+        Assert.Equal(deviceHash, manifest.GetPreMergeBackupHash("android-device-1"));
+        Assert.True(manifest.HasPreMergeBackupForSnapshot("android-device-1", deviceHash));
+        Assert.False(manifest.HasPreMergeBackupForSnapshot("android-device-1", new string('b', 64)));
         Assert.False(manifest.IsProcessed("android-device-1", deviceHash));
 
         manifest.MarkProcessed("android-device-1", deviceHash);
@@ -1220,7 +1223,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var manifest = DriveMasterManifest.Empty("windows-device-1");
         const string deviceHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         manifest.MarkProcessed("android-device-1", deviceHash);
-        manifest.SetPreMergeBackup("android-device-1", "backup-android-device-1.db");
+        manifest.SetPreMergeBackup("android-device-1", "backup-android-device-1.db", deviceHash);
 
         var data = new Dictionary<string, object?>
         {
@@ -1240,6 +1243,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         Assert.Equal("windows-device-1", restored.MasterDeviceId);
         Assert.True(restored.IsProcessed("android-device-1", deviceHash));
         Assert.Equal("backup-android-device-1.db", restored.GetPreMergeBackup("android-device-1"));
+        Assert.Equal(deviceHash, restored.GetPreMergeBackupHash("android-device-1"));
         Assert.DoesNotContain(Environment.UserName, json, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("backup-android-device-1.db", json);
     }

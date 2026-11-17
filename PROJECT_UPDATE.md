@@ -1137,3 +1137,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Changed the disposable test fixture to use a strongly typed SQLite transaction; no production database or sync logic changed in this correction.
 - [ ] Re-run grouped WPF Release/tests and confirm the all-collections Drive round-trip test passes.
 - [x] Restored the previously added live Drive status indicator in MainWindow.xaml.cs; the round-trip test commit had been built on an older base tree and this correction preserves the status display.
+
+
+## Work log — 2026-11-17 (Snapshot-scoped pre-merge backups)
+
+- [x] Audit found the prior Drive manifest reused one backup filename per device even when a newer snapshot arrived. The service now records the snapshot SHA-256 associated with each device's pre-merge backup.
+- [x] A new snapshot hash creates a fresh verified backup before merge; retrying the same pending snapshot reuses that same backup and avoids creating a new backup every two-minute poll. Older manifests without backup hashes are treated safely as needing a fresh backup.
+- [x] Added manifest tests for snapshot-to-backup hash binding and round-trip persistence. The new field is additive; existing processedSnapshots/preMergeBackups fields and schema-v2 snapshot contract remain unchanged.
+- [x] Run #422 passed WPF Release build and 51/51 tests, including the full disposable schema-v18 Drive round-trip test. Artifact: KhanBabaPOS-Windows-x64-422 (artifact ID 14310676128, SHA-256 1532f9f202714949d8e8267c010817761cfa4fda408623c977daa95bd637c67f, expires 2026-12-17).
+- [ ] Re-run grouped WPF Release/tests after the snapshot-scoped backup change.
+- [ ] Correct test-count note: run #420 passed 50/50 tests (not 52/52); run #422 passed 51/51.
