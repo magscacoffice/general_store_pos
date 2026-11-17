@@ -1565,4 +1565,51 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
 
+    [Fact]
+    public async Task SalesmanCannotOverwriteAnotherCashiersSaleEvenWhenCallingServiceDirectly()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        var accessPath = Path.Combine(directory, "recall-salesman-access.dat");
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
+            await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await db.OpenAsync();
+                await using var command = db.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO sales(total_amount,discount,final_amount,payment_type,customer_id,customer_type,
+                        received_amount,balance_due,sync_id,customer_sync_id,date,salesman_uid,salesman_name)
+                    VALUES(18,0,18,'Cash',$customer,'Khata',18,0,'other-cashier-sale','history-party',
+                        '2026-11-16 10:00:00','salesman-2','Cashier Two');
+                    SELECT last_insert_rowid();
+                    """;
+                command.Parameters.AddWithValue("$customer", customerId);
+                var saleId = Convert.ToInt32(await command.ExecuteScalarAsync());
+
+                var access = new AccessService(accessPath);
+                access.ProvisionFirstAdmin("testadmin", "Test Admin", "TestPassword!2026");
+                access.CreateStaff("cashier-one", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
+                var session = access.Authenticate("cashier-one", "CashierPass!2026");
+                AccessService.RegisterProcess(access);
+
+                var service = new SalePostingService(access);
+                var request = new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 1, 22)],
+                    customerId, "Cash", null, 0, false, "Khata",
+                    session.DisplayName, session.UserId);
+
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                    () => service.UpdateSaleFromRecallAsync(saleId, request, path));
+            }
+        }
+        finally
+        {
+            AccessService.RegisterProcess(TestAccess);
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+
 }

@@ -264,7 +264,7 @@ public sealed class SalePostingService
         {
             await using var oldCommand = connection.CreateCommand();
             oldCommand.Transaction = transaction;
-            oldCommand.CommandText = "SELECT customer_id, COALESCE(customer_type,'Walk-in'), COALESCE(payment_type,'Cash'), COALESCE(total_amount,0), COALESCE(discount,0), COALESCE(final_amount,0), COALESCE(received_amount,0), COALESCE(balance_due,0), date, sync_id, customer_sync_id FROM sales WHERE id=$id LIMIT 1;";
+            oldCommand.CommandText = "SELECT customer_id, COALESCE(customer_type,'Walk-in'), COALESCE(payment_type,'Cash'), COALESCE(total_amount,0), COALESCE(discount,0), COALESCE(final_amount,0), COALESCE(received_amount,0), COALESCE(balance_due,0), date, sync_id, customer_sync_id, COALESCE(salesman_uid,'') FROM sales WHERE id=$id LIMIT 1;";
             oldCommand.Parameters.AddWithValue("$id", saleId);
             await using var oldReader = await oldCommand.ExecuteReaderAsync(cancellationToken);
             if (!await oldReader.ReadAsync(cancellationToken)) throw new InvalidOperationException("Original bill nahi mila.");
@@ -273,6 +273,7 @@ public sealed class SalePostingService
             var oldDate = oldReader.GetString(8);
             var oldSaleSync = oldReader.IsDBNull(9) ? null : oldReader.GetString(9);
             var oldCustomerSync = oldReader.IsDBNull(10) ? null : oldReader.GetString(10);
+            var oldCashierUid = oldReader.GetString(11);
             var oldTotal = oldReader.GetDouble(3);
             var oldDiscount = oldReader.GetDouble(4);
             var oldFinal = oldReader.GetDouble(5) > 0 || oldTotal <= 0 ? oldReader.GetDouble(5) : Math.Max(0, oldTotal-oldDiscount);
@@ -280,6 +281,9 @@ public sealed class SalePostingService
             var oldDue = oldReader.GetDouble(7) > 0 ? oldReader.GetDouble(7) :
                 oldReader.GetString(2) is "Khata" or "Partial" ? Math.Max(0, oldFinal-oldReceived) : 0;
             await oldReader.DisposeAsync();
+            if (session.Role == AccessRole.Salesman &&
+                !string.Equals(oldCashierUid, session.UserId, StringComparison.Ordinal))
+                throw new UnauthorizedAccessException("Salesman sirf apne banaye huay bill ko Recall/Update kar sakta hai. Admin se rabta karein.");
             if (oldSaleSync is null || oldSaleSync.Length == 0) throw new InvalidOperationException("Original bill sync identity missing hai.");
             if (oldCustomerId != request.CustomerId || oldCustomerType != request.CustomerType)
                 throw new InvalidOperationException("Existing bill ka customer/type change nahi ho sakta. Save as New Bill karein.");

@@ -988,3 +988,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Sale history records mein authenticated salesman_uid expose hoti hai. Recall list Admin ko tamam bills aur Salesman ko sirf apni UID ke bills dikhati hai; service filter display name ke bajaye stable user ID use karta hai.
 - [x] Disposable schema-v18 regression test add kiya: Khata customer name, Walk-in name, multiple salesman records aur Admin-vs-Salesman recall scope verify karta hai.
 - [ ] WPF final manual Release build/test mein is history fix aur nayi regression test ko validate karna hai.
+
+
+## Work log — 2026-11-17 (Recall cashier ownership enforcement)
+
+- [x] Salesman Recall list filter ke ilawa SalePostingService mein bhi ownership enforce hoti hai: Salesman sirf apni authenticated salesman_uid wali sale overwrite kar sakta hai; Admin kisi bhi bill ko update kar sakta hai.
+- [x] Direct service call se doosre cashier ki sale update karne ki koshish bhi UnauthorizedAccessException se reject hoti hai; UI filter ko security boundary nahi banaya gaya.
+- [x] Disposable SQLite regression test add kiya jo doosre cashier ki sale par direct overwrite reject hona verify karta hai.
+- [ ] WPF final manual Release build/test mein is service guard aur regression test ko validate karna hai.
