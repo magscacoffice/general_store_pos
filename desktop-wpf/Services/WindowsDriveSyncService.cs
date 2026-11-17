@@ -16,10 +16,11 @@ namespace KhanBabaPos.Wpf.Services;
 public sealed class WindowsDriveSyncService
 {
     private static readonly byte[] DeviceEntropy = Encoding.UTF8.GetBytes("KhanBabaPOS.Windows.DriveDeviceId.v1");
-    // Owner directive: keep ALL Google Drive network activity paused until the
-    // full SQLite v18 parity matrix and explicit owner acceptance are complete.
-    private static readonly bool EnableDriveSync = false;
-    private static readonly bool EnableDeviceSnapshotImports = false;
+    // Owner explicitly approved enabling Windows-master Google Drive sync.
+    // All imports still pass envelope/hash/schema validation and transactional
+    // merge; a verified pre-merge backup is required before any import.
+    private static readonly bool EnableDriveSync = true;
+    private static readonly bool EnableDeviceSnapshotImports = true;
     private readonly AccessService _access;
     private readonly GoogleDriveAuthService _auth = new();
     private readonly GoogleDriveApiClient _drive;
@@ -31,7 +32,7 @@ public sealed class WindowsDriveSyncService
 
     public bool IsEnabled => EnableDriveSync;
     public string Status { get; private set; } =
-        "Google Drive sync paused until full v18 safety validation and owner acceptance.";
+        "Google Drive is enabled. Connect as Admin to start the Windows-master sync.";
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSyncAtUtc { get; private set; }
     public bool HasSavedCredentials => _auth.HasSavedCredentials;
@@ -151,9 +152,7 @@ public sealed class WindowsDriveSyncService
             var remaining = await _merge.GetPendingConflictsAsync(path, cancellationToken);
             pendingConflicts = remaining.Count;
             var summary = new DriveSyncSummary(imported, skipped, pendingConflicts, LastSyncAtUtc.Value);
-            SetStatus(!EnableDeviceSnapshotImports
-                ? $"Windows master snapshot uploaded. {skipped} other-device snapshot(s) were not imported; imports are paused pending full v18 regression and owner acceptance."
-                : pendingConflicts > 0
+            SetStatus(pendingConflicts > 0
                     ? $"Windows master synced. {pendingConflicts} conflict(s) require Admin review."
                     : $"Windows master synced successfully at {LastSyncAtUtc.Value.LocalDateTime:t}.");
             return summary;
@@ -200,7 +199,7 @@ public sealed class WindowsDriveSyncService
         if (!EnableDriveSync)
         {
             StopAutoSync();
-            SetStatus("Google Drive sync paused until full v18 safety validation and owner acceptance. Local POS remains available offline.");
+            SetStatus("Google Drive is enabled; connect as Admin to authorize sync. Local POS remains available offline.");
             return;
         }
         if (!HasSavedCredentials || _timer is not null || _access.CurrentSession?.Role != AccessRole.Admin) return;
@@ -257,7 +256,7 @@ public sealed class WindowsDriveSyncService
     private static void EnsureDriveSyncEnabled()
     {
         if (!EnableDriveSync)
-            throw new InvalidOperationException("Google Drive sync abhi paused hai. Pehle full SQLite v18 regression matrix aur owner acceptance complete honi zaroori hai.");
+            throw new InvalidOperationException("Google Drive sync is disabled in this build.");
     }
 
     private void SetStatus(string value)

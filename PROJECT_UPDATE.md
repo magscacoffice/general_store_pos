@@ -1099,3 +1099,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #418 passed WPF Release build and 48/48 regression tests; self-contained win-x64 artifact uploaded: `KhanBabaPOS-Windows-x64-418` (artifact ID `14309197761`, SHA-256 `5c60d75497dc2ca11a7b5f4c7e7c9a70d4946806be88fbbd2eb7ac6c257768c7`, expires 2026-12-17).
 - [ ] Remaining billing parity proof: run identical representative fixture data through Flutter and WPF and compare resulting SQLite rows/reports byte-for-byte or field-by-field. Source review and WPF regression tests alone do not replace this cross-runtime fixture comparison.
 - [ ] Owner must test the latest ZIP on the target Windows laptop using a disposable database copy. Confirm actual display/DPI fit, no-scroll New Sale, barcode focus/repeated scans, printer/PDF and backup/restore.
+
+
+## Work log — 2026-11-17 (Owner approval: enable Windows Google Drive sync)
+
+- [x] Owner explicitly approved enabling Google Drive sync and completing remaining Windows code; the previous owner-approval pause is lifted.
+- [x] Enabled the Windows-master Drive upload/download and device-snapshot import switches in WPF. Firebase/Firestore remains excluded from Windows business-data sync.
+- [x] Added a first-connect confirmation explaining Windows-master upload, remote-device import, verified pre-merge backup and Admin conflict review.
+- [x] Added WPF regression coverage for remote product conflict detection, Keep Windows resolution/idempotent replay, and explicit Use Other Device resolution.
+- [ ] GitHub Actions must pass the grouped Release build and complete WPF test suite before this code is considered validated.
+- [ ] On the target Windows PC, Admin must connect the Google account through the app's OAuth browser flow; validate first sync with a disposable database copy and confirm the correct Google Drive folder/files.
+- [ ] Complete full cross-runtime fixture parity for sales, sale items, purchases, receipts/Khata, returns, tombstones, aliases and repeated sync before production use.
+- [ ] Offline retry, token refresh/revocation, multi-device conflict review and Android round-trip must be accepted on real devices. Local POS operations must continue when Drive is unavailable.
+- [ ] This code change does not authorize production signing, installer release, main merge or deletion of existing Drive snapshots/backups.

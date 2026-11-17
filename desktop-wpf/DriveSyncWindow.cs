@@ -42,7 +42,7 @@ public sealed class DriveSyncWindow : Window
         root.Children.Add(new TextBlock { Text = "Google Drive — Windows Master", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(23, 59, 50)) });
         root.Children.Add(new TextBlock { Text = _sync.IsEnabled
             ? "Windows local database master rahega. Doosre device ke stock/account conflicts par explicit faisla zaroori hai."
-            : "Google Drive upload, download, auto-sync aur conflict resolution filhal band hain. Full v18 safety validation aur owner approval ke baad hi enable honge.",
+            : "Google Drive sync is disabled in this build.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 5, 0, 10) });
         root.Children.Add(_status);
 
@@ -111,6 +111,9 @@ public sealed class DriveSyncWindow : Window
     private async void Connect_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdmin()) return;
+        if (MessageBox.Show(
+                "Google Drive par Windows database snapshot upload hoga aur doosre connected device ke records import/merge honge. Merge se pehle verified safety backup banega; stock aur account balance ke conflicts ko Admin review karega. Kya aap continue karna chahte hain?",
+                Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         await RunAsync(() => _sync.ConnectAndSyncAsync());
         await RefreshConflictsAsync();
     }

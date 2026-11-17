@@ -1763,4 +1763,120 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
 
+
+    private static ValidatedDriveSnapshot CreateDriveProductSnapshot(string name, long quantity, string hash)
+    {
+        var product = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["name"] = name,
+            ["barcode"] = "CURRENT-1",
+            ["price"] = 12d,
+            ["purchasePrice"] = 5d,
+            ["wholesalePrice"] = 10d,
+            ["damaged_quantity"] = 0L,
+            ["quantity"] = quantity,
+            ["is_active"] = 1L,
+            ["stock_unit"] = "pcs"
+        };
+        var data = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["products"] = new List<object?> { product },
+            ["parties"] = new List<object?>(),
+            ["sales"] = new List<object?>(),
+            ["sale_items"] = new List<object?>(),
+            ["purchases"] = new List<object?>(),
+            ["khata_transactions"] = new List<object?>(),
+            ["expenses"] = new List<object?>(),
+            ["reminders"] = new List<object?>(),
+            ["sale_returns"] = new List<object?>(),
+            ["sale_return_items"] = new List<object?>(),
+            ["tombstones"] = new List<object?>()
+        };
+        return new ValidatedDriveSnapshot("android-device", hash, data, "{}");
+    }
+
+    private static async Task<string> CreateDriveMergeFixtureAsync()
+    {
+        var source = await CreateFixtureAsync();
+        var directory = Path.Combine(Path.GetTempPath(), "khan-baba-drive-merge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory, "khan_baba_pos.db");
+        File.Copy(source, target);
+        File.Delete(source);
+        return target;
+    }
+
+    [Fact]
+    public async Task DriveMergeCreatesConflictAndKeepWindowsPreservesLocalStock()
+    {
+        var path = await CreateDriveMergeFixtureAsync();
+        try
+        {
+            await AddProductAsync(path, "Local Sugar", "CURRENT-1");
+            var merge = new DriveSnapshotMergeService();
+            var snapshot = CreateDriveProductSnapshot("Remote Sugar", 1, new string('a', 64));
+
+            var result = await merge.MergeAsync(snapshot, "android-device", path,
+                applyMasterState: false, detectConflicts: true);
+
+            Assert.Equal(1, result.PendingConflicts);
+            var conflicts = await merge.GetPendingConflictsAsync(path);
+            var conflict = Assert.Single(conflicts);
+            Assert.Equal("product", conflict.EntityType);
+
+            await merge.ResolveConflictAsync(conflict.Id, useRemote: false, path);
+            Assert.Empty(await merge.GetPendingConflictsAsync(path));
+
+            await merge.MergeAsync(snapshot, "android-device", path,
+                applyMasterState: false, detectConflicts: true);
+            Assert.Empty(await merge.GetPendingConflictsAsync(path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+            }.ToString());
+            await db.OpenAsync();
+            await using var command = db.CreateCommand();
+            command.CommandText = "SELECT quantity FROM products WHERE barcode='CURRENT-1';";
+            Assert.Equal(3L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DriveMergeAppliesRemoteProductOnlyAfterAdminResolvesConflict()
+    {
+        var path = await CreateDriveMergeFixtureAsync();
+        try
+        {
+            await AddProductAsync(path, "Local Sugar", "CURRENT-1");
+            var merge = new DriveSnapshotMergeService();
+            var snapshot = CreateDriveProductSnapshot("Remote Sugar", 1, new string('b', 64));
+
+            var result = await merge.MergeAsync(snapshot, "android-device", path,
+                applyMasterState: false, detectConflicts: true);
+            Assert.Equal(1, result.PendingConflicts);
+
+            var conflict = Assert.Single(await merge.GetPendingConflictsAsync(path));
+            await merge.ResolveConflictAsync(conflict.Id, useRemote: true, path);
+            Assert.Empty(await merge.GetPendingConflictsAsync(path));
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+            }.ToString());
+            await db.OpenAsync();
+            await using var command = db.CreateCommand();
+            command.CommandText = "SELECT quantity FROM products WHERE barcode='CURRENT-1';";
+            Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
 }
