@@ -1375,7 +1375,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await using var prior = seed.CreateCommand();
                 prior.CommandText = """
                     INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
-                    VALUES($party,'receipt',1,'Prior receipt','2026-11-16 09:00:00','wpf-prior-receipt','wpf-wholesale-sync');
+                    VALUES($party,'receipt',1,'Prior receipt','2026-11-16 10:00:00','wpf-prior-receipt','wpf-wholesale-sync');
                     """;
                 prior.Parameters.AddWithValue("$party", customerId);
                 await prior.ExecuteNonQueryAsync();
@@ -1399,7 +1399,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await using var receipt = later.CreateCommand();
                 receipt.CommandText = """
                     INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
-                    VALUES($party,'receipt',1,'Later receipt','2026-11-16 11:00:00','wpf-later-receipt','wpf-wholesale-sync');
+                    VALUES($party,'receipt',1,'Later receipt','2026-11-16 10:00:00','wpf-later-receipt','wpf-wholesale-sync');
                     """;
                 receipt.Parameters.AddWithValue("$party", customerId);
                 await receipt.ExecuteNonQueryAsync();

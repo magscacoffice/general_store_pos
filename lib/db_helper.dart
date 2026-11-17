@@ -2584,7 +2584,27 @@ class DBHelper {
         final accounts = await txn.query('parties', columns: ['customer_type'], where: "id = ? AND type = 'customer'", whereArgs: [partyId], limit: 1);
         if (accounts.isEmpty || (accounts.first['customer_type']?.toString() ?? 'Khata') != oldCustomerType) throw Exception('Original customer account verify nahi ho saka.');
         final originalSaleDate = old['date']?.toString() ?? '';
-        final receipts = await txn.query('khata_transactions', where: "party_id = ? AND type = 'receipt' AND note != ? AND date > ?", whereArgs: [partyId, 'Cash received at sale #' + saleId.toString(), originalSaleDate]);
+        final ownReceiptNote = 'Cash received at sale #' + saleId.toString();
+        final ownReceiptRows = await txn.query(
+          'khata_transactions',
+          columns: ['id'],
+          where: 'party_id = ? AND note = ?',
+          whereArgs: [partyId, ownReceiptNote],
+          orderBy: 'id DESC',
+          limit: 1,
+        );
+        final originalReceiptId = ownReceiptRows.isEmpty
+            ? null
+            : (ownReceiptRows.first['id'] as num).toInt();
+        // Date strings have second-level precision. Use the local row ID as a
+        // tie-breaker so a later receipt in the same second cannot slip through.
+        // If the original sale had no receipt, same-second receipts are blocked
+        // conservatively because their order cannot be proven.
+        final receipts = await txn.query(
+          'khata_transactions',
+          where: "party_id = ? AND type = 'receipt' AND note != ? AND (date > ? OR (date = ? AND (? IS NULL OR id > ?)))",
+          whereArgs: [partyId, ownReceiptNote, originalSaleDate, originalSaleDate, originalReceiptId, originalReceiptId],
+        );
         if (receipts.isNotEmpty) throw Exception('Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.');
       }
       final oldItems = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);

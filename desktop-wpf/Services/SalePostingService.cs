@@ -307,12 +307,30 @@ public sealed class SalePostingService
                     if (!string.Equals(actualType, oldCustomerType, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidOperationException("Original customer type change ho chuka hai; overwrite safe nahi.");
                 }
+                var ownReceiptNote = $"Cash received at sale #{saleId}";
+                await using var ownReceipt = connection.CreateCommand();
+                ownReceipt.Transaction = transaction;
+                ownReceipt.CommandText = "SELECT id FROM khata_transactions WHERE party_id=$party AND note=$note ORDER BY id DESC LIMIT 1;";
+                ownReceipt.Parameters.AddWithValue("$party", oldCustomerId.Value);
+                ownReceipt.Parameters.AddWithValue("$note", ownReceiptNote);
+                var ownReceiptValue = await ownReceipt.ExecuteScalarAsync(cancellationToken);
+                object originalReceiptId = ownReceiptValue is null or DBNull ? DBNull.Value : Convert.ToInt64(ownReceiptValue, CultureInfo.InvariantCulture);
+
+                // Sale timestamps have second-level precision. Use the original
+                // checkout receipt row ID to detect a later receipt in the same
+                // second. Without an original receipt, same-second receipts are
+                // conservatively treated as later because ordering is unknown.
                 await using var receipts = connection.CreateCommand();
                 receipts.Transaction = transaction;
-                receipts.CommandText = "SELECT COUNT(*) FROM khata_transactions WHERE party_id=$party AND type='receipt' AND note != $ownReceipt AND date > $saleDate;";
+                receipts.CommandText = """
+                    SELECT COUNT(*) FROM khata_transactions
+                    WHERE party_id=$party AND type='receipt' AND note != $ownReceipt
+                      AND (date > $saleDate OR (date = $saleDate AND ($ownReceiptId IS NULL OR id > $ownReceiptId)));
+                    """;
                 receipts.Parameters.AddWithValue("$party", oldCustomerId.Value);
-                receipts.Parameters.AddWithValue("$ownReceipt", $"Cash received at sale #{saleId}");
+                receipts.Parameters.AddWithValue("$ownReceipt", ownReceiptNote);
                 receipts.Parameters.AddWithValue("$saleDate", oldDate);
+                receipts.Parameters.AddWithValue("$ownReceiptId", originalReceiptId);
                 if (Convert.ToInt32(await receipts.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0)
                     throw new InvalidOperationException("Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.");
             }

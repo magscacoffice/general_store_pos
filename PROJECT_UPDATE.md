@@ -898,3 +898,11 @@ Future improvements: add new ideas here when the owner requests them.
 
 ### Validation cadence
 - [x] .github/workflows/build-wpf.yml is now manual workflow_dispatch only. Code edits/commits will no longer automatically start WPF build/test or upload an artifact; run it only at an agreed milestone/final validation.
+
+
+## Work log — 2026-11-17 (Recall same-second receipt ordering safety)
+
+- [x] Android aur WPF Recall guards mein same-second Khata receipt edge case address kiya: original checkout receipt ka local row ID anchor banega; usi second mein baad ki receipt overwrite block karegi, jabke pehle record hui receipt allow rahegi.
+- [x] Agar original sale ke waqt receipt record hi nahi thi to same-second receipt ko conservatively later maan kar overwrite block hoga; ambiguous ordering par accounting history overwrite nahi hogi.
+- [x] Android aur WPF disposable-database tests ko same-second prior/later receipt ordering verify karne ke liye update kiya.
+- [ ] Updated Android and WPF regression suites must pass before this safety refinement is marked validated.

@@ -60,7 +60,7 @@ void main() {
     await _seedProduct();
     final db = await DBHelper.database;
     final party = (await db.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [customerId])).single;
-    await db.insert('khata_transactions', {'party_id': customerId, 'party_sync_id': party['sync_id'], 'sync_id': 'recall-prior-receipt', 'type': 'receipt', 'amount': 2.0, 'note': 'Receipt before sale', 'date': '2026-11-16 09:00:00'});
+    await db.insert('khata_transactions', {'party_id': customerId, 'party_sync_id': party['sync_id'], 'sync_id': 'recall-prior-receipt', 'type': 'receipt', 'amount': 2.0, 'note': 'Receipt before sale', 'date': '2026-11-16 10:00:00'});
     final saleId = await _createPartialSale(customerId, quantity: 1, date: '2026-11-16 10:00:00', received: 5.0);
     await DBHelper.updateSaleFromRecall(
       saleId: saleId,
@@ -76,7 +76,7 @@ void main() {
     final saleId = await _createPartialSale(customerId, quantity: 1, date: '2026-11-16 10:00:00', received: 5.0);
     final db = await DBHelper.database;
     final party = (await db.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [customerId])).single;
-    await db.insert('khata_transactions', {'party_id': customerId, 'party_sync_id': party['sync_id'], 'sync_id': 'recall-later-receipt', 'type': 'receipt', 'amount': 1.0, 'note': 'Later receipt', 'date': '2026-11-16 11:00:00'});
+    await db.insert('khata_transactions', {'party_id': customerId, 'party_sync_id': party['sync_id'], 'sync_id': 'recall-later-receipt', 'type': 'receipt', 'amount': 1.0, 'note': 'Later receipt', 'date': '2026-11-16 10:00:00'});
     await expectLater(
       DBHelper.updateSaleFromRecall(
         saleId: saleId,
