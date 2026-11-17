@@ -328,6 +328,90 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
+    public async Task WpfFixedDiscountPostsMatchingNetTotalReceivedAndKhataValues()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
+            var service = new SalePostingService(TestAccess);
+            var result = await service.CompleteSaleAsync(
+                new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 2, 22)],
+                    customerId, "Cash", null, 4, false, "Khata", "Local Windows User"),
+                path);
+
+            Assert.Equal(44, result.Subtotal, 2);
+            Assert.Equal(4, result.Discount, 2);
+            Assert.Equal(40, result.FinalAmount, 2);
+            Assert.Equal(40, result.ReceivedAmount, 2);
+            Assert.Equal(0, result.BalanceDue, 2);
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var sale = db.CreateCommand();
+            sale.CommandText = "SELECT total_amount,discount,final_amount,received_amount,balance_due FROM sales LIMIT 1;";
+            await using var reader = await sale.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(44, reader.GetDouble(0), 2);
+            Assert.Equal(4, reader.GetDouble(1), 2);
+            Assert.Equal(40, reader.GetDouble(2), 2);
+            Assert.Equal(40, reader.GetDouble(3), 2);
+            Assert.Equal(0, reader.GetDouble(4), 2);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WpfPartialPaymentRejectsZeroExactAndOverTotalWithoutPosting()
+    {
+        var path = await CreateDisposableDatabaseAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        try
+        {
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
+            var service = new SalePostingService(TestAccess);
+            foreach (var received in new double?[] { 0, 22, 25 })
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CompleteSaleAsync(
+                        new SaleCheckoutRequest(
+                            [new SaleLineInput("WPF-WH-1", 1, 22)],
+                            customerId, "Partial", received, 0, false, "Khata", "Local Windows User"),
+                        path));
+            }
+
+            await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = path, Pooling = false }.ToString());
+            await db.OpenAsync();
+            await using var check = db.CreateCommand();
+            check.CommandText = """
+                SELECT
+                    (SELECT quantity FROM products WHERE barcode='WPF-WH-1'),
+                    (SELECT COUNT(*) FROM sales),
+                    (SELECT COUNT(*) FROM khata_transactions),
+                    (SELECT balance FROM parties WHERE id=$customer);
+                """;
+            check.Parameters.AddWithValue("$customer", customerId);
+            await using var reader = await check.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(5, reader.GetInt32(0));
+            Assert.Equal(0, reader.GetInt32(1));
+            Assert.Equal(0, reader.GetInt32(2));
+            Assert.Equal(0, reader.GetDouble(3), 2);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task WpfWholesaleSaleRejectsKhataAccountBeforeChangingStock()
     {
         var path = await CreateDisposableDatabaseAsync();
@@ -1636,14 +1720,24 @@ public sealed class PosDatabaseSchemaVerifierTests
             AccessService.RegisterProcess(access);
 
             var salesmanDraft = new PendingBillSnapshot(
-                "salesman-draft", "Salesman Draft", DateTime.Now.ToString("s"), [],
-                null, "Walk-in", "Cash", 0, false, "");
+                "salesman-draft", "Salesman Draft", DateTime.Now.ToString("s"),
+                [new PendingBillLine("WPF-WH-1", "Saved item", 18, 2, 10, "pcs")],
+                23, "Wholesale", "Partial", 12.5, true, "7.50");
             await service.SaveAsync(salesmanDraft);
 
             var visibleToSalesman = await service.GetAllAsync();
             Assert.Single(visibleToSalesman);
             Assert.Equal("salesman-draft", visibleToSalesman[0].BillId);
             Assert.Equal(salesmanSession.UserId, visibleToSalesman[0].CashierUid);
+            Assert.Equal(23, visibleToSalesman[0].SelectedCustomerId);
+            Assert.Equal("Wholesale", visibleToSalesman[0].SelectedSaleType);
+            Assert.Equal("Partial", visibleToSalesman[0].CustomerPaymentMode);
+            Assert.Equal(12.5, visibleToSalesman[0].OverallDiscount, 2);
+            Assert.True(visibleToSalesman[0].IsPercentageDiscount);
+            Assert.Equal("7.50", visibleToSalesman[0].ReceivedAmount);
+            Assert.Single(visibleToSalesman[0].Cart);
+            Assert.Equal("WPF-WH-1", visibleToSalesman[0].Cart[0].Barcode);
+            Assert.Equal(2, visibleToSalesman[0].Cart[0].Quantity);
 
             await Assert.ThrowsAsync<UnauthorizedAccessException>(
                 () => service.SaveAsync(adminDraft with { Label = "Overwritten by Salesman" }));
