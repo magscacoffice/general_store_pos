@@ -1147,3 +1147,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #422 passed WPF Release build and 51/51 tests, including the full disposable schema-v18 Drive round-trip test. Artifact: KhanBabaPOS-Windows-x64-422 (artifact ID 14310676128, SHA-256 1532f9f202714949d8e8267c010817761cfa4fda408623c977daa95bd637c67f, expires 2026-12-17).
 - [ ] Re-run grouped WPF Release/tests after the snapshot-scoped backup change.
 - [ ] Correct test-count note: run #420 passed 50/50 tests (not 52/52); run #422 passed 51/51.
+
+
+## Work log — 2026-11-17 (Verify saved Drive pre-merge backup before reuse)
+
+- [x] Added backup verification that checks the SHA-256 sidecar, exact file hash, schema-v18 validity and SQLite integrity_check before a previously recorded Drive pre-merge backup can be reused.
+- [x] If the backup file or checksum is missing, invalid or corrupted, Windows creates a fresh verified backup before importing the device snapshot.
+- [x] Added regression coverage for valid backup acceptance and corrupted checksum rejection. Snapshot hash is validated before manifest backup state is changed.
+- [ ] Run grouped WPF Release build/tests after backup integrity verification changes.

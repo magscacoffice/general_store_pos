@@ -90,12 +90,10 @@ public sealed class DriveMasterManifest
         RequireKey(deviceId, nameof(deviceId));
         if (string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName || fileName is "." or "..")
             throw new ArgumentException("Only a backup filename, not a local path, may be stored in the cloud manifest.", nameof(fileName));
+        if (snapshotHash is not null) RequireHash(snapshotHash);
         _preMergeBackups[deviceId] = fileName;
         if (snapshotHash is not null)
-        {
-            RequireHash(snapshotHash);
             _preMergeBackupHashes[deviceId] = snapshotHash.ToLowerInvariant();
-        }
     }
 
     public string ToJson(JsonElement masterData, string snapshotHash, DateTimeOffset updatedAtUtc)

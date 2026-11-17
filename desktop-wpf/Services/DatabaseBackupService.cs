@@ -29,6 +29,46 @@ public sealed class DatabaseBackupService
         return destination;
     }
 
+
+    public async Task<bool> IsVerifiedBackupAsync(
+        string backupPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(backupPath) || !File.Exists(backupPath + ".sha256")) return false;
+        try
+        {
+            var expectedHash = (await File.ReadAllTextAsync(backupPath + ".sha256", cancellationToken)).Trim();
+            if (expectedHash.Length != 64 || expectedHash.Any(character => !Uri.IsHexDigit(character)))
+                return false;
+
+            var actualHash = await ComputeSha256Async(backupPath, cancellationToken);
+            if (!CryptographicOperations.FixedTimeEquals(
+                    Convert.FromHexString(expectedHash), Convert.FromHexString(actualHash)))
+                return false;
+
+            await PosDatabaseSchemaVerifier.VerifyAsync(backupPath, cancellationToken);
+            await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = backupPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false
+            }.ToString());
+            await connection.OpenAsync(cancellationToken);
+            await using var integrity = connection.CreateCommand();
+            integrity.CommandText = "PRAGMA integrity_check;";
+            var result = Convert.ToString(await integrity.ExecuteScalarAsync(cancellationToken));
+            return string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     public async Task<string> RestoreAsync(
         string currentDatabasePath,
         string selectedBackupPath,

@@ -127,6 +127,9 @@ public sealed class PosDatabaseSchemaVerifierTests
             var firstBackup = await service.CreateBackupAsync(currentPath, Path.Combine(dataDirectory, "Backups"));
             Assert.True(File.Exists(firstBackup));
             Assert.True(File.Exists(firstBackup + ".sha256"));
+            Assert.True(await service.IsVerifiedBackupAsync(firstBackup));
+            await File.WriteAllTextAsync(firstBackup + ".sha256", "invalid-checksum");
+            Assert.False(await service.IsVerifiedBackupAsync(firstBackup));
 
             var restoredPath = await service.RestoreAsync(currentPath, selectedBackup, dataDirectory);
             Assert.True(File.Exists(currentPath));
