@@ -1604,7 +1604,6 @@ public sealed class PosDatabaseSchemaVerifierTests
 
                 await Assert.ThrowsAsync<UnauthorizedAccessException>(
                     () => service.UpdateSaleFromRecallAsync(saleId, request, path));
-            }
         }
         finally
         {
