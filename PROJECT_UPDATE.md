@@ -375,8 +375,8 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] **Billing calculation audit and completion:** compare WPF checkout with the existing Flutter implementation using the same disposable schema-v18 database and test fixtures. Verify line totals (quantity × rate), subtotal, fixed discount, percentage discount, net/final total, cash received, credit/partial received amount, balance due, customer/Khata ledger entries, stock deduction and transaction rollback. Preserve existing discount behaviour and all Walk-in/Khata/Wholesale customer types.
 - [ ] **Resolve cashier calculation inconsistencies:** reconcile checkout validation with bill preview/receipt calculations, especially Partial payment boundary rules; ensure displayed received/balance values match the values actually posted to SQLite.
 - [ ] **New Sale acceptance:** verify New Sale button and F5 create a clean pending bill without losing the previous bill; scanner focus returns after adding an item and after checkout; repeated barcode scans increment the same cart line; pending bills restore customer type, customer, payment mode, discount mode/value and partial received amount.
-- [ ] **Regression tests:** add/verify automated tests for the above calculations and New Sale/cart/pending-bill behaviour. Do not mark this work complete from a successful compile alone.
-- [x] **Windows test artifact produced:** run #416 completed WPF Release build, all 46/46 tests, self-contained win-x64 publish and artifact upload. `KhanBabaPOS-Windows-x64-416` (artifact ID `14309430623`, 65.4 MB, SHA-256 `96ee8f4d9499ba0533887fb3b97606aad0b9bdd9e77830792c8d81b0200513ef`, expires 2026-12-17). Unsigned owner-test package only; not a production installer/release. Real-PC acceptance and signing remain separate.
+- [x] **Regression tests:** automated tests cover fixed and percentage discounts, Partial payment boundaries (zero/exact/over-total), transaction rollback, stock/Khata values, cashier-owned pending bills and restoration of customer/payment/discount/received/cart fields. Run #418 passed 48/48 tests. Scanner focus/repeated scan visual acceptance remains a target-PC task.
+- [x] **Latest Windows test artifact produced:** run #418 completed WPF Release build, all 48/48 tests, self-contained win-x64 publish and artifact upload. `KhanBabaPOS-Windows-x64-418` (artifact ID `14309197761`, 65.4 MB, SHA-256 `5c60d75497dc2ca11a7b5f4c7e7c9a70d4946806be88fbbd2eb7ac6c257768c7`, expires 2026-12-17). Unsigned owner-test package only; not a production installer/release. Real-PC acceptance and signing remain separate.
 
 <!-- This is the canonical live task list. The earlier roadmap sections describe requirements/architecture; Completed Updates records finished work. Source implementation, automated validation and target-device acceptance are tracked separately. CI build alone never completes hardware/UI acceptance. -->
 
@@ -415,7 +415,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 - [ ] Verify WPF scrollbar visibility/hit targets, combined scan/search focus, modal keyboard navigation and responsive layouts on the target PC.
 - [ ] Complete target-Windows runtime, visual, scanner and printer acceptance.
 - [ ] Owner signs off physical cashier acceptance before Windows cutover.
-- [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish a production installer/stable release while pending tasks remain. An unsigned Windows x64 test artifact is allowed only when explicitly requested by the owner, as in run #416.
+- [ ] Merge to main only after all required automated and owner acceptance gates pass. Do not create or publish a production installer/stable release while pending tasks remain. An unsigned Windows x64 test artifact is allowed only when explicitly requested by the owner, as in run #418.
 
 ## New notes from user (2026-11-16)
 
@@ -897,7 +897,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Do not merge to main or call the application production-ready until the above gates and owner sign-off are complete.
 
 ### Validation cadence
-- [x] `.github/workflows/build-wpf.yml` is manual workflow_dispatch only; `.github/workflows/test-pos-sync.yml` runs on main pushes or manual dispatch, not on integration branch pushes.
+- [x] `.github/workflows/build-wpf.yml` runs on path-filtered pushes to `integration/wpf-mainline` when `desktop-wpf/**`, `desktop-wpf.Tests/**` or the workflow file changes, and also supports `workflow_dispatch`; docs-only commits do not trigger WPF Actions. `.github/workflows/test-pos-sync.yml` remains separate.
 
 
 ## Work log — 2026-11-17 (Recall same-second receipt ordering safety)
@@ -913,7 +913,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android analyzer and existing sync/invoice tests passed on Ubuntu and Windows in run #97; the Recall suite and same-second ordering tests passed on both runners in run #98.
 - [x] Android Recall tests passed: edited bill total/discount/received/Khata/stock, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
 - [x] Windows WPF Release build passed and 41/41 regression tests passed in run #411. The self-contained Windows x64 test artifact was uploaded.
-- [x] WPF build/test workflow is manual workflow_dispatch only. Android sync/invoice workflow is manual workflow_dispatch only; no branch push triggers it.
+- [x] WPF build/test workflow uses path-filtered integration-branch pushes plus `workflow_dispatch`; Android sync/invoice workflow remains manual workflow_dispatch only.
 - [ ] Drive snapshot update/delete identity and full schema-v18 reconciliation matrix remain pending; Google Drive network sync remains disabled.
 - [ ] Physical Windows PC, SpeedX SP60D scanner, BC-86AC printer/cutter, PDF output, backup/restore and owner sign-off remain pending.
 - [ ] Production updater remains disabled until the production signing certificate and trusted thumbprint are provided.
@@ -921,7 +921,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Workflow cadence clarification — 2026-11-17
 
-- [x] WPF build/artifact workflow integration branch par automatic push se disabled hai; final milestone par manual run hi use hoga.
+- [x] WPF build/artifact workflow sirf grouped WPF source/test/workflow changes par integration branch mein trigger hota hai; documentation-only changes se Actions trigger nahi hota.
 - [x] Android sync/invoice/Recall test workflow bhi manual workflow_dispatch only hai; kisi branch push par automatic nahi chalega.
 - [x] Is se code ke darmiyan choti commits ya documentation edits Actions ko bar-bar trigger nahi karengi. Final consolidated validation aik planned milestone par hogi.
 
@@ -979,7 +979,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF customer/supplier account delete parity added with zero-balance/no-history guard, Windows-master party tombstone, selected-row UI action, balance/history tests and Admin-only role test.
 - [ ] Latest WPF code after run #411 (same-second receipt guard, responsive/role-aware navigation, cashier/printer status, printer test preference role path and party deletion) still needs one manual Release build/test run. Run #411 is a baseline artifact from before these later WPF changes.
 - [ ] Latest Android code after run #98 includes the v3-to-v18 migration fix and new legacy upgrade test; run the manual Android workflow after this change.
-- [x] Both build/test workflows are manual-only; no code push should trigger Actions automatically.
+- [x] WPF workflow path-filtered grouped source/test pushes aur `workflow_dispatch` par chalta hai; Android sync/invoice workflow manual-only hai. Har choti file update push karne ke bajaye related code ko milestone commit mein group karna hai.
 
 
 ## Work log — 2026-11-17 (Sales History customer mapping and cashier scope)
@@ -1000,14 +1000,14 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Final WPF validation milestone — 2026-11-17
 
-- [x] WPF workflow ko manual workflow_dispatch only rakha gaya. Repo ka default branch main hai aur usay owner approval ke baghair change/merge nahi karna; integration branch par workflow trigger edit akela push run start nahi karta.
+- [x] WPF workflow integration branch ke WPF source/test paths par grouped push se run hota hai; default `main` ko owner approval ke baghair change/merge nahi karna.
 - [ ] Final WPF Release/test/artifact run GitHub Actions UI se manually dispatch karna hoga; is session ke GitHub connector mein workflow-dispatch write action available nahi. Latest Recall receipt-ordering + cashier ownership, Sales History mapping, sidebar/status/role navigation, printer role fix aur supplier invoice UI us run mein validate honge.
 
 
 ## WPF workflow dispatch limitation — 2026-11-17
 
-- [x] Integration branch ko main mein merge kiye baghair WPF workflow automatic push trigger nahi hota, kyun ke repository ka default branch main hai aur us par workflow file manual-only hi hai.
-- [x] Integration branch ka WPF workflow manual workflow_dispatch only rakha hai. Is session ke connected GitHub actions read/re-run operations support karte hain, lekin naya workflow_dispatch trigger create nahi karte.
+- [x] Integration branch par path-filtered WPF workflow push trigger hota hai; `main` mein merge ki zaroorat nahi. Default branch `main` ko owner approval ke baghair change/merge nahi karna.
+- [x] Naya workflow dispatch action connector se available na bhi ho, WPF source/test ke grouped integration-branch push se path-filtered validation aur artifact build trigger ho jata hai.
 - [ ] Latest WPF source ka final build/test aur artifact owner ko GitHub Actions UI se Build and Test Native WPF POS + Windows x64 Artifact workflow manually run karna hoga, ya Work mode/terminal access dena hoga.
 
 
@@ -1031,7 +1031,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] **Startup window source implementation:** WPF startup now caps initial dimensions and centers the window within `SystemParameters.WorkArea` (taskbar-excluded work area), while retaining normal title-bar drag, resize and maximize/restore. Actual monitor/DPI acceptance remains pending.
 - [x] **New Sale single-screen source implementation:** customer/type, payment/received, discount, totals and print/checkout actions are now in a compact fixed grid instead of a vertically scrolling right pane; scanner/search, pending bill and New Bill remain in the header; cart remains visible beside the controls. Preserve all existing actions and calculations. Actual 980×650/1280×720/owner-display visual acceptance remains pending.
 - [ ] Verify startup positioning and the complete New Sale layout at the owner's actual display resolution and Windows scaling, plus 980×650, 1280×720, maximized and restored/resized states. Record any genuinely smaller unsupported work area rather than allowing controls to clip.
-- [x] Source implementation is included in run #416 and compiled successfully; the remaining task is target-display visual acceptance, not another documentation-only workflow.
+- [x] Source implementation is included in run #417 and compiled successfully; the remaining task is target-display visual acceptance, not another documentation-only workflow.
 
 ## Work log — 2026-11-17 (Startup bounds and one-screen New Sale source update)
 
@@ -1045,7 +1045,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] GitHub Actions WPF run #412 mein WPF application Release compile pass hua, lekin test project compile `PosDatabaseSchemaVerifierTests.cs` line 1607 ke malformed `try/finally` block ki wajah se fail hua.
 - [x] `SalesmanCannotOverwriteAnotherCashiersSaleEvenWhenCallingServiceDirectly` test mein extra closing brace remove ki gayi; test ka intended `try/finally` cleanup structure restore kiya gaya.
 - [ ] Yeh source correction abhi run #412 mein validate nahi hui kyun ke run is fix se pehle ke commit par tha. Final grouped WPF Release/test run mein is test ko verify karna lazmi hai.
-- [x] Startup work-area sizing and compact New Sale XAML passed the WPF Release build in run #416; the same run uploaded the Windows x64 test artifact. Physical screen-size acceptance remains pending.
+- [x] Startup work-area sizing and compact New Sale XAML passed the WPF Release build and 46/46 tests in run #417; the same run uploaded the updated Windows x64 test artifact. Physical screen-size acceptance remains pending.
 
 
 ## WPF run #412 failure analysis and correction — 2026-11-17
@@ -1053,14 +1053,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #412 (commit bb961189b3586116acc7f409e34fef56316242e9): WPF Release application build succeeded with 0 errors; test project compilation failed in PosDatabaseSchemaVerifierTests.cs around line 1607.
 - [x] Root cause: Salesman direct-Recall test had an extra closing brace after the assertion, producing CS1524/CS1519. The current integration branch test source has that extra brace removed.
 - [x] The same test fixture's SQLite connection is now disposed before invoking SalePostingService, avoiding an open-file/backup interaction during the service test.
-- [x] Corrected WPF test suite and latest code changes passed in run #416; #412 remains a failed historical run and is not used as an artifact.
+- [x] Corrected WPF test suite passed in run #416; the newer New Sale XAML and live payment summary passed in run #417; #412/#415 remain failed historical runs and are not used as current artifacts.
 
 
 ## WPF final rerun — 2026-11-17
 
 - [x] Run #412 test-file extra brace was corrected on the current branch; SalesHistory and cashier-scoped pending-bill regression tests were added after that failed run.
-- [x] One consolidated WPF validation attempt is now enabled for this grouped desktop source/test milestone only. After the run completes, the workflow will return to manual-only so ordinary edits do not trigger Actions.
-- [x] Superseded by successful run #416: Release build + 46/46 tests + Windows x64 artifact upload passed.
+- [x] One consolidated WPF validation run was used for the grouped milestone. Current workflow remains path-filtered to WPF source/test/workflow changes; docs-only edits do not trigger Actions.
+- [x] Superseded by successful runs #416–#418; latest run #418 passed Release build, 48/48 tests and Windows x64 artifact upload.
 
 
 ## Work log — 2026-11-17 (Pending-bill AccessService injection)
@@ -1090,3 +1090,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] New Sale summary now previews the received and remaining due amounts live for Cash, Credit and Partial modes; this is display-only and does not alter checkout calculations or SQLite values.
 - [x] Existing bill-level fixed/percentage discount remains unchanged. Schema v18 has no separate line-discount field, so no fake per-item discount column was added.
 - [ ] These final XAML changes require the next grouped WPF Release/test run and owner visual acceptance at 980×650 and 1280×720.
+
+## Billing parity and Windows test build — 2026-11-17 (run #418)
+
+- [x] Source-level comparison completed between Flutter `sales_screen.dart` / `DBHelper.completeSale` and WPF `MainWindow` / `SalePostingService`: subtotal, fixed/percentage bill discount, Cash/Credit/Partial received amount, balance due, customer type/account validation, stock deduction, sale-item cost snapshot, Khata debit/receipt and transactional rollback are aligned for the current cart model.
+- [x] Added fixed-discount persistence test and Partial payment boundary tests (zero, exact-total and over-total). Invalid partial payments leave sale, stock, customer balance and Khata ledger unchanged.
+- [x] Expanded pending-bill test to verify customer ID/type, payment mode, discount mode/value, received amount and cart line restoration under cashier ownership.
+- [x] Run #418 passed WPF Release build and 48/48 regression tests; self-contained win-x64 artifact uploaded: `KhanBabaPOS-Windows-x64-418` (artifact ID `14309197761`, SHA-256 `5c60d75497dc2ca11a7b5f4c7e7c9a70d4946806be88fbbd2eb7ac6c257768c7`, expires 2026-12-17).
+- [ ] Remaining billing parity proof: run identical representative fixture data through Flutter and WPF and compare resulting SQLite rows/reports byte-for-byte or field-by-field. Source review and WPF regression tests alone do not replace this cross-runtime fixture comparison.
+- [ ] Owner must test the latest ZIP on the target Windows laptop using a disposable database copy. Confirm actual display/DPI fit, no-scroll New Sale, barcode focus/repeated scans, printer/PDF and backup/restore.
