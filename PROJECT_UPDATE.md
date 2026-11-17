@@ -1039,3 +1039,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] New Sale right-side customer/payment/discount/summary/print/checkout controls ko vertical `ScrollViewer` se nikal kar compact single-screen grid mein arrange kiya gaya; customer type, customer, payment mode, received amount, discount, subtotal/net total aur actions ek hi panel mein visible hain.
 - [ ] Source-only update abhi compile/XAML validation nahi samjhi jayegi. WPF Release build + complete tests aur 980×650, 1280×720, actual display scaling, maximize/restore par visual acceptance final grouped validation mein pending hai.
 - [ ] Agar kisi display ki usable work area 480×480 DIP se bhi chhoti ho to is layout ki fit guarantee nahi; aise environment ko explicit unsupported/exceptional case ke tor par report karna hai, controls ko silently hide nahi karna.
+
+## Work log — 2026-11-17 (WPF CI failure source correction)
+
+- [x] GitHub Actions WPF run #412 mein WPF application Release compile pass hua, lekin test project compile `PosDatabaseSchemaVerifierTests.cs` line 1607 ke malformed `try/finally` block ki wajah se fail hua.
+- [x] `SalesmanCannotOverwriteAnotherCashiersSaleEvenWhenCallingServiceDirectly` test mein extra closing brace remove ki gayi; test ka intended `try/finally` cleanup structure restore kiya gaya.
+- [ ] Yeh source correction abhi run #412 mein validate nahi hui kyun ke run is fix se pehle ke commit par tha. Final grouped WPF Release/test run mein is test ko verify karna lazmi hai.
+- [ ] Is session ke latest WPF UI changes (startup work-area sizing aur compact New Sale panel) ka XAML/Release/test validation bhi pending hai; koi successful latest artifact abhi claim nahi kiya ja raha.
