@@ -1061,3 +1061,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Run #412 test-file extra brace was corrected on the current branch; SalesHistory and cashier-scoped pending-bill regression tests were added after that failed run.
 - [x] One consolidated WPF validation attempt is now enabled for this grouped desktop source/test milestone only. After the run completes, the workflow will return to manual-only so ordinary edits do not trigger Actions.
 - [ ] Current branch build, all WPF tests and Windows x64 artifact result are pending run #413.
+
+
+## Work log — 2026-11-17 (Pending-bill AccessService injection)
+
+- [x] Run #413 compile ne confirm kiya ke CurrentSession instance property hai; PendingBillService ab authenticated AccessService instance constructor se receive karta hai aur session usi instance se read karta hai.
+- [x] MainWindow aur disposable-database test dono explicit AccessService inject karte hain; process-level role guard existing authorization policy ke mutabiq rehta hai.
+- [ ] Is correction ke baad WPF build/tests ka next grouped rerun pending hai.

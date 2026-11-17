@@ -25,7 +25,7 @@ public partial class MainWindow : Window
     private readonly AccessSession _session;
     private readonly WindowsDriveSyncService _driveSync;
     private IReadOnlyList<CustomerLookup> _allCustomers = [];
-    private readonly PendingBillService _pendingBills = new();
+    private readonly PendingBillService _pendingBills;
     private readonly DispatcherTimer _searchTimer;
     private readonly DispatcherTimer _pendingSaveTimer;
     private CancellationTokenSource? _searchCts;
@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     {
         _access = access;
         _session = session;
+        _pendingBills = new PendingBillService(access);
         _sales = new SalePostingService(access);
         _driveSync = new WindowsDriveSyncService(access);
         _driveSync.StartAutoSync();

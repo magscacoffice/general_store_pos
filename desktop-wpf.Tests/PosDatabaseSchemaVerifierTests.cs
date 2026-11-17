@@ -1624,7 +1624,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             var access = new AccessService(accessPath);
             access.ProvisionFirstAdmin("testadmin", "Test Admin", "TestPassword!2026");
             AccessService.RegisterProcess(access);
-            var service = new PendingBillService(path);
+            var service = new PendingBillService(access, path);
 
             var adminDraft = new PendingBillSnapshot(
                 "admin-draft", "Admin Draft", DateTime.Now.ToString("s"), [],

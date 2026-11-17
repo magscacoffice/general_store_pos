@@ -5,7 +5,7 @@ using KhanBabaPos.Wpf.Data;
 namespace KhanBabaPos.Wpf.Services;
 
 /// <summary>Persists WPF pending bills in the existing schema-v18 pending_bills table.</summary>
-public sealed class PendingBillService(string? databasePath = null)
+public sealed class PendingBillService(AccessService access, string? databasePath = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,7 +21,7 @@ public sealed class PendingBillService(string? databasePath = null)
     public async Task SaveAsync(PendingBillSnapshot bill, CancellationToken cancellationToken = default)
     {
         AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
-        var session = AccessService.CurrentSession
+        var session = access.CurrentSession
             ?? throw new UnauthorizedAccessException("Active cashier session required.");
         if (string.IsNullOrWhiteSpace(bill.BillId))
             throw new InvalidOperationException("Pending bill ID is required.");
@@ -86,7 +86,7 @@ public sealed class PendingBillService(string? databasePath = null)
     public async Task<IReadOnlyList<PendingBillSnapshot>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
-        var session = AccessService.CurrentSession
+        var session = access.CurrentSession
             ?? throw new UnauthorizedAccessException("Active cashier session required.");
         var path = ResolvePath();
         await PosDatabaseSchemaVerifier.VerifyAsync(path, cancellationToken);
@@ -130,7 +130,7 @@ public sealed class PendingBillService(string? databasePath = null)
     public async Task DeleteAsync(string billId, CancellationToken cancellationToken = default)
     {
         AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);
-        var session = AccessService.CurrentSession
+        var session = access.CurrentSession
             ?? throw new UnauthorizedAccessException("Active cashier session required.");
         if (string.IsNullOrWhiteSpace(billId)) return;
         var path = ResolvePath();
