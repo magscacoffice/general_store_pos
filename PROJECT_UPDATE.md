@@ -864,7 +864,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Android Recall overwrite ab edited cart ka subtotal aur saved discount amount se final total dobara calculate karta hai; purane invoice ka final_amount edited bill par reuse nahi hota.
 - [x] Android aur WPF dono mein Recall overwrite guard ab usi customer ki original sale ke baad wali extra Khata receipt ko check karta hai. Original bill se pehle ki receipt history be-wajah overwrite ko block nahi karti; original checkout receipt apni note identity se exclude rehti hai.
-- [ ] **Validation Pending:** disposable SQLite v18 fixture par Cash, Credit, Partial, fixed/percentage discount, prior receipt, later receipt, return block, stock rollback aur Khata balance cases ki cross-platform regression tests; Flutter analyze/test aur WPF Release build/test consolidated run mein chalane hain.
+- [x] Android disposable SQLite Recall regression tests, analyzer, same-second prior/later receipt, return block, stock rollback and Khata reconciliation passed on Ubuntu and Windows in run #98. [ ] WPF same-second guard change still needs the final manual WPF Release build/test.
 - [ ] Drive snapshot/Android sync parity aur real-device cashier acceptance alag pending gates rahenge. Is source-only fix ko tested ya production-ready nahi kaha ja raha.
 
 
@@ -872,7 +872,7 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Added `test/recall_bill_test.dart` using a fresh temporary SQLite database per test; live store data and production backups are not used.
 - [x] Coverage added for edited subtotal/discount/final total/received amount/Khata balance/ledger/stock reconciliation, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
-- [ ] Flutter test execution and analyzer validation are pending the consolidated Android validation run. These source tests are not yet reported as passing.
+- [x] Flutter analyzer and all four Recall regression tests passed on Ubuntu and Windows in run #98; the tests use disposable SQLite v18 databases.
 - [ ] Before Drive snapshot imports are re-enabled, the append-only merge contract must be extended/tested for recalled sale updates and replaced sale-item identities; Windows Drive sync remains fully disabled until the owner safety gate is cleared.
 
 
@@ -889,7 +889,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF Release build + regression suite passed in GitHub Actions run #411: 41 passed, 0 failed. Self-contained Windows x64 test ZIP artifact was uploaded. This is a test artifact only, not a signed production release.
 
 ### Remaining code/acceptance gates
-- [ ] Run Flutter analyze and the new Android Recall integration tests in the final consolidated validation pass.
+- [x] Flutter analyze and Android Recall integration tests passed on Ubuntu and Windows in run #98.
 - [ ] Complete cross-platform Drive snapshot reconciliation tests (existing sale updates, sale-item identity/deletions, Khata transaction identity, idempotency, aliases, missing references, rollback and recovery) before any Drive sync enablement.
 - [ ] Complete full schema-v18 and transaction-method parity audit; verify against disposable copy of the real store database.
 - [ ] Owner-side Windows laptop acceptance: responsive UI, scanner focus/SpeedX SP60D, saved printer and BC-86AC 80mm output/cutter, PDF/Print to PDF, backup/restore and startup/offline behaviour.
@@ -897,7 +897,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Do not merge to main or call the application production-ready until the above gates and owner sign-off are complete.
 
 ### Validation cadence
-- [x] .github/workflows/build-wpf.yml is now manual workflow_dispatch only. Code edits/commits will no longer automatically start WPF build/test or upload an artifact; run it only at an agreed milestone/final validation.
+- [x] `.github/workflows/build-wpf.yml` is manual workflow_dispatch only; `.github/workflows/test-pos-sync.yml` runs on main pushes or manual dispatch, not on integration branch pushes.
 
 
 ## Work log — 2026-11-17 (Recall same-second receipt ordering safety)
@@ -905,15 +905,15 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android aur WPF Recall guards mein same-second Khata receipt edge case address kiya: original checkout receipt ka local row ID anchor banega; usi second mein baad ki receipt overwrite block karegi, jabke pehle record hui receipt allow rahegi.
 - [x] Agar original sale ke waqt receipt record hi nahi thi to same-second receipt ko conservatively later maan kar overwrite block hoga; ambiguous ordering par accounting history overwrite nahi hogi.
 - [x] Android aur WPF disposable-database tests ko same-second prior/later receipt ordering verify karne ke liye update kiya.
-- [ ] Updated Android and WPF regression suites must pass before this safety refinement is marked validated.
+- [x] Android Recall suite passed on Ubuntu and Windows in run #98, including same-second receipt ordering. [ ] WPF same-second guard change awaits the final manual WPF Release build/test.
 
 
 ## Validation update — 2026-11-17 (Android + WPF consolidated pass)
 
-- [x] Android Flutter analyze passed and 20/20 tests passed on both Ubuntu and Windows in POS workflow run #97.
+- [x] Android analyzer and existing sync/invoice tests passed on Ubuntu and Windows in run #97; the Recall suite and same-second ordering tests passed on both runners in run #98.
 - [x] Android Recall tests passed: edited bill total/discount/received/Khata/stock, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
 - [x] Windows WPF Release build passed and 41/41 regression tests passed in run #411. The self-contained Windows x64 test artifact was uploaded.
-- [x] Both WPF build/test and Android sync/invoice test workflows are now manual workflow_dispatch only. Future code pushes will not automatically run Actions; use a planned milestone/final validation run.
+- [x] WPF build/test workflow is manual workflow_dispatch only. Android sync/invoice workflow runs on main pushes or manual dispatch; integration branch pushes do not trigger it.
 - [ ] Drive snapshot update/delete identity and full schema-v18 reconciliation matrix remain pending; Google Drive network sync remains disabled.
 - [ ] Physical Windows PC, SpeedX SP60D scanner, BC-86AC printer/cutter, PDF output, backup/restore and owner sign-off remain pending.
 - [ ] Production updater remains disabled until the production signing certificate and trusted thumbprint are provided.
