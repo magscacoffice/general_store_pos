@@ -774,20 +774,20 @@ Future improvements: add new ideas here when the owner requests them.
 ## Work log — 2026-11-16 (Initial remaining-work source audit)
 
 - [x] Latest working branch `integration/wpf-mainline` aur canonical `PROJECT_UPDATE.md` verify ki. `update.md` duplicate create nahi ki.
-- [x] Android `lib/history_screen.dart` inspect ki: existing Sales History bill details load/reprint aur sale-return flows hain; approved Recall/Edit Previous Bill overwrite workflow nazar nahi aaya.
+- [x] Android Recall/Edit Previous Bill workflow ab history screen se integrated hai; safe overwrite, Save as New Bill, return/later receipt lock aur transactional stock/Khata reconciliation implemented. Android regression tests run #98 mein pass.
 - [x] Android `lib/db_helper.dart` mein schema-v18 sale, sale_items, sale_returns, sale_return_items aur khata_transactions contracts ka initial inspection kiya. Sale posting mein sale aur Khata ledger rows transaction mein banti hain; Recall implementation se pehle receipt/return linkage aur sync delete/tombstone contract ki mazeed verification zaroori hai.
-- [x] WPF `SalesHistoryService.cs` read-only history aur sale item retrieval deta hai; WPF MainWindow mein Recall Bill selection/edit workflow abhi maujood nahi. WPF `SalePostingService` filhal new sale posting karta hai.
-- [x] Supplier invoice desktop dialog aur purchase history UI source mein mojood hain. Is UI ke baad ka required WPF Release build aur full regression test result abhi documentation mein Pending hai.
-- [ ] **Pending — Recall Bill / Edit Previous Bill:** dono platforms par feature implementation aur transactional regression tests abhi baqi hain.
-- [ ] **Pending — latest WPF validation:** supplier invoice UI ke baad Release build + complete tests ka naya successful CI result abhi verify nahi hua.
+- [x] WPF SalesHistoryService mapping fix ho chuki hai; MainWindow Recall workflow implemented, cashier UID filter aur service-level ownership check active. Latest WPF tests manual run ke liye pending.
+- [x] Supplier invoice desktop dialog/purchase history UI source mein mojood hain; baseline WPF Release build + 41 tests #411 pass. Newer WPF source changes ke baad final manual validation pending.
+- [x] **Completed — Recall Bill / Edit Previous Bill:** Android + WPF source, same-second receipt ordering, return lock, stock/Khata transaction/rollback and Save as New Bill complete; Android run #98 passed; WPF latest validation pending.
+- [ ] **Pending — latest WPF validation:** WPF run #411 baseline pass tha; same-second guard, cashier ownership, history mapping, pending-bill isolation, responsive navigation/header aur printer role changes ke baad manual workflow dispatch required.
 - [ ] **Pending — environment limitation:** is session mein Codespaces terminal/workspace ka live connection available nahi mila; GitHub source read/write mumkin hai, lekin is waqt local `dotnet` / `flutter` commands run karke code changes compile/test karna mumkin nahi. Bina build/test ke unverified code commit nahi kiya jayega.
 
 
 ## Work order update — 2026-11-16 (Owner ne darmiyani build/test filhal skip karne ki ijazat di)
 
-- [ ] **Status: In Progress.** Owner ki wazeh hidayat: "Code aur is ka test/build bhi filhal chhor do. Bas code likhte jao. Aakhir mein jab commit/push karenge, tab errors dekh kar fix karenge. Abhi code mukammal karo."
-- [ ] Is liye implementation ke darmiyan har choti tabdeeli ke baad build/test chalana zaroori nahi. Pehle tamam agreed code changes mukammal karne hain; phir aik consolidated review, build aur tests commit/push se pehle ya us waqt available environment mein chalaye jayenge.
-- [ ] Yeh ijazat accounting/data safety ko bypass karne ki ijazat nahi: Recall Bill overwrite ke liye return ya baad ki Khata receipt/payment ki pabandi, stock aur Khata ki aik SQLite transaction, rollback par original bill ki hifazat, sync/outbox identity aur existing discount/printing behavior preserve karna lazmi hai.
+- [x] **Status: In Progress.** Owner ki wazeh hidayat: code-first development, related changes grouped, har choti update par Actions/commit nahi.
+- [x] Implementation ke darmiyan har choti tabdeeli par build/test nahi chalaya jayega; grouped milestone par zaroori regression validation hogi. Android Recall milestone run #98 pass; WPF final validation abhi pending.
+- [x] Accounting/data safety conditions enforce hain: return/later Khata receipt block, same-second ordering, transaction/rollback, stock/Khata reconciliation, sync identity aur discount/printing behavior preserve. WPF final regression run pending.
 - [ ] Agar local terminal ya CI run available na ho to tests skip hone ki wajah sachai se note karni hai; test pass hone ka dawa nahi karna.
 
 
