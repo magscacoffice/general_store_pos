@@ -42,8 +42,13 @@ public partial class MainWindow : Window
         _pendingBills = new PendingBillService(access);
         _sales = new SalePostingService(access);
         _driveSync = new WindowsDriveSyncService(access);
+        _driveSync.StatusChanged += DriveSync_StatusChanged;
         _driveSync.StartAutoSync();
-        Closed += (_, _) => _driveSync.StopAutoSync();
+        Closed += (_, _) =>
+        {
+            _driveSync.StopAutoSync();
+            _driveSync.StatusChanged -= DriveSync_StatusChanged;
+        };
         InitializeComponent();
         // Keep the complete window inside the usable display area (excluding the taskbar).
         // WPF dimensions and SystemParameters.WorkArea are both device-independent units.
@@ -135,12 +140,42 @@ public partial class MainWindow : Window
             SearchStatusText.Text = ex.Message;
         }
         UserStatusText.Text = $"Signed in: {_session.DisplayName} ({_session.Role})";
-        DriveStatusText.Text = _driveSync.IsEnabled ? "Drive: Enabled" : "Drive: Paused";
-        DriveStatusText.ToolTip = _driveSync.Status;
+        UpdateDriveStatus();
         _ = LoadPrinterStatusAsync();
         RefreshTotals();
         FocusScanner();
         _ = CheckForUpdatesOnStartupAsync();
+    }
+
+
+    private void DriveSync_StatusChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.InvokeAsync(UpdateDriveStatus);
+            return;
+        }
+        UpdateDriveStatus();
+    }
+
+    private void UpdateDriveStatus()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.InvokeAsync(UpdateDriveStatus);
+            return;
+        }
+
+        DriveStatusText.Text = !_driveSync.IsEnabled
+            ? "Drive: Disabled"
+            : !_driveSync.HasSavedCredentials
+                ? "Drive: Connect required"
+                : _driveSync.LastError is not null
+                    ? "Drive: Sync error"
+                    : _driveSync.LastSyncAtUtc is DateTimeOffset lastSync
+                        ? $"Drive: Synced {lastSync.LocalDateTime:t}"
+                        : "Drive: Connected — first sync pending";
+        DriveStatusText.ToolTip = _driveSync.Status;
     }
 
     private async Task LoadPrinterStatusAsync()

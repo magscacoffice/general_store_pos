@@ -1506,15 +1506,14 @@ public sealed class PosDatabaseSchemaVerifierTests
 
 
     [Fact]
-    public async Task WindowsDriveSyncRemainsDisabledUntilSafetyMatrixAndOwnerAcceptance()
+    public void WindowsDriveSyncIsEnabledAndWaitsForAdminOAuthBeforeAutoSync()
     {
         var sync = new WindowsDriveSyncService(TestAccess);
-        sync.StartAutoSync();
 
-        Assert.False(sync.IsEnabled);
-        Assert.Contains("paused", sync.Status.ToLowerInvariant());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sync.ConnectAndSyncAsync());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sync.SyncNowAsync());
+        Assert.True(sync.IsEnabled);
+        Assert.False(sync.HasSavedCredentials);
+        sync.StartAutoSync();
+        Assert.Contains("connect", sync.Status.ToLowerInvariant());
     }
 
 
