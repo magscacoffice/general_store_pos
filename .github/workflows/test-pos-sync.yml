@@ -1,10 +1,6 @@
 name: POS sync and invoice conversion tests
 
 on:
-  push:
-    branches:
-      - 'main'
-      - 'integration/wpf-mainline'
   workflow_dispatch:
 
 permissions:

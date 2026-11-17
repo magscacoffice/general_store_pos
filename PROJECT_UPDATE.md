@@ -906,3 +906,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Agar original sale ke waqt receipt record hi nahi thi to same-second receipt ko conservatively later maan kar overwrite block hoga; ambiguous ordering par accounting history overwrite nahi hogi.
 - [x] Android aur WPF disposable-database tests ko same-second prior/later receipt ordering verify karne ke liye update kiya.
 - [ ] Updated Android and WPF regression suites must pass before this safety refinement is marked validated.
+
+
+## Validation update — 2026-11-17 (Android + WPF consolidated pass)
+
+- [x] Android Flutter analyze passed and 20/20 tests passed on both Ubuntu and Windows in POS workflow run #97.
+- [x] Android Recall tests passed: edited bill total/discount/received/Khata/stock, earlier receipt allowed, later receipt blocked with rollback, and return-record overwrite block.
+- [x] Windows WPF Release build passed and 41/41 regression tests passed in run #411. The self-contained Windows x64 test artifact was uploaded.
+- [x] Both WPF build/test and Android sync/invoice test workflows are now manual workflow_dispatch only. Future code pushes will not automatically run Actions; use a planned milestone/final validation run.
+- [ ] Drive snapshot update/delete identity and full schema-v18 reconciliation matrix remain pending; Google Drive network sync remains disabled.
+- [ ] Physical Windows PC, SpeedX SP60D scanner, BC-86AC printer/cutter, PDF output, backup/restore and owner sign-off remain pending.
+- [ ] Production updater remains disabled until the production signing certificate and trusted thumbprint are provided.
