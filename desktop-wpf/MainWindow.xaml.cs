@@ -118,9 +118,40 @@ public partial class MainWindow : Window
             DatabaseStatusText.Foreground = Brushes.Firebrick;
             SearchStatusText.Text = ex.Message;
         }
+        UserStatusText.Text = $"Signed in: {_session.DisplayName} ({_session.Role})";
+        DriveStatusText.Text = _driveSync.IsEnabled ? "Drive: Enabled" : "Drive: Paused";
+        DriveStatusText.ToolTip = _driveSync.Status;
+        _ = LoadPrinterStatusAsync();
         RefreshTotals();
         FocusScanner();
         _ = CheckForUpdatesOnStartupAsync();
+    }
+
+    private async Task LoadPrinterStatusAsync()
+    {
+        try
+        {
+            var printerService = new PrinterSettingsService();
+            var preferences = await printerService.LoadAsync();
+            if (string.IsNullOrWhiteSpace(preferences.PreferredPrinter))
+            {
+                PrinterStatusText.Text = "Printer: Not selected";
+                return;
+            }
+
+            var queues = await printerService.GetInstalledAsync();
+            var saved = queues.FirstOrDefault(x =>
+                string.Equals(x.Name, preferences.PreferredPrinter, StringComparison.OrdinalIgnoreCase));
+            PrinterStatusText.Text = saved is null
+                ? $"Printer: {preferences.PreferredPrinter} (not installed)"
+                : saved.IsAvailable
+                    ? $"Printer: {saved.Name} (available)"
+                    : $"Printer: {saved.Name} (unavailable)";
+        }
+        catch
+        {
+            PrinterStatusText.Text = "Printer: Status unavailable";
+        }
     }
 
     private async Task CheckForUpdatesOnStartupAsync()

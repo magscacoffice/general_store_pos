@@ -948,3 +948,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Is UI role-path ki WPF compile/regression validation final manual WPF run mein hogi.
 
 - [x] Schema-v18 upgrade audit found and fixed migration ordering for databases older than v7: sale_items and sale_return_items are now created before the v18 stock_unit columns are added. A version-3 legacy-database preservation regression test was added; execution remains for the next manual Android validation milestone.
+
+
+## Work log — 2026-11-17 (WPF cashier status strip)
+
+- [x] Main Sale workspace header ab active cashier ka display name/role, Google Drive ka actual paused/enabled state aur saved printer queue ki installed/available/unavailable state dikhata hai.
+- [x] Printer status background async load hota hai aur spooler enumeration failure ko local POS startup failure nahi banata; scanner focus ko status lookup se block nahi kiya jata.
+- [ ] Header status strip aur sidebar scrolling ka final WPF XAML/Release validation planned final manual run mein pending hai.

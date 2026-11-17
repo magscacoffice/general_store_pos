@@ -101,6 +101,11 @@
                                Foreground="#65736C" Margin="0,4,0,0"/>
                     <TextBlock x:Name="UpdateStatusText" Text="Updates checked automatically when internet is available."
                                Foreground="#728078" FontSize="11" Margin="0,4,0,0"/>
+                    <WrapPanel Margin="0,6,0,0">
+                        <TextBlock x:Name="UserStatusText" Foreground="#52615B" FontSize="11"/>
+                        <TextBlock x:Name="DriveStatusText" Foreground="#8A5A24" FontSize="11" Margin="12,0,0,0"/>
+                        <TextBlock x:Name="PrinterStatusText" Foreground="#52615B" FontSize="11" Margin="12,0,0,0"/>
+                    </WrapPanel>
                 </StackPanel>
                 <Border Grid.Column="1" Background="White" BorderBrush="#DCE5E0" BorderThickness="1"
                         CornerRadius="8" Padding="12,8" VerticalAlignment="Center">
