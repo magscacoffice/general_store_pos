@@ -457,6 +457,15 @@ public partial class MainWindow : Window
         SubtotalText.Text = $"Rs. {Subtotal:N2}";
         FinalTotalText.Text = $"Rs. {FinalTotal:N2}";
         DiscountPreviewText.Text = $"Discount: Rs. {CalculatedDiscount:N2}";
+        var paymentMode = PaymentModeBox.SelectedItem?.ToString() ?? "Cash";
+        var displayedReceived = paymentMode switch
+        {
+            "Cash" => FinalTotal,
+            "Partial" when double.TryParse(PartialAmountBox.Text, NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var partial) && double.IsFinite(partial) && partial > 0 => partial,
+            _ => 0d
+        };
+        ReceivedBalanceText.Text = $"Received Rs. {displayedReceived:N2}  •  Due Rs. {Math.Max(0d, FinalTotal - displayedReceived):N2}";
         CartCountText.Text = $"{CartLines.Sum(x => x.Quantity)} units • {CartLines.Count} lines";
         CheckoutButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
         PrintBillButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;

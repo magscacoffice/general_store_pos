@@ -163,7 +163,7 @@ The Android client remains Flutter/Dart. The current-main-based integration bran
 - [x] WPF opens directly into the New Sale cashier workspace.
 - [x] Cashier workspace includes persistent scanner/search, product suggestions, stock context and editable cart DataGrid.
 - [x] Cashier workspace includes customer type/account, discount, subtotal/final total, payment mode, received/balance and checkout.
-- [ ] Cart columns: barcode/item, quantity, unit, rate, discount where applicable, line amount; support keyboard edit and clear row selection.
+- [x] Cart columns now show barcode/item, editable quantity, stock unit, editable rate where Wholesale permits it, and line amount; keyboard editing and remove/clear actions remain available. The schema-v18 sale model has bill-level fixed/percentage discount (no separate per-line discount field), so the existing bill discount is retained rather than inventing a line-discount value. New Sale summary also previews received and due amounts for Cash/Credit/Partial.
 - [x] Scanner receives initial focus and regains focus after product add/scan and New Sale; deliberate customer/payment field focus is respected.
 - [x] New Sale persists the current pending bill, creates a new bill identity, and restores pending customer/payment/discount details when switching.
 - [x] F2 scanner, F4 customer, F5 new bill, F6 discount, F7 partial received, F8 payment mode, F9/Ctrl+P print, F10 checkout and Esc transient-action shortcuts are implemented.
@@ -1083,3 +1083,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Fixed two test-harness defects exposed by run #415: the pending-bill test now uses an isolated disposable database directory rather than attempting to delete the shared system temp folder; repeated account seeding now avoids inserting the same test product barcode twice.
 - [x] This artifact includes the WPF startup work-area sizing and compact New Sale panel source changes.
 - [ ] Owner must extract and launch the ZIP on Windows 10/11 x64 using a disposable database copy; validate actual display/DPI fit, New Sale no-scroll layout, scanner, printer, PDF and backup/restore. This unsigned test artifact is not production-ready.
+
+## Work log — 2026-11-17 (New Sale cart and payment visibility)
+
+- [x] Cart grid now includes stock unit and compact barcode/quantity/rate/amount columns to improve fit at desktop cashier widths.
+- [x] New Sale summary now previews the received and remaining due amounts live for Cash, Credit and Partial modes; this is display-only and does not alter checkout calculations or SQLite values.
+- [x] Existing bill-level fixed/percentage discount remains unchanged. Schema v18 has no separate line-discount field, so no fake per-item discount column was added.
+- [ ] These final XAML changes require the next grouped WPF Release/test run and owner visual acceptance at 980×650 and 1280×720.
