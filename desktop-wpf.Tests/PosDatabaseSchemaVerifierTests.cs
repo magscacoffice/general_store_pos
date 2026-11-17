@@ -1614,4 +1614,60 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
 
+    [Fact]
+    public async Task PendingBillsAreIsolatedByCashierAndAdminRetainsAllAccess()
+    {
+        var path = await CreateFixtureAsync();
+        var directory = Path.GetDirectoryName(path)!;
+        var accessPath = Path.Combine(directory, "pending-bill-access.dat");
+        try
+        {
+            var access = new AccessService(accessPath);
+            access.ProvisionFirstAdmin("testadmin", "Test Admin", "TestPassword!2026");
+            AccessService.RegisterProcess(access);
+            var service = new PendingBillService(path);
+
+            var adminDraft = new PendingBillSnapshot(
+                "admin-draft", "Admin Draft", DateTime.Now.ToString("s"), [],
+                null, "Walk-in", "Cash", 0, false, "");
+            await service.SaveAsync(adminDraft);
+
+            access.CreateStaff("cashier-one", "Cashier One", "CashierPass!2026", AccessRole.Salesman);
+            var salesmanSession = access.Authenticate("cashier-one", "CashierPass!2026");
+            AccessService.RegisterProcess(access);
+
+            var salesmanDraft = new PendingBillSnapshot(
+                "salesman-draft", "Salesman Draft", DateTime.Now.ToString("s"), [],
+                null, "Walk-in", "Cash", 0, false, "");
+            await service.SaveAsync(salesmanDraft);
+
+            var visibleToSalesman = await service.GetAllAsync();
+            Assert.Single(visibleToSalesman);
+            Assert.Equal("salesman-draft", visibleToSalesman[0].BillId);
+            Assert.Equal(salesmanSession.UserId, visibleToSalesman[0].CashierUid);
+
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                () => service.SaveAsync(adminDraft with { Label = "Overwritten by Salesman" }));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                () => service.DeleteAsync("admin-draft"));
+
+            await service.DeleteAsync("salesman-draft");
+            Assert.Empty(await service.GetAllAsync());
+
+            access.Authenticate("testadmin", "TestPassword!2026");
+            AccessService.RegisterProcess(access);
+            var visibleToAdmin = await service.GetAllAsync();
+            Assert.Single(visibleToAdmin);
+            Assert.Equal("admin-draft", visibleToAdmin[0].BillId);
+            await service.DeleteAsync("admin-draft");
+            Assert.Empty(await service.GetAllAsync());
+        }
+        finally
+        {
+            AccessService.RegisterProcess(TestAccess);
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+
 }

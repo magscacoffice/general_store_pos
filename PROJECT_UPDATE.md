@@ -1015,3 +1015,13 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Saved-printer status now also treats paused queues, paper-out/paper-problem, open door, user intervention and pending deletion as unavailable; app no longer reports these spooler states as ready.
 - [ ] Actual BC-86AC hardware status/cutter and spooler driver behaviour still require target Windows PC verification.
+
+
+## Work log — 2026-11-17 (Cashier-scoped pending bills)
+
+- [x] Existing SQLite v18 pending_bills schema unchanged; authenticated cashier UID ab payload JSON mein store hoti hai.
+- [x] Salesman ko sirf apne drafts list, update aur delete karne ki permission; doosray cashier ke draft ko overwrite/delete karne par service-level UnauthorizedAccessException.
+- [x] Admin ko tamam legacy/new drafts visible aur manageable; purane drafts jin mein cashier UID nahi, Salesman se hidden rehte hain jab tak Admin unhein explicitly reassign na kare.
+- [x] Read-only pending-bill list load par unnecessary backup removed; Save/Delete se pehle verified backup retained.
+- [x] Disposable schema-v18 test add kiya jo Admin/Salesman visibility, ownership, overwrite/delete restrictions aur Admin full access verify karta hai.
+- [ ] WPF final manual Release build/test mein pending-bill ownership regression test validate karna hai.
