@@ -940,3 +940,9 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Main WPF navigation sidebar ko 3-row Grid layout mein convert kiya: brand/header aur footer stable rehte hain, jabke tamam navigation actions independently vertical-scrollable hain.
 - [x] 980×650 minimum window par long navigation list footer ko push/clip nahi karegi; horizontal scrolling disabled hai. Final WPF XAML/Release validation consolidated manual run mein pending hai.
+
+
+## Work log — 2026-11-17 (Printer workstation-role parity)
+
+- [x] Printer Test Print action ko bhi `SaveWorkstationAsync` par shift kiya. Salesman ab printer selection/configuration ke sath test print preferences bhi save kar sakta hai; admin-only general `SaveAsync` security boundary unchanged hai.
+- [ ] Is UI role-path ki WPF compile/regression validation final manual WPF run mein hogi.
