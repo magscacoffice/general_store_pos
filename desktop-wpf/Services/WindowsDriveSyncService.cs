@@ -128,7 +128,8 @@ public sealed class WindowsDriveSyncService
     
                     SetStatus($"Merging records from {validated.DeviceId}...");
                     var result = await _merge.MergeAsync(validated, validated.DeviceId, path,
-                        applyMasterState: false, detectConflicts: true, cancellationToken);
+                        applyMasterState: false, detectConflicts: true, cancellationToken,
+                        autoResolveConflictsKeepWindows: true);
                     imported++;
                     pendingConflicts += result.PendingConflicts;
                     if (result.SnapshotFullyAccepted)
@@ -159,7 +160,7 @@ public sealed class WindowsDriveSyncService
             pendingConflicts = remaining.Count;
             var summary = new DriveSyncSummary(imported, skipped, pendingConflicts, LastSyncAtUtc.Value);
             SetStatus(pendingConflicts > 0
-                    ? $"Windows master synced. {pendingConflicts} conflict(s) require Admin review."
+                    ? $"Windows master synced. {pendingConflicts} unexpected conflict(s) remain for Admin review."
                     : $"Windows master synced successfully at {LastSyncAtUtc.Value.LocalDateTime:t}.");
             return summary;
         }
