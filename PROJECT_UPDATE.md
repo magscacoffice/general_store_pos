@@ -1054,3 +1054,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Root cause: Salesman direct-Recall test had an extra closing brace after the assertion, producing CS1524/CS1519. The current integration branch test source has that extra brace removed.
 - [x] The same test fixture's SQLite connection is now disposed before invoking SalePostingService, avoiding an open-file/backup interaction during the service test.
 - [ ] Corrected WPF test suite and latest code changes have not yet been rerun; manual workflow_dispatch is still required. Do not treat #412 as a passing artifact.
+
+
+## WPF final rerun — 2026-11-17
+
+- [x] Run #412 test-file extra brace was corrected on the current branch; SalesHistory and cashier-scoped pending-bill regression tests were added after that failed run.
+- [x] One consolidated WPF validation attempt is now enabled for this grouped desktop source/test milestone only. After the run completes, the workflow will return to manual-only so ordinary edits do not trigger Actions.
+- [ ] Current branch build, all WPF tests and Windows x64 artifact result are pending run #413.
