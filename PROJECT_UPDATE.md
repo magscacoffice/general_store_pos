@@ -1277,3 +1277,6 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Enabled the grouped WPF Release/test/Windows x64 test-ZIP workflow on pushes to `main` as well as `integration/wpf-mainline`, so this authorized main-branch update gets a Windows validation run.
 - [ ] Confirm the resulting main-branch WPF Release build and full automated test run; record the successful run and test artifact only after GitHub Actions completes.
 - [ ] Production Windows Release `v1.0.1.0` remains blocked until the owner supplies the production code-signing certificate and approved publisher thumbprint. Do not publish an unsigned installer or bypass the Authenticode/SHA-256 updater checks.
+
+
+- [x] Corrected a malformed four-part installer-version validation regex detected in the first push-triggered workflow evaluation; the validation workflow is now syntactically aligned with `1.0.1.0`.

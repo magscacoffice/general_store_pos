@@ -48,7 +48,7 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
           $version = $env:APP_VERSION
           if ([string]::IsNullOrWhiteSpace($version)) { $version = "1.0.1.0" }
-          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+) {
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
             throw "Invalid installer version: $version"
           }
           & $iscc "/DAppVersion=$version" "installer/KhanBabaPOS.iss"
