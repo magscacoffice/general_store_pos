@@ -35,6 +35,7 @@ public sealed class KhataWindow:Window
 
         var toolbar=new DockPanel{LastChildFill=false,Margin=new Thickness(0,0,0,12)};
         _search.Width=300;_search.Height=36;_search.Padding=new Thickness(8,6,8,6);_search.ToolTip="Search customer name or phone";toolbar.Children.Add(_search);
+        var reminder=Btn("WhatsApp Reminder");reminder.Click+=(_,_)=>SendWhatsAppReminder();DockPanel.SetDock(reminder,Dock.Right);toolbar.Children.Add(reminder);
         var ledger=Btn("View Ledger");ledger.Click+=async(_,_)=>await OpenLedgerAsync();DockPanel.SetDock(ledger,Dock.Right);toolbar.Children.Add(ledger);
         var receipt=Btn("Record Receipt");receipt.Click+=async(_,_)=>await ReceiptAsync();DockPanel.SetDock(receipt,Dock.Right);toolbar.Children.Add(receipt);
         DockPanel.SetDock(toolbar,Dock.Top);root.Children.Add(toolbar);
@@ -56,6 +57,11 @@ public sealed class KhataWindow:Window
     private async Task LoadAsync(){
         try{var rows=await _service.GetCustomersAsync(_search.Text);Customers.Clear();foreach(var row in rows)Customers.Add(row);_status.Text=$"{Customers.Count:N0} Khata customer(s)";}
         catch(Exception ex){_status.Text="Khata load failed: "+ex.Message;}
+    }
+    private void SendWhatsAppReminder(){
+        if(_grid.SelectedItem is not KhataCustomer customer)return;
+        try{WhatsAppReminderService.ReviewAndOpen(this,customer.Name,customer.Phone,customer.Balance);}
+        catch(Exception ex){MessageBox.Show(ex.Message,"WhatsApp reminder",MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
     private async Task OpenLedgerAsync(){
         if(_grid.SelectedItem is not KhataCustomer customer)return;

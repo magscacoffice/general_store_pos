@@ -1184,8 +1184,25 @@ Future improvements: add new ideas here when the owner requests them.
 
 ## Pending requirements — Windows POS usability, reminders and updates (Owner request: 2026-11-17)
 
-- [ ] **WhatsApp reminders:** Add a clear option to send a reminder through WhatsApp from the relevant reminder/customer workflow. The user must be able to review the recipient and message before sending; show a clear sent/failed result. Preserve the existing reminder schedule/data and do not silently send messages.
-- [ ] **Windows app update notification:** On app startup (and an appropriate manual check option), check whether a newer stable Windows version is available. If an update exists, show the installed version and latest available version, with a clear notification and update action. Handle offline/check failures without blocking normal POS use.
-- [ ] **Windows update download location:** In the update notification/details, explicitly show the exact download file location/path after the update package is downloaded, and provide an action to open that folder or launch the downloaded installer. Do not display a guessed path; show the actual resolved path and download status.
-- [ ] **New Sale keyboard shortcuts:** Display a short, readable keyboard-shortcut hint beside every relevant function/control on the Windows New Sale screen (for example barcode scan/focus, product search, quantity, discount, customer selection, payment, hold/resume if supported, complete sale, and clear/cancel). Shortcuts must match the actual implemented key bindings, avoid conflicting with text-entry fields, and be usable without a mouse. Add a compact shortcut legend/help view as well so cashiers can quickly learn all available keys.
-- [ ] Add automated tests for update-version comparison/download-path reporting and shortcut bindings; test WhatsApp reminder handoff and success/failure feedback. Complete owner acceptance on the target Windows PC before marking these items done.
+- [x] **WhatsApp reminders (source implemented):** Customer reminders are available from Parties and Customer Khata. The recipient and prefilled message are reviewed before opening WhatsApp; the app reports successful handoff or launch failure and never claims delivery. The user presses Send in WhatsApp.
+- [x] **Windows app update notification (source implemented):** Startup and manual checks show installed/latest stable versions and update availability. Offline/check failures remain non-blocking.
+- [x] **Windows update download location (source implemented, signing-gated):** After a verified signed package is downloaded, show the exact resolved local path and offer install now or install later/open folder. Download and install remain disabled until the production signing certificate/thumbprint is configured.
+- [x] **New Sale keyboard shortcuts (source implemented):** Visible hints and F1 help cover F2 scanner/search, F4 customer, F5 new bill, F6 discount, F7 received amount, F8 payment mode, F9/Ctrl+P print, F10 complete sale, F11/F12 quantity, Ctrl+Delete remove line and Ctrl+Shift+Delete clear bill.
+- [x] Added automated tests for Pakistani phone normalization, reminder message content, version comparison, update-folder resolution and safe installer filenames. UI handoff, actual Windows keyboard interaction, and target-PC acceptance remain manual checks; no build/test run was started because the owner has prohibited build artifacts for now.
+
+
+## Work log — 2026-11-18 (Connected GitHub workflow and pending cashier features)
+
+- [x] Confirmed GitHub is already connected to ChatGPT for this repository. Use the existing connected GitHub integration for repository reads and writes; do not ask the owner to reconnect GitHub or request Codespace access when the connected tools can perform the task.
+- [x] Related source and tracker changes are kept together in one consolidated commit; avoid commits for individual small edits.
+- [x] No APK, Windows ZIP, installer or other build artifact is generated without the owner's explicit authorization.
+- [x] WhatsApp uses review-before-handoff; the app does not claim message delivery.
+- [x] Update UI displays installed/latest version; verified download path and install-later/open-folder action are shown when signing is configured. Production signing remains a hard gate.
+- [x] New Sale shortcut labels and F1 help are aligned with implemented bindings.
+
+
+## Static source review — 2026-11-18
+
+- [x] Cashier shortcut review: Ctrl+Delete, Ctrl+Shift+Delete and Ctrl+P now defer to normal text editing when a TextBox or PasswordBox has focus; F9 remains the dedicated print shortcut.
+- [x] Startup update status retains both installed and latest version when an update is available.
+- [ ] Runtime compilation, automated test execution and Windows-device acceptance are still outstanding. Do not run commands that generate build artifacts until the owner authorizes that step.

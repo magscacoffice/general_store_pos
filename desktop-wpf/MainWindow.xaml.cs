@@ -210,13 +210,21 @@ public partial class MainWindow : Window
         try
         {
             var updater = new NativeUpdateService();
+            var installed = NativeUpdateService.GetInstalledVersion();
+            var latest = await updater.GetLatestVersionAsync();
+            UpdateStatusText.Text = $"Windows version: installed {installed} • latest {latest}";
+            if (latest <= installed)
+            {
+                UpdateButton.Content = "✓ POS is up to date";
+                UpdateStatusText.Foreground = Brushes.SeaGreen;
+                return;
+            }
             var update = await updater.CheckForUpdateAsync();
             if (update is null) return;
-
             UpdateButton.Content = $"⬆ Update {update.Version} available";
             UpdateButton.Background = new SolidColorBrush(Color.FromRgb(220, 239, 226));
             UpdateButton.Foreground = new SolidColorBrush(Color.FromRgb(23, 75, 49));
-            UpdateStatusText.Text = "A newer Windows version is available. Admin can open Check for Updates.";
+            UpdateStatusText.Text = $"Update available: installed {installed} • latest {update.Version}. Admin can open Check for Updates.";
             UpdateStatusText.Foreground = Brushes.SeaGreen;
 
             // Persist the last notified stable version so startup does not repeat the same popup.
@@ -231,7 +239,7 @@ public partial class MainWindow : Window
             if (!string.Equals(lastNotified, versionText, StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show(
-                    $"Khan Baba POS ka naya stable version {versionText} available hai.\\n\\n{update.ReleaseNotes}\\n\\nInstaller download/install tab tak disabled rahega jab tak production signing certificate configure nahi hota.",
+                    $"Khan Baba POS ka naya stable version {versionText} available hai.\n\n{update.ReleaseNotes}\n\nInstaller download/install tab tak disabled rahega jab tak production signing certificate configure nahi hota.",
                     "Khan Baba POS — Update Available",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -294,6 +302,9 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // Do not steal standard editing shortcuts from text-entry controls.
+        var textEntryFocused = Keyboard.FocusedElement is TextBox ||
+                              Keyboard.FocusedElement is PasswordBox;
         // Cashier shortcuts are handled at the window level so they work from
         // the scanner, grid and payment controls without requiring mouse clicks.
         if (e.Key == Key.F2)
@@ -330,7 +341,7 @@ public partial class MainWindow : Window
             PaymentModeBox.IsDropDownOpen = true;
             e.Handled = true;
         }
-        else if (e.Key == Key.F9 || (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control))
+        else if (e.Key == Key.F9 || (!textEntryFocused && e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control))
         {
             PrintCurrentBill_Click(this, new RoutedEventArgs());
             e.Handled = true;
@@ -338,6 +349,30 @@ public partial class MainWindow : Window
         else if (e.Key == Key.F10 && !_checkoutInProgress)
         {
             Checkout_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F1)
+        {
+            MessageBox.Show(
+                "CASHIER KEYBOARD SHORTCUTS\n\nF1  Keyboard help\nF2  Barcode scanner / product search\nF4  Customer selection\nF5  New bill\nF6  Discount\nF7  Cash received\nF8  Payment mode\nF9  Print current bill\nF10 Complete sale\nF11 Increase selected item quantity\nF12 Decrease selected item quantity\nCtrl+Delete Remove selected item\nCtrl+Shift+Delete Clear current bill\nCtrl+P Print current bill\n\nScanner focus returns after adding a product.",
+                "Khan Baba POS — Keyboard Shortcuts", MessageBoxButton.OK, MessageBoxImage.Information);
+            e.Handled = true;
+        }
+        else if ((e.Key == Key.F11 || e.Key == Key.F12) && CartGrid.SelectedItem is CartLine selectedLine)
+        {
+            selectedLine.Quantity = Math.Clamp(selectedLine.Quantity + (e.Key == Key.F11 ? 1 : -1), 1,
+                Math.Max(1, selectedLine.AvailableStock));
+            e.Handled = true;
+        }
+        else if (!textEntryFocused && e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            RemoveSelected_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
+        else if (!textEntryFocused && e.Key == Key.Delete &&
+                 Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            ClearBill_Click(this, new RoutedEventArgs());
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
@@ -1035,19 +1070,30 @@ public partial class MainWindow : Window
         var updater = new NativeUpdateService();
         try
         {
-            var update = await updater.CheckForUpdateAsync();
-            if (update is null)
+            var installed = NativeUpdateService.GetInstalledVersion();
+            var latest = await updater.GetLatestVersionAsync();
+            if (latest <= installed)
             {
-                MessageBox.Show("Apka POS latest release par hai.", "Software Update", MessageBoxButton.OK, MessageBoxImage.Information);
+                UpdateStatusText.Text = $"Windows version: installed {installed} • latest {latest} (up to date)";
+                MessageBox.Show($"Apka POS latest stable release par hai.\nInstalled version: {installed}\nLatest version: {latest}",
+                    "Software Update", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            var message = $"New version {update.Version} available hai.\\n\\n{update.ReleaseNotes}";
+
+            var update = await updater.CheckForUpdateAsync()
+                ?? throw new InvalidDataException("Latest release update details could not be loaded.");
+            var message = $"Installed version: {installed}\nLatest version: {latest}\n\n{update.ReleaseNotes}";
+            UpdateStatusText.Text = $"Update available: installed {installed} • latest {latest}";
             if (!updater.CanInstallSignedUpdates)
             {
-                MessageBox.Show(message + "\\n\\nDownload/install filhal disabled hai jab tak production code-signing certificate configure nahi hota.", "Update available — installation pending", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(message + "\n\nDownload/install filhal disabled hai jab tak production code-signing certificate aur trusted thumbprint configure nahi hota.",
+                    "Update available — signing setup required", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (MessageBox.Show(message + "\\n\\nUpdate install karna hai?", "Software Update", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+            if (MessageBox.Show(message + "\n\nVerified update download karna hai?", "Software Update",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
             var progress = new Progress<NativeUpdateProgress>(value =>
             {
                 UpdateStatusText.Text = $"Verified installer download: {value.Percentage:0}%";
@@ -1055,16 +1101,31 @@ public partial class MainWindow : Window
             UpdateButton.IsEnabled = false;
             try
             {
-                await updater.DownloadAndStartInstallerAsync(update, progress);
-                Application.Current.Shutdown();
+                var path = await updater.DownloadVerifiedInstallerAsync(update, progress);
+                UpdateStatusText.Text = $"Update downloaded: {path}";
+                var choice = MessageBox.Show(
+                    $"Verified update download ho gaya.\n\nExact file location:\n{path}\n\nYes = Install now\nNo = Install later (file saved rahegi)",
+                    "Update downloaded",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Information);
+                if (choice == MessageBoxResult.Yes)
+                {
+                    updater.LaunchDownloadedInstaller(path);
+                    Application.Current.Shutdown();
+                }
+                else if (choice == MessageBoxResult.No)
+                {
+                    MessageBox.Show($"Installer baad mein is location se chala sakte hain:\n{path}",
+                        "Update saved for later", MessageBoxButton.OK, MessageBoxImage.Information);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        NativeUpdateService.GetUpdateDirectory()) { UseShellExecute = true });
+                }
             }
-            finally
-            {
-                UpdateButton.IsEnabled = true;
-            }
+            finally { UpdateButton.IsEnabled = true; }
         }
         catch (Exception ex)
         {
+            UpdateStatusText.Text = "Update check/download failed: " + ex.Message;
             MessageBox.Show(ex.Message, "Software Update", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

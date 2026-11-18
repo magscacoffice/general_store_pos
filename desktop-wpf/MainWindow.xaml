@@ -138,7 +138,7 @@
                                  VerticalContentAlignment="Center" ToolTip="Barcode scanner or product search"
                                  TextChanged="ScannerBox_TextChanged" KeyDown="ScannerBox_KeyDown"
                                  AutomationProperties.Name="Barcode scanner and product search"/>
-                        <TextBlock Grid.Column="1" Text="Scan barcode or search product…"
+                        <TextBlock Grid.Column="1" Text="Scan / Search • F2"
                                    Foreground="#9AA69F" FontSize="15" IsHitTestVisible="False"
                                    VerticalAlignment="Center" Margin="8,0,0,0">
                             <TextBlock.Style>
@@ -192,7 +192,7 @@
                     <ComboBox x:Name="PendingBillsBox" Width="155" DisplayMemberPath="Label"
                               SelectedValuePath="BillId" SelectionChanged="PendingBillsBox_SelectionChanged"/>
                 </StackPanel>
-                <Button Grid.Column="2" Content="+ New Bill" Click="NewSale_Click" Margin="0" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="+ New Bill • F5" Click="NewSale_Click" Margin="0" VerticalAlignment="Center"/>
             </Grid>
 
             <Grid Grid.Row="2">
@@ -223,15 +223,15 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Barcode" Binding="{Binding Barcode}" Width="82" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Item" Binding="{Binding Name}" Width="*" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="52"/>
+                                <DataGridTextColumn Header="Qty (F11/F12)" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="52"/>
                                 <DataGridTextColumn Header="Unit" Binding="{Binding StockUnit}" Width="52" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Rate" Binding="{Binding Price, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}" Width="72"/>
                                 <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="82" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
                         <DockPanel Grid.Row="2" Margin="0,10,0,0">
-                            <Button Content="Remove selected" Click="RemoveSelected_Click" Margin="0"/>
-                            <Button Content="Clear bill" Click="ClearBill_Click" DockPanel.Dock="Right" Margin="8,0,0,0"/>
+                            <Button Content="Remove selected • Ctrl+Del" Click="RemoveSelected_Click" Margin="0"/>
+                            <Button Content="Clear bill • Ctrl+Shift+Del" Click="ClearBill_Click" DockPanel.Dock="Right" Margin="8,0,0,0"/>
                         </DockPanel>
                     </Grid>
                 </Border>
@@ -260,22 +260,22 @@
                                 <ComboBox x:Name="SaleTypeBox" MinHeight="30" SelectionChanged="SaleTypeBox_SelectionChanged"/>
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="5,0,2,5">
-                                <TextBlock Text="Customer" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
+                                <TextBlock Text="Customer • F4" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
                                 <ComboBox x:Name="CustomerBox" MinHeight="30" DisplayMemberPath="Name" SelectedValuePath="Id"
                                           SelectionChanged="CustomerBox_SelectionChanged"/>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="2,0,5,0">
-                                <TextBlock Text="Payment mode" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
+                                <TextBlock Text="Payment mode • F8" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
                                 <ComboBox x:Name="PaymentModeBox" MinHeight="30" SelectionChanged="PaymentModeBox_SelectionChanged"/>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="1" Margin="5,0,2,0">
-                                <TextBlock Text="Cash received (Rs.)" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
+                                <TextBlock Text="Cash received • F7 (Rs.)" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
                                 <TextBox x:Name="PartialAmountBox" MinHeight="30" Padding="7,4" TextChanged="CheckoutFields_TextChanged"/>
                             </StackPanel>
                         </Grid>
                         <Grid Grid.Row="2" Margin="2,2,2,7">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="95"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Discount" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#20342D" Margin="0,0,8,0"/>
+                            <TextBlock Text="Discount • F6" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#20342D" Margin="0,0,8,0"/>
                             <ComboBox x:Name="DiscountModeBox" Grid.Column="1" MinHeight="30" SelectionChanged="CheckoutFields_SelectionChanged"/>
                             <TextBox x:Name="DiscountValueBox" Grid.Column="2" MinHeight="30" Padding="7,4" Margin="6,0,0,0"
                                      Text="0" TextChanged="CheckoutFields_TextChanged"/>

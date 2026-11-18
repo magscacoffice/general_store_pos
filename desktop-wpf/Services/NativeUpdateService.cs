@@ -23,6 +23,23 @@ public sealed class NativeUpdateService
 
     public bool CanInstallSignedUpdates => !string.IsNullOrWhiteSpace(TrustedPublisherThumbprint);
 
+    public static Version GetInstalledVersion() =>
+        Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(1, 0, 0, 0);
+
+    public static bool IsUpdateAvailable(Version installed, Version latest) =>
+        latest > installed;
+
+    public async Task<Version> GetLatestVersionAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await Http.GetAsync(ReleaseApi, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var release = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var tag = release.RootElement.GetProperty("tag_name").GetString() ?? "";
+        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version))
+            throw new InvalidDataException("Latest GitHub release tag is not a valid version.");
+        return version;
+    }
+
     public async Task<NativeUpdateInfo?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
     {
         using var response = await Http.GetAsync(ReleaseApi, cancellationToken);
@@ -32,7 +49,7 @@ public sealed class NativeUpdateService
         var tag = root.GetProperty("tag_name").GetString() ?? "";
         if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion))
             throw new InvalidDataException("Latest GitHub release tag is not a valid version.");
-        var currentVersion = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(1, 0, 0, 0);
+        var currentVersion = GetInstalledVersion();
         if (latestVersion <= currentVersion) return null;
 
         var assets = root.GetProperty("assets").EnumerateArray().ToArray();
@@ -74,18 +91,9 @@ public sealed class NativeUpdateService
             installerSize);
     }
 
-    public Task DownloadAndStartInstallerAsync(
-        NativeUpdateInfo update, CancellationToken cancellationToken = default) =>
-        DownloadAndStartInstallerCoreAsync(update, null, cancellationToken);
-
-    public Task DownloadAndStartInstallerAsync(
-        NativeUpdateInfo update, IProgress<NativeUpdateProgress> progress,
-        CancellationToken cancellationToken = default) =>
-        DownloadAndStartInstallerCoreAsync(update, progress, cancellationToken);
-
-    private async Task DownloadAndStartInstallerCoreAsync(
-        NativeUpdateInfo update, IProgress<NativeUpdateProgress>? progress,
-        CancellationToken cancellationToken)
+    public async Task<string> DownloadVerifiedInstallerAsync(
+        NativeUpdateInfo update, IProgress<NativeUpdateProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(update);
         if (!CanInstallSignedUpdates)
@@ -100,10 +108,10 @@ public sealed class NativeUpdateService
         if (update.Sha256.Length != 64 || !update.Sha256.All(Uri.IsHexDigit))
             throw new InvalidDataException("Installer SHA-256 metadata is invalid.");
 
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KhanBabaPOS", "Updates");
+        var directory = GetUpdateDirectory();
         Directory.CreateDirectory(directory);
         var finalName = $"{Path.GetFileNameWithoutExtension(update.InstallerAssetName)}-{update.Version}.exe";
-        var installerPath = Path.Combine(directory, finalName);
+        var installerPath = Path.GetFullPath(Path.Combine(directory, finalName));
         string? stagedPath = null;
         try
         {
@@ -118,17 +126,13 @@ public sealed class NativeUpdateService
                     if (!CryptographicOperations.FixedTimeEquals(
                             Convert.FromHexString(actualHash), Convert.FromHexString(update.Sha256)))
                         throw new CryptographicException("Downloaded installer SHA-256 check failed.");
-
                     VerifyAuthenticodeSignature(stagedPath, pinned);
                     File.Move(stagedPath, installerPath, overwrite: true);
                     stagedPath = null;
                     lastError = null;
                     break;
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex) when (IsTransientDownloadFailure(ex) && attempt < 3)
                 {
                     lastError = ex;
@@ -137,26 +141,57 @@ public sealed class NativeUpdateService
                     await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
                 }
             }
-
             if (lastError is not null)
                 throw new IOException("Installer download failed after three attempts.", lastError);
             if (!File.Exists(installerPath))
                 throw new IOException("Verified installer could not be staged.");
-
-            var start = new ProcessStartInfo(installerPath)
-            {
-                UseShellExecute = true,
-                Verb = "open",
-                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
-            };
-            if (Process.Start(start) is null)
-                throw new InvalidOperationException("Installer process could not be started.");
+            return installerPath;
         }
         finally
         {
             if (stagedPath is not null) TryDelete(stagedPath);
         }
     }
+
+    public void LaunchDownloadedInstaller(string installerPath)
+    {
+        if (!CanInstallSignedUpdates)
+            throw new InvalidOperationException("Updater abhi disabled hai: production code-signing certificate ka thumbprint configure nahi hua.");
+        var directory = Path.GetFullPath(GetUpdateDirectory()) + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(installerPath);
+        if (!fullPath.StartsWith(directory, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            throw new InvalidOperationException("Installer path Khan Baba Updates folder ke andar maujood verified file ka nahi hai.");
+        VerifyAuthenticodeSignature(fullPath, NormalizeThumbprint(TrustedPublisherThumbprint));
+        var start = new ProcessStartInfo(fullPath)
+        {
+            UseShellExecute = true,
+            Verb = "open",
+            Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+        };
+        if (Process.Start(start) is null)
+            throw new InvalidOperationException("Installer process could not be started.");
+    }
+
+    public Task DownloadAndStartInstallerAsync(
+        NativeUpdateInfo update, CancellationToken cancellationToken = default) =>
+        DownloadAndStartInstallerCoreAsync(update, null, cancellationToken);
+
+    public Task DownloadAndStartInstallerAsync(
+        NativeUpdateInfo update, IProgress<NativeUpdateProgress> progress,
+        CancellationToken cancellationToken = default) =>
+        DownloadAndStartInstallerCoreAsync(update, progress, cancellationToken);
+
+    private async Task DownloadAndStartInstallerCoreAsync(
+        NativeUpdateInfo update, IProgress<NativeUpdateProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var path = await DownloadVerifiedInstallerAsync(update, progress, cancellationToken);
+        LaunchDownloadedInstaller(path);
+    }
+
+    public static string GetUpdateDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "KhanBabaPOS", "Updates");
 
     public static bool IsSafeInstallerAssetName(string value) =>
         !string.IsNullOrWhiteSpace(value) &&
