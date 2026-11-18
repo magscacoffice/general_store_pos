@@ -1275,8 +1275,11 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Added regression tests for the 1.0.0.0 → 1.0.1.0 patch update, equal-version handling, four-part tag normalization and the rule that an Android build suffix alone must not trigger a Windows update.
 - [x] Aligned the Inno Setup default, installer validation workflow and release-manifest example with the four-part Windows version contract.
 - [x] Enabled the grouped WPF Release/test/Windows x64 test-ZIP workflow on pushes to `main` as well as `integration/wpf-mainline`, so this authorized main-branch update gets a Windows validation run.
-- [ ] Confirm the resulting main-branch WPF Release build and full automated test run; record the successful run and test artifact only after GitHub Actions completes.
+- [x] Main-branch WPF Release build and full automated test run completed successfully on GitHub Actions run #437 (run ID `44282965290`): Release build succeeded and all 86/86 tests passed.
 - [ ] Production Windows Release `v1.0.1.0` remains blocked until the owner supplies the production code-signing certificate and approved publisher thumbprint. Do not publish an unsigned installer or bypass the Authenticode/SHA-256 updater checks.
 
 
 - [x] Corrected a malformed four-part installer-version validation regex detected in the first push-triggered workflow evaluation; the validation workflow is now syntactically aligned with `1.0.1.0`.
+
+- [x] Run #437 uploaded test artifact `KhanBabaPOS-Windows-x64-437` (artifact ID `14417452483`, GitHub artifact size 68,604,822 bytes; expires 2026-12-18). Run: https://github.com/magscacoffice/general_store_pos/actions/runs/44282965290.
+- [x] Extracted the actual self-contained app ZIP from the workflow artifact and verified its ZIP integrity. Owner test ZIP: `KhanBabaPOS-Windows-x64-437-test-build.zip`; size 68,811,892 bytes; SHA-256 `65c73c991315fcb0bbaabcaaa87303f3885eae91e3831ec4e5b82e4b9402c61a`. The package is unsigned and for Windows x64 testing only.
