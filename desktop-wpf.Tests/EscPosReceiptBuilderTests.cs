@@ -47,6 +47,35 @@ public sealed class EscPosReceiptBuilderTests
     }
 
     [Fact]
+    public void ReceiptKeepsCashierThroughCustomerInTwoRowsAndNetAmountOnOneLine()
+    {
+        var sale = SampleSale();
+        var text = EscPosReceiptBuilder.BuildText(sale, SampleItems(), new PrinterPreferences());
+        var lines = text.Replace("\r", string.Empty).Split('\n');
+
+        var invoiceRow = Assert.Single(lines, line => line.Contains("Bill#", StringComparison.Ordinal));
+        Assert.Contains("Date:", invoiceRow);
+        Assert.Contains("Time:", invoiceRow);
+
+        var cashierRow = Assert.Single(lines, line => line.Contains("Cashier:", StringComparison.Ordinal));
+        Assert.Contains("Cashier: Cashier One", cashierRow);
+        Assert.Contains("Type: Khata", cashierRow);
+
+        var customerRow = Assert.Single(lines, line => line.Contains("Customer:", StringComparison.Ordinal));
+        Assert.Contains("Customer: Test Customer", customerRow);
+        Assert.DoesNotContain("Time:", customerRow);
+
+        var netRow = Assert.Single(lines, line => line.Contains("NET AMOUNT:", StringComparison.Ordinal));
+        Assert.True(netRow.Length <= 45, $"Net Amount must fit one 80mm text row: {netRow}");
+
+        var bytes = EscPosReceiptBuilder.BuildBytes(text, new PrinterPreferences());
+        Assert.True(ContainsStyledLine(bytes, "KHAN BABA", 0x11, bold: true));
+        Assert.True(ContainsStyledLine(bytes, "GENERAL STORE", 0x00, bold: true));
+        Assert.True(ContainsStyledLine(bytes, "G.T ROAD SANAWAN", 0x00, bold: false));
+        Assert.True(ContainsStyledLine(bytes, netRow.Trim(), 0x00, bold: true));
+    }
+
+    [Fact]
     public void EscPosBytesSetEightyMillimeterWidthMarginsEmphasisAndCutter()
     {
         var prefs = new PrinterPreferences(TopMarginMm: 3, BottomMarginMm: 4);
@@ -56,7 +85,6 @@ public sealed class EscPosReceiptBuilderTests
         Assert.True(Contains(bytes, 0x1B, 0x4A, 24));
         Assert.True(Contains(bytes, 0x1B, 0x4A, 32));
         Assert.True(Contains(bytes, 0x1B, 0x61, 1, 0x1B, 0x45, 1, 0x1D, 0x21, 0x11));
-        Assert.True(Contains(bytes, 0x1D, 0x21, 0x10));
         Assert.Equal(new byte[] { 0x1D, 0x56, 0x00 }, bytes[^3..]);
     }
 
@@ -81,6 +109,17 @@ public sealed class EscPosReceiptBuilderTests
         Assert.Contains("/MediaBox [0 0 226.77", pdf);
         Assert.Contains("/BaseFont /Courier-Bold", pdf);
         Assert.Contains("NET AMOUNT: Rs. 1100.00", pdf);
+    }
+
+    private static bool ContainsStyledLine(byte[] source, string text, byte size, bool bold)
+    {
+        var prefix = new byte[]
+        {
+            0x1B, 0x61, 0x01,
+            0x1B, 0x45, bold ? (byte)0x01 : (byte)0x00,
+            0x1D, 0x21, size
+        };
+        return Contains(source, prefix.Concat(Encoding.ASCII.GetBytes(text)).ToArray());
     }
 
     private static bool Contains(byte[] source, params byte[] value)

@@ -1291,3 +1291,13 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Kept the Windows client secret out of source control and documentation. The WPF authorization-code exchange and refresh-token flow continue to read `GOOGLE_WINDOWS_CLIENT_SECRET` from the local Windows process environment and include it only when configured.
 - [ ] Owner must configure the matching new client secret locally as the Windows user environment variable `GOOGLE_WINDOWS_CLIENT_SECRET`, fully exit and restart Khan Baba POS, disconnect/re-authorize Drive so tokens are issued for the new Client ID, then test authorization and a subsequent token refresh.
 - [ ] Real Google Drive sync and Android/Windows round-trip acceptance remain pending. No APK, ZIP, installer, or other build artifact was generated or authorized by this source update.
+
+
+## Work log — 2026-11-18 (Receipt layout refinement + authorized Windows test build)
+
+- [x] WPF thermal receipt metadata condensed to exactly two rows: `Cashier` + `Type`, then `Customer`; invoice number, date and time share the preceding invoice row so customer names retain their available width.
+- [x] Net Amount now uses bold, centered, standard-width ESC/POS text to avoid thermal-printer line wrapping while retaining a single receipt row.
+- [x] Added regression coverage for the two metadata rows, one-line Net Amount, and centered ESC/POS output for the first three header lines.
+- [ ] Complete the grouped WPF Release build and full regression test suite; verify the single authorized Windows x64 test ZIP.
+- [ ] Physical Black Copper BC-86AC print acceptance remains pending; confirm top-three-line centering, two-row invoice metadata, one-line Net Amount, margins, final-line spacing and cutter on paper.
+- [x] Owner explicitly authorized one Windows x64 test ZIP after this receipt adjustment. This is a one-time test-build authorization only; no Android APK, production installer, or stable release is authorized. Do not treat it as ongoing permission for future artifacts.

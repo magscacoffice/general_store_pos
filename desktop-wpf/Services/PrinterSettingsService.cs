@@ -67,11 +67,10 @@ public static class EscPosReceiptBuilder
         b.AppendLine(Center("G.T ROAD SANAWAN"));
         b.AppendLine(Center("PH#03451444325"));
         b.AppendLine();
-        b.AppendLine(sale.SaleId <= 0
-            ? Pair("DRAFT PREVIEW", $"Date: {date:dd/MM/yy}")
-            : Pair($"Bill# {sale.SaleId:D6}", $"Date: {date:dd/MM/yy}"));
-        b.AppendLine(Pair($"Cashier: {sale.Cashier}", $"Time: {date:hh:mm:ss tt}"));
-        b.AppendLine(Pair($"Type: {sale.CustomerType}", string.Empty));
+        var invoiceLabel = sale.SaleId <= 0 ? "DRAFT PREVIEW" : $"Bill# {sale.SaleId:D6}";
+        b.AppendLine(Pair(invoiceLabel, $"Date: {date:dd/MM/yy} Time: {date:hh:mm tt}"));
+        // Keep cashier/type and customer in exactly two rows; date/time stay on the invoice row.
+        b.AppendLine(Pair($"Cashier: {sale.Cashier}", $"Type: {sale.CustomerType}"));
         b.AppendLine(Pair($"Customer: {sale.CustomerName}", string.Empty));
         b.AppendLine(separator);
         b.AppendLine(ItemHeader());
@@ -135,7 +134,8 @@ public static class EscPosReceiptBuilder
             else if (trimmed is "G.T ROAD SANAWAN" or "PH#03451444325" or "THANK YOU - VISIT AGAIN" or "KHAN BABA GENERAL STORE")
                 WriteStyledLine(B, trimmed, centered: true, bold: false, size: 0x00);
             else if (trimmed.StartsWith("NET AMOUNT:", StringComparison.Ordinal))
-                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x10);
+                // Use bold standard-width text; some 80mm ESC/POS queues wrap the enlarged row.
+                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x00);
             else
             {
                 B(0x1B, 0x61, 0x00, 0x1B, 0x45, 0x00, 0x1D, 0x21, 0x00);
