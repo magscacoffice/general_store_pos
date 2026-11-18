@@ -32,7 +32,7 @@ public sealed class PrinterSettingsService
         AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);if(string.IsNullOrWhiteSpace(printerName))throw new InvalidOperationException("Select a printer first.");await Task.Run(()=>RawPrinter.Send(printerName,bytes),ct);}
 }
 public sealed record PrinterQueueInfo(string Name,bool IsAvailable,string Status){public string DisplayStatus=>IsAvailable?"Available":"Unavailable";}
-public sealed record PrinterPreferences(string? PreferredPrinter=null,int PaperWidthMm=80,int HeaderSize=2,int TotalSize=2,int MarginMm=2);
+public sealed record PrinterPreferences(string? PreferredPrinter=null,int PaperWidthMm=80,int TopMarginMm=2,int BottomMarginMm=2);
 internal static class RawPrinter
 {
  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct DocInfo{[MarshalAs(UnmanagedType.LPWStr)]public string DocumentName;[MarshalAs(UnmanagedType.LPWStr)]public string OutputFile;[MarshalAs(UnmanagedType.LPWStr)]public string DataType;}
@@ -47,55 +47,250 @@ internal static class RawPrinter
 }
 public static class EscPosReceiptBuilder
 {
- static readonly Encoding Ascii=Encoding.ASCII;
- public static string BuildText(SaleHistoryRecord? sale,IReadOnlyList<SaleHistoryItem> items,PrinterPreferences prefs)
- {
-  if(sale is null)return "KHAN BABA GENERAL STORE\nPrinter configured. Select an invoice to preview its receipt.";
-  var width=Math.Clamp((576-prefs.MarginMm*16)/12,40,48);string line=new('-',width);
-  string Center(string v){v=v.Length>width?v[..width]:v;return v.PadLeft((width+v.Length)/2).PadRight(width);}
-  string Pair(string l,string r){if(l.Length+r.Length+1>=width){l=l[..Math.Min(l.Length,width-r.Length-1)];}return l+new string(' ',Math.Max(1,width-l.Length-r.Length))+r;}
-  var b=new StringBuilder();b.AppendLine(Center("KHAN BABA"));b.AppendLine(Center("GENERAL STORE"));b.AppendLine(Center("G.T ROAD SANAWAN"));b.AppendLine(Center("PH#03451444325"));b.AppendLine();
-  var date=DateTime.TryParse(sale.Date,out var parsed)?parsed:DateTime.Now;
-  b.AppendLine(sale.SaleId <= 0 ? Pair("DRAFT PREVIEW",$"Date: {date:dd/MM/yy}") : Pair($"Bill# {sale.SaleId:D6}",$"Date: {date:dd/MM/yy}"));b.AppendLine(Pair($"Cashier: {sale.Cashier}",$"Time: {date:hh:mm:ss tt}"));b.AppendLine(Pair($"Type: {sale.CustomerType}",""));b.AppendLine(Pair($"Customer: {sale.CustomerName}",""));b.AppendLine(line);
-  b.AppendLine(" Qty Description       Rate       Amount");
-  b.AppendLine(line);
-  foreach(var item in items){var q=item.Quantity.ToString(CultureInfo.InvariantCulture).PadLeft(4);var rate=item.SalePrice.ToString("0.00",CultureInfo.InvariantCulture).PadLeft(10);var amount=item.LineTotal.ToString("0.00",CultureInfo.InvariantCulture).PadLeft(11);var desc=item.ProductName.Length>17?item.ProductName[..17]:item.ProductName;b.AppendLine(q+" "+desc.PadRight(17)+" "+rate+" "+amount);}
-  b.AppendLine(line);b.AppendLine(Pair($"Items: {items.Count}",$"Gross: {sale.Subtotal:0.00}"));b.AppendLine(Pair("Discount",sale.Discount.ToString("0.00",CultureInfo.InvariantCulture)));b.AppendLine(line);b.AppendLine(Center($"NET AMOUNT: Rs. {sale.FinalAmount:0.00}"));b.AppendLine(line);b.AppendLine(Pair($"Payment: {sale.PaymentType}",""));b.AppendLine(Pair("Received",sale.Received.ToString("0.00",CultureInfo.InvariantCulture)));if(sale.BalanceDue>0)b.AppendLine(Pair("Balance Due",sale.BalanceDue.ToString("0.00",CultureInfo.InvariantCulture)));var change=sale.Received-sale.FinalAmount;if(change>0)b.AppendLine(Pair("Change",change.ToString("0.00",CultureInfo.InvariantCulture)));if(sale.ReturnedAmount>0)b.AppendLine(Pair("Returned",sale.ReturnedAmount.ToString("0.00",CultureInfo.InvariantCulture)));b.AppendLine(line);b.AppendLine(Center("THANK YOU - VISIT AGAIN"));b.AppendLine(Center("KHAN BABA GENERAL STORE"));return b.ToString();
- }
- public static byte[] BuildBytes(string text,PrinterPreferences p)
- {
-  using var ms=new MemoryStream();void B(params byte[] v)=>ms.Write(v,0,v.Length);
-  B(0x1B,0x40);var margin=p.MarginMm*8;var printWidth=576-margin*2;B(0x1D,0x4C,(byte)(margin&255),(byte)((margin>>8)&255),0x1D,0x57,(byte)(printWidth&255),(byte)((printWidth>>8)&255));
-  var lines=text.Split('\n');foreach(var line in lines){if(line.Trim()=="KHAN BABA"||line.Trim()=="GENERAL STORE"){B(0x1B,0x61,0x01,0x1B,0x45,0x01,0x1D,0x21,(byte)(p.HeaderSize switch{1=>0x10,3=>0x22,_=>0x11}));B(Ascii.GetBytes(line));B(0x1D,0x21,0x00,0x1B,0x45,0x00,0x1B,0x61,0x00);}else if(line.TrimStart().StartsWith("NET AMOUNT",StringComparison.Ordinal)){B(0x1B,0x61,0x01,0x1B,0x45,0x01,0x1D,0x21,(byte)(p.TotalSize switch{1=>0x10,3=>0x22,_=>0x11}));B(Ascii.GetBytes(line));B(0x1D,0x21,0x00,0x1B,0x45,0x00,0x1B,0x61,0x00);}else B(Ascii.GetBytes(line));B(0x0A);}
-  B(0x0A,0x0A,0x1D,0x56,0x00);return ms.ToArray();
- }
+    private const int PaperDots = 576;
+    private const int HorizontalMarginDots = 16;
+    private const int Columns = 45;
+    private static readonly Encoding Ascii = Encoding.ASCII;
+
+    public static string BuildText(SaleHistoryRecord? sale, IReadOnlyList<SaleHistoryItem> items, PrinterPreferences prefs)
+    {
+        if (sale is null)
+            return "KHAN BABA GENERAL STORE\nPrinter configured. Select an invoice to preview its receipt.";
+
+        var separator = new string('-', Columns);
+        var date = DateTime.TryParse(sale.Date, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed)
+            ? parsed : DateTime.Now;
+        var b = new StringBuilder();
+
+        b.AppendLine(Center("KHAN BABA"));
+        b.AppendLine(Center("GENERAL STORE"));
+        b.AppendLine(Center("G.T ROAD SANAWAN"));
+        b.AppendLine(Center("PH#03451444325"));
+        b.AppendLine();
+        b.AppendLine(sale.SaleId <= 0
+            ? Pair("DRAFT PREVIEW", $"Date: {date:dd/MM/yy}")
+            : Pair($"Bill# {sale.SaleId:D6}", $"Date: {date:dd/MM/yy}"));
+        b.AppendLine(Pair($"Cashier: {sale.Cashier}", $"Time: {date:hh:mm:ss tt}"));
+        b.AppendLine(Pair($"Type: {sale.CustomerType}", string.Empty));
+        b.AppendLine(Pair($"Customer: {sale.CustomerName}", string.Empty));
+        b.AppendLine(separator);
+        b.AppendLine(ItemHeader());
+        b.AppendLine(separator);
+        foreach (var item in items)
+            b.AppendLine(ItemRow(item));
+        b.AppendLine(separator);
+        b.AppendLine(Pair($"Total Items: {items.Count}", $"Gross: {Money(sale.Subtotal)}"));
+        b.AppendLine(Pair("Discount", Money(sale.Discount)));
+        b.AppendLine(separator);
+        b.AppendLine(Center($"NET AMOUNT: Rs. {Money(sale.FinalAmount)}"));
+        b.AppendLine(separator);
+        b.AppendLine(Pair($"Payment: {sale.PaymentType}", string.Empty));
+        b.AppendLine(Pair("Received", Money(sale.Received)));
+        if (sale.BalanceDue > 0)
+            b.AppendLine(Pair("Balance Due", Money(sale.BalanceDue)));
+        var change = Math.Max(0d, sale.Received - sale.FinalAmount);
+        if (change > 0)
+            b.AppendLine(Pair("Change", Money(change)));
+        if (sale.ReturnedAmount > 0)
+            b.AppendLine(Pair("Returned", Money(sale.ReturnedAmount)));
+        if (!string.IsNullOrWhiteSpace(sale.CustomerPhone))
+            b.AppendLine(Pair($"Phone: {sale.CustomerPhone}", string.Empty));
+        b.AppendLine(separator);
+        b.AppendLine(Center("THANK YOU - VISIT AGAIN"));
+        b.AppendLine(Center("KHAN BABA GENERAL STORE"));
+        b.AppendLine();
+        b.AppendLine();
+        return b.ToString();
+    }
+
+    public static byte[] BuildBytes(string text, PrinterPreferences prefs)
+    {
+        using var ms = new MemoryStream();
+        void B(params byte[] bytes) => ms.Write(bytes, 0, bytes.Length);
+
+        B(0x1B, 0x40);
+        var left = HorizontalMarginDots;
+        var width = PaperDots - (HorizontalMarginDots * 2);
+        B(0x1D, 0x4C, (byte)(left & 0xFF), (byte)((left >> 8) & 0xFF));
+        B(0x1D, 0x57, (byte)(width & 0xFF), (byte)((width >> 8) & 0xFF));
+
+        var topDots = Math.Clamp(prefs.TopMarginMm, 0, 10) * 8;
+        var bottomDots = Math.Clamp(prefs.BottomMarginMm, 0, 10) * 8;
+        if (topDots > 0)
+            B(0x1B, 0x4A, (byte)topDots);
+
+        foreach (var line in (text ?? string.Empty).Replace("\r", string.Empty).Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0)
+            {
+                B(0x0A);
+                continue;
+            }
+
+            if (trimmed == "KHAN BABA")
+                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x11);
+            else if (trimmed == "GENERAL STORE")
+                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x00);
+            else if (trimmed is "G.T ROAD SANAWAN" or "PH#03451444325" or "THANK YOU - VISIT AGAIN" or "KHAN BABA GENERAL STORE")
+                WriteStyledLine(B, trimmed, centered: true, bold: false, size: 0x00);
+            else if (trimmed.StartsWith("NET AMOUNT:", StringComparison.Ordinal))
+                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x10);
+            else
+            {
+                B(0x1B, 0x61, 0x00, 0x1B, 0x45, 0x00, 0x1D, 0x21, 0x00);
+                B(Ascii.GetBytes(line));
+                B(0x0A);
+            }
+        }
+
+        if (bottomDots > 0)
+            B(0x1B, 0x4A, (byte)bottomDots);
+        B(0x1D, 0x56, 0x00);
+        return ms.ToArray();
+    }
+
+    private static void WriteStyledLine(Action<byte[]> write, string value, bool centered, bool bold, byte size)
+    {
+        write([0x1B, 0x61, centered ? (byte)0x01 : (byte)0x00]);
+        write([0x1B, 0x45, bold ? (byte)0x01 : (byte)0x00]);
+        write([0x1D, 0x21, size]);
+        write(Ascii.GetBytes(value));
+        write([0x1D, 0x21, 0x00, 0x1B, 0x45, 0x00, 0x1B, 0x61, 0x00, 0x0A]);
+    }
+
+    private static string ItemHeader() =>
+        "Qty".PadLeft(4) + " " + "Description".PadRight(17) +
+        " " + "Rate".PadLeft(10) + " " + "Amount".PadLeft(11);
+
+    private static string ItemRow(SaleHistoryItem item)
+    {
+        var qty = item.Quantity.ToString(CultureInfo.InvariantCulture);
+        var rate = Money(item.SalePrice);
+        var amount = Money(item.LineTotal);
+        var qtyWidth = Math.Max(4, qty.Length);
+        var rateWidth = Math.Max(10, rate.Length);
+        var amountWidth = Math.Max(11, amount.Length);
+        var descriptionWidth = Math.Clamp(Columns - qtyWidth - rateWidth - amountWidth - 3, 1, 17);
+        var name = SingleLine(item.ProductName, descriptionWidth);
+        var row = qty.PadLeft(qtyWidth) + " " + name.PadRight(descriptionWidth) +
+                  " " + rate.PadLeft(rateWidth) + " " + amount.PadLeft(amountWidth);
+        return row.Length <= Columns ? row : row[^Columns..];
+    }
+
+    private static string Money(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string SingleLine(string value, int maxWidth)
+    {
+        var safe = string.Join(' ', (value ?? string.Empty)
+            .Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ')
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (safe.Length <= maxWidth)
+            return safe;
+        if (maxWidth <= 2)
+            return safe[..maxWidth];
+        return safe[..(maxWidth - 2)] + "..";
+    }
+
+    private static string Center(string value)
+    {
+        var safe = SingleLine(value, Columns);
+        return safe.PadLeft((Columns + safe.Length) / 2).PadRight(Columns);
+    }
+
+    private static string Pair(string left, string right)
+    {
+        var safeRight = SingleLine(right, Columns);
+        var safeLeft = SingleLine(left, Math.Max(0, Columns - safeRight.Length - 1));
+        return safeLeft + new string(' ', Math.Max(1, Columns - safeLeft.Length - safeRight.Length)) + safeRight;
+    }
 }
 
 public static class PdfReceiptBuilder
 {
- public static byte[] Build(string text)
- {
-  var lines=(text??string.Empty).Replace("\r",string.Empty).Split('\n');
-  var pages=lines.Chunk(55).ToList();if(pages.Count==0)pages.Add(Array.Empty<string>());
-  var count=pages.Count;var contentStart=3+count;var fontId=3+(2*count);
-  var objects=new List<byte[]>();
-  objects.Add(Encoding.ASCII.GetBytes("<< /Type /Catalog /Pages 2 0 R >>"));
-  var kids=string.Join(" ",Enumerable.Range(0,count).Select(i=>$"{3+i} 0 R"));
-  objects.Add(Encoding.ASCII.GetBytes($"<< /Type /Pages /Kids [{kids}] /Count {count} >>"));
-  for(var i=0;i<count;i++)objects.Add(Encoding.ASCII.GetBytes($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentStart+i} 0 R >>"));
-  foreach(var page in pages)
-  {
-   var body=new StringBuilder("BT\n/F1 9 Tf\n42 800 Td\n12 TL\n");
-   foreach(var line in page){var safe=line.Replace("\\","\\\\").Replace("(","\\(").Replace(")","\\)").Replace("\t"," ");body.Append('(').Append(safe).Append(") Tj T*\n");}
-   body.Append("ET\n");var bytes=Encoding.ASCII.GetBytes(body.ToString());
-   using var stream=new MemoryStream();stream.Write(Encoding.ASCII.GetBytes($"<< /Length {bytes.Length} >>\nstream\n"));stream.Write(bytes);stream.Write(Encoding.ASCII.GetBytes("endstream"));objects.Add(stream.ToArray());
-  }
-  objects.Add(Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>"));
-  using var output=new MemoryStream();output.Write(Encoding.ASCII.GetBytes("%PDF-1.4\n"));var offsets=new List<long>{0};
-  for(var i=0;i<objects.Count;i++){offsets.Add(output.Position);output.Write(Encoding.ASCII.GetBytes($"{i+1} 0 obj\n"));output.Write(objects[i]);output.Write(Encoding.ASCII.GetBytes("\nendobj\n"));}
-  var xref=output.Position;output.Write(Encoding.ASCII.GetBytes($"xref\n0 {objects.Count+1}\n0000000000 65535 f \n"));
-  foreach(var offset in offsets.Skip(1))output.Write(Encoding.ASCII.GetBytes($"{offset:0000000000} 00000 n \n"));
-  output.Write(Encoding.ASCII.GetBytes($"trailer\n<< /Size {objects.Count+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF"));
-  return output.ToArray();
- }
+    private const double MmToPoints = 72d / 25.4d;
+    private const double PageWidth = 80d * MmToPoints;
+
+    public static byte[] Build(string text, PrinterPreferences? preferences = null)
+    {
+        preferences ??= new PrinterPreferences();
+        var lines = (text ?? string.Empty).Replace("\r", string.Empty).Split('\n');
+        var top = Math.Clamp(preferences.TopMarginMm, 0, 10) * MmToPoints;
+        var bottom = Math.Clamp(preferences.BottomMarginMm, 0, 10) * MmToPoints;
+        var side = 2d * MmToPoints;
+        var pageHeight = top + bottom + 34d + Math.Max(1, lines.Length) * 10.5d;
+        var body = new StringBuilder("BT\n");
+        var y = pageHeight - top - 16d;
+
+        foreach (var sourceLine in lines)
+        {
+            var line = sourceLine.TrimEnd();
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0) { y -= 5d; continue; }
+
+            var header = trimmed == "KHAN BABA";
+            var store = trimmed == "GENERAL STORE";
+            var total = trimmed.StartsWith("NET AMOUNT:", StringComparison.Ordinal);
+            var centered = header || store || total || trimmed == "G.T ROAD SANAWAN" ||
+                           trimmed == "PH#03451444325" || trimmed == "THANK YOU - VISIT AGAIN" ||
+                           trimmed == "KHAN BABA GENERAL STORE";
+            var bold = header || store || total;
+            var size = header ? 14d : total ? 10.5d : store ? 8.5d : 7d;
+            var value = centered ? trimmed : line;
+            var width = value.Length * size * 0.6d;
+            var x = centered ? Math.Max(side, (PageWidth - width) / 2d) : side;
+
+            body.Append('/').Append(bold ? "F2" : "F1").Append(' ')
+                .Append(size.ToString("0.##", CultureInfo.InvariantCulture)).Append(" Tf\n");
+            body.Append("1 0 0 1 ")
+                .Append(x.ToString("0.##", CultureInfo.InvariantCulture)).Append(' ')
+                .Append(y.ToString("0.##", CultureInfo.InvariantCulture)).Append(" Tm\n");
+            body.Append('(').Append(PdfEscape(Encoding.ASCII.GetString(Encoding.ASCII.GetBytes(value)))).Append(") Tj\n");
+            y -= header ? 16d : total ? 14d : store ? 12d : 10.5d;
+        }
+        body.Append("ET\n");
+
+        var streamBytes = Encoding.ASCII.GetBytes(body.ToString());
+        var objects = new List<byte[]>
+        {
+            Encoding.ASCII.GetBytes("<< /Type /Catalog /Pages 2 0 R >>"),
+            Encoding.ASCII.GetBytes("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+            Encoding.ASCII.GetBytes($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PageWidth.ToString("0.##", CultureInfo.InvariantCulture)} {pageHeight.ToString("0.##", CultureInfo.InvariantCulture)}] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>"),
+            BuildStreamObject(streamBytes),
+            Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>"),
+            Encoding.ASCII.GetBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>")
+        };
+
+        using var output = new MemoryStream();
+        output.Write(Encoding.ASCII.GetBytes("%PDF-1.4\n"));
+        var offsets = new List<long> { 0 };
+        for (var i = 0; i < objects.Count; i++)
+        {
+            offsets.Add(output.Position);
+            output.Write(Encoding.ASCII.GetBytes($"{i + 1} 0 obj\n"));
+            output.Write(objects[i]);
+            output.Write(Encoding.ASCII.GetBytes("\nendobj\n"));
+        }
+
+        var xref = output.Position;
+        output.Write(Encoding.ASCII.GetBytes($"xref\n0 {objects.Count + 1}\n0000000000 65535 f \n"));
+        foreach (var offset in offsets.Skip(1))
+            output.Write(Encoding.ASCII.GetBytes($"{offset:0000000000} 00000 n \n"));
+        output.Write(Encoding.ASCII.GetBytes($"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF"));
+        return output.ToArray();
+    }
+
+    private static byte[] BuildStreamObject(byte[] bytes)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(Encoding.ASCII.GetBytes($"<< /Length {bytes.Length} >>\nstream\n"));
+        stream.Write(bytes);
+        stream.Write(Encoding.ASCII.GetBytes("endstream"));
+        return stream.ToArray();
+    }
+
+    private static string PdfEscape(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+             .Replace("(", "\\(", StringComparison.Ordinal)
+             .Replace(")", "\\)", StringComparison.Ordinal);
 }

@@ -741,9 +741,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var customerName = CustomerBox.SelectedItem is CustomerLookup customer
-            ? customer.Name
-            : "Walk-in Customer";
+        var selectedCustomer = CustomerBox.SelectedItem as CustomerLookup;
+        var customerName = selectedCustomer?.Name ?? "Walk-in Customer";
         var sale = new SaleHistoryRecord(
             0,
             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
@@ -758,7 +757,8 @@ public partial class MainWindow : Window
             _session.DisplayName,
             0,
             0,
-            SelectedCustomerId);
+            SelectedCustomerId,
+            CustomerPhone: selectedCustomer?.Phone ?? string.Empty);
         var items = CartLines.Select((line, index) => new SaleHistoryItem(
             index + 1,
             line.Barcode,

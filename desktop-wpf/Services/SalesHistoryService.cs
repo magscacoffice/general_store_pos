@@ -28,7 +28,7 @@ public sealed class SalesHistoryService
                    COALESCE(s.salesman_name,''), COALESCE((SELECT SUM(r.refund_amount)
                      FROM sale_returns r WHERE r.sale_id=s.id),0),
                    (SELECT COUNT(*) FROM sale_returns r WHERE r.sale_id=s.id),
-                   COALESCE(s.salesman_uid,'')
+                   COALESCE(s.salesman_uid,''), COALESCE(p.phone,'')
             FROM sales s LEFT JOIN parties p ON p.id=s.customer_id
             WHERE ($search='' OR CAST(s.id AS TEXT) LIKE $like OR p.name LIKE $like
                    OR s.date LIKE $like OR s.payment_type LIKE $like)
@@ -59,7 +59,7 @@ public sealed class SalesHistoryService
                 payment is "Khata" or "Partial" ? Math.Max(0d, final - received) : balanceRaw;
             result.Add(new SaleHistoryRecord(reader.GetInt32(0), reader.GetString(1), reader.GetString(3),
                 reader.GetString(4), payment, total, discount, final, received, balance,
-                reader.GetString(11), reader.GetDouble(12), reader.GetInt32(13), customerId, reader.GetString(14)));
+                reader.GetString(11), reader.GetDouble(12), reader.GetInt32(13), customerId, reader.GetString(14), reader.GetString(15)));
         }
         return result;
     }
@@ -108,6 +108,6 @@ public sealed class SalesHistoryService
 
 public sealed record SaleHistoryRecord(int SaleId,string Date,string CustomerName,string CustomerType,
     string PaymentType,double Subtotal,double Discount,double FinalAmount,double Received,double BalanceDue,
-    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId,[property: System.ComponentModel.Browsable(false)] string CashierUid = "");
+    string Cashier,double ReturnedAmount,int ReturnedCount,int? CustomerId,[property: System.ComponentModel.Browsable(false)] string CashierUid = "", [property: System.ComponentModel.Browsable(false)] string CustomerPhone = "");
 public sealed record SaleHistoryItem(int Id,string Barcode,string ProductName,int Quantity,string StockUnit,
     double SalePrice,double PurchasePrice,double LineTotal,double CostTotal);

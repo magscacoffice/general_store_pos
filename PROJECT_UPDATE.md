@@ -1237,4 +1237,21 @@ Future improvements: add new ideas here when the owner requests them.
 ### Initial comparison (source audit)
 - [x] Android master located: `lib/printer_screen.dart`, including `_billText`, `_itemReceiptRow`, USB ESC/POS rendering and PDF layout.
 - [x] WPF implementation located: `desktop-wpf/PrinterInvoiceWindow.cs` and `desktop-wpf/Services/PrinterSettingsService.cs`.
-- [ ] Current WPF formatter and settings do not yet meet the parity requirements above; implementation and automated tests pending.
+- [x] Current WPF formatter now uses the Android master field order and 45-column 80mm layout; ESC/POS applies Android-style bold/large store name and prominent net amount without double-width overflow.
+- [x] Windows Printer & Invoice UI now exposes only independent Top Margin and Bottom Margin controls for receipt tuning; saved printer selection, refresh, test print, preview, PDF/share and F9/Ctrl+P flows are retained.
+- [x] Customer phone is read from the existing `parties.phone` field for posted bills and selected customer drafts. The schema has no sales tax field; matching Android behavior, tax is omitted unless a future stored tax amount is supported.
+- [x] PDF receipt output now uses an 80mm receipt-roll page with matching centered/bold header and net-total emphasis.
+- [x] Added disposable-fixture regression tests for receipt order/fields, long labels and line width, 80mm ESC/POS width, top/bottom feed, emphasis, cutter, cash change/due and receipt-width PDF.
+- [ ] Run validation-only automated tests (no package/artifact publish); physical Black Copper BC-86AC test remains pending.
+
+
+## Work log — 2026-11-18 (Android-master Windows receipt parity implementation)
+
+- [x] Android `lib/printer_screen.dart` checked as the master receipt reference; Windows WPF output is aligned to its store header, invoice metadata, item table, totals/payment, customer phone and thank-you footer.
+- [x] WPF customer phone is populated from existing `parties.phone` in history reads and selected-customer draft preview. No database schema migration was needed.
+- [x] Confirmed existing schema-v18 `sales` table has no tax amount column; tax is therefore not invented or calculated for Windows receipts.
+- [x] Replaced configurable header/total sizes and combined margin with separate Top Margin and Bottom Margin values. Legacy printer JSON keys are ignored by the new preferences record and safe 2mm defaults are applied.
+- [x] ESC/POS keeps fixed Android-style 2mm left/right inset on 80mm media, centers enlarged header and net amount through printer alignment commands, feeds top/bottom margins independently and retains auto-cut.
+- [x] PDF export uses a narrow 80mm receipt page and the same prepared receipt text/content order.
+- [x] Added Windows receipt regression tests. Tests have been authored but are not marked passed until a validation run is executed.
+- [ ] Owner-side BC-86AC physical acceptance remains pending; no build artifact is to be generated without separate explicit authorization.
