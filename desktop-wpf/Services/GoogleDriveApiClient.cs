@@ -16,7 +16,7 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class GoogleDriveAuthService
 {
-    private const string ClientId = "707319476515-viu9eqvkacootsu2eooa4eon2oeheab2.apps.googleusercontent.com";
+    private const string ClientId = "707319476515-vtdi3s5vn0tudh3ihnppco14kkrgtk78.apps.googleusercontent.com";
     private const string Scope = "https://www.googleapis.com/auth/drive.file";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(25) };
     private readonly string _tokenPath;

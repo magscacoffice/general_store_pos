@@ -1283,3 +1283,11 @@ Future improvements: add new ideas here when the owner requests them.
 
 - [x] Run #437 uploaded test artifact `KhanBabaPOS-Windows-x64-437` (artifact ID `14417452483`, GitHub artifact size 68,604,822 bytes; expires 2026-12-18). Run: https://github.com/magscacoffice/general_store_pos/actions/runs/44282965290.
 - [x] Extracted the actual self-contained app ZIP from the workflow artifact and verified its ZIP integrity. Owner test ZIP: `KhanBabaPOS-Windows-x64-437-test-build.zip`; size 68,811,892 bytes; SHA-256 `65c73c991315fcb0bbaabcaaa87303f3885eae91e3831ec4e5b82e4b9402c61a`. The package is unsigned and for Windows x64 testing only.
+
+
+## Work log — 2026-11-18 (Windows Google OAuth client replacement)
+
+- [x] Replaced only the native WPF Windows Google OAuth Client ID with the newly created Desktop OAuth client supplied by the owner. Android OAuth configuration was not changed.
+- [x] Kept the Windows client secret out of source control and documentation. The WPF authorization-code exchange and refresh-token flow continue to read `GOOGLE_WINDOWS_CLIENT_SECRET` from the local Windows process environment and include it only when configured.
+- [ ] Owner must configure the matching new client secret locally as the Windows user environment variable `GOOGLE_WINDOWS_CLIENT_SECRET`, fully exit and restart Khan Baba POS, disconnect/re-authorize Drive so tokens are issued for the new Client ID, then test authorization and a subsequent token refresh.
+- [ ] Real Google Drive sync and Android/Windows round-trip acceptance remain pending. No APK, ZIP, installer, or other build artifact was generated or authorized by this source update.
