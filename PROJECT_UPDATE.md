@@ -1219,3 +1219,22 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] After that build, owner-side Windows acceptance remains separate: login/role visibility, actual display/DPI/resizing, scanner focus and repeated scans, saved BC-86AC printer/cutter and receipt spacing, PDF/Unicode output, backup/restore, and Google OAuth/Android round-trip on disposable database copies.
 - [ ] Production updater download/install remains blocked until the owner supplies the production signing certificate and trusted thumbprint. Do not bypass this security gate.
 - [ ] Keep all work on `integration/wpf-mainline`; do not merge to `main` until automated validation and owner acceptance gates are complete.
+
+
+## Printer parity requirements — Android master bill for Windows (2026-11-18)
+
+- [ ] Android `lib/printer_screen.dart` ka thermal receipt layout master/reference hoga. Windows WPF receipt ka content order, labels, alignment, line widths, item columns, separators, bold emphasis, header prominence, net-total prominence, footer aur cut behavior Android master ke mutabiq hon.
+- [ ] Android bill ke required fields ko WPF sale model se map karna hai: store name/address/phone; Bill No/Date/Time; Cashier; Sale Type; Customer (aur available phone); item Qty/Description/Rate/Amount; item count/Gross; Discount; Tax sirf jab applicable ho; Net Amount; Payment; Received; Balance Due; Change; thank-you footer. Returned amount ko existing accounting semantics ke mutabiq preserve karna hai, bina Android master ke fields ko ghalat map kiye.
+- [ ] Item amount, gross/subtotal, discount, tax, net amount, received, due aur change ki calculations existing WPF sale/posting model se verify hon. Printer formatter koi business calculation ya stored sale value mutate nahi karega.
+- [ ] 80mm / 576-dot ESC/POS output ko Android ke bold/large `KHAN BABA` header aur `NET AMOUNT` emphasis ke barabar readable banana hai. Plain ASCII text ke double-width command se alignment/line clipping na ho; raster rendering ya equivalent safe ESC/POS layout ko test ke saath choose karna hai.
+- [ ] Windows Printer & Invoice settings mein user-facing receipt tuning sirf **Top Margin** aur **Bottom Margin** ho. Header Size, Total Size aur combined/symmetric Margin controls remove hon. Printer selection/persistence, refresh, test print, preview, PDF/share actions aur F9/Ctrl+P workflow preserve hon.
+- [ ] Top/bottom margin values independently persist hon; paper width 80mm rahe. ESC/POS left/right printable width ko 80mm ke liye safe default par rakha jaye, aur top/bottom whitespace ko feed/line spacing ke zariye apply kiya jaye. Margin implementation ko BC-86AC ke physical print se verify karna hoga.
+- [ ] Receipt preview, ESC/POS bytes aur PDF output ek hi bill content/model se generate hon; preview/print/PDF ke totals aur field order drift na karein.
+- [ ] Tests disposable fixtures par hon: no items, long product/customer names, large quantities/prices, discount, tax, cash change, partial/Khata due, return amount, draft bill, Unicode-safe fallback, 80mm width, top/bottom margins, header/total emphasis, cutter command aur no clipping/overlap.
+- [ ] Physical acceptance gate: Black Copper BC-86AC, 79.5±0.5mm paper, Windows preferred-printer persistence, readable header/total, no last-line clipping/overlap, correct feed margins and auto-cutter. CI success ko physical acceptance na kaha jaye.
+- [ ] Is change ke dauran koi APK, Windows ZIP, installer ya doosra build artifact generate nahi karna. Related code aur documentation changes ko implementation complete hone par consolidated commit mein deliver karna; build sirf owner ki alag explicit permission par.
+
+### Initial comparison (source audit)
+- [x] Android master located: `lib/printer_screen.dart`, including `_billText`, `_itemReceiptRow`, USB ESC/POS rendering and PDF layout.
+- [x] WPF implementation located: `desktop-wpf/PrinterInvoiceWindow.cs` and `desktop-wpf/Services/PrinterSettingsService.cs`.
+- [ ] Current WPF formatter and settings do not yet meet the parity requirements above; implementation and automated tests pending.
