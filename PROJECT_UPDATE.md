@@ -1298,6 +1298,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] WPF thermal receipt metadata condensed to exactly two rows: `Cashier` + `Type`, then `Customer`; invoice number, date and time share the preceding invoice row so customer names retain their available width.
 - [x] Net Amount now uses bold, centered, standard-width ESC/POS text to avoid thermal-printer line wrapping while retaining a single receipt row.
 - [x] Added regression coverage for the two metadata rows, one-line Net Amount, and centered ESC/POS output for the first three header lines.
-- [ ] Complete the grouped WPF Release build and full regression test suite; verify the single authorized Windows x64 test ZIP.
+- [x] Grouped WPF Release build and full regression suite passed in GitHub Actions run #442 (`44292220106`): 87/87 tests passed. Run: https://github.com/magscacoffice/general_store_pos/actions/runs/44292220106.
+- [x] Authorized Windows x64 test ZIP uploaded as `KhanBabaPOS-Windows-x64-442` (artifact ID `14421956977`, 68,604,753 bytes; expires 2026-12-18). SHA-256: `00a8f99af974d906f944e626f5eae8fa9add6d461cbea7d119cde1a2819ccf03`.
 - [ ] Physical Black Copper BC-86AC print acceptance remains pending; confirm top-three-line centering, two-row invoice metadata, one-line Net Amount, margins, final-line spacing and cutter on paper.
 - [x] Owner explicitly authorized one Windows x64 test ZIP after this receipt adjustment. This is a one-time test-build authorization only; no Android APK, production installer, or stable release is authorized. Do not treat it as ongoing permission for future artifacts.
