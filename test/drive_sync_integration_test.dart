@@ -345,6 +345,164 @@ void main() {
     expect((await DBHelper.getPurchases()).length, 2);
   });
 
+  test('Wholesale cash and partial sales preserve customer type and post same-account receipts', () async {
+    await DBHelper.insertProduct({
+      'name': 'Wholesale Sugar',
+      'barcode': 'KB-WH-100',
+      'price': 22.0,
+      'purchasePrice': 10.0,
+      'wholesalePrice': 18.0,
+      'damaged_quantity': 0,
+      'quantity': 10,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    final customerId = await DBHelper.insertParty({
+      'name': 'Wholesale Test Account',
+      'phone': '03000000001',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+    await DBHelper.updateCustomerType(customerId, 'Wholesale');
+
+    await DBHelper.completeSale(
+      sale: {
+        'total_amount': 36.0,
+        'final_amount': 36.0,
+        'discount': 0.0,
+        'payment_type': 'Partial',
+        'customer_type': 'Wholesale',
+        'customer_id': customerId,
+        'received_amount': 10.0,
+        'date': '2026-11-15 10:00:00',
+      },
+      items: [
+        {
+          'barcode': 'KB-WH-100',
+          'name': 'Wholesale Sugar',
+          'quantity': 2,
+          'salePrice': 18.0,
+          'purchasePrice': 10.0,
+        },
+      ],
+    );
+
+    await DBHelper.completeSale(
+      sale: {
+        'total_amount': 18.0,
+        'final_amount': 18.0,
+        'discount': 0.0,
+        'payment_type': 'Cash',
+        'customer_type': 'Wholesale',
+        'customer_id': customerId,
+        'received_amount': 18.0,
+        'date': '2026-11-15 10:05:00',
+      },
+      items: [
+        {
+          'barcode': 'KB-WH-100',
+          'name': 'Wholesale Sugar',
+          'quantity': 1,
+          'salePrice': 18.0,
+          'purchasePrice': 10.0,
+        },
+      ],
+    );
+
+    final customer = (await DBHelper.getParties('customer')).single;
+    expect(customer['customer_type'], 'Wholesale');
+    expect(customer['balance'], 26.0);
+
+    final sales = await DBHelper.getSales();
+    expect(sales.length, 2);
+    expect(sales.every((sale) => sale['customer_type'] == 'Wholesale'), isTrue);
+    expect(sales.any((sale) => sale['payment_type'] == 'Partial' && sale['received_amount'] == 10.0), isTrue);
+    expect(sales.any((sale) => sale['payment_type'] == 'Cash' && sale['received_amount'] == 18.0), isTrue);
+
+    final ledger = await DBHelper.getKhataTransactions(customerId);
+    expect(ledger.length, 4);
+    expect(ledger.where((entry) => entry['type'] == 'credit').length, 2);
+    expect(ledger.where((entry) => entry['type'] == 'receipt').length, 2);
+    expect(
+      ledger.where((entry) => entry['type'] == 'receipt')
+          .fold<double>(0, (sum, entry) => sum + (entry['amount'] as num).toDouble()),
+      28.0,
+    );
+    expect((await DBHelper.getProducts()).single['quantity'], 7);
+
+    final snapshot = await DBHelper.exportDriveSnapshot();
+    final syncedParty = (snapshot['parties'] as List)
+        .cast<Map>()
+        .singleWhere((party) => party['sync_id'] == customer['sync_id']);
+    expect(syncedParty['customer_type'], 'Wholesale');
+
+    await useDatabase(windowsPath);
+    expect(
+      await DBHelper.mergeDriveSnapshot(
+        envelope(snapshot, deviceId: 'android-device', hash: 'wholesale-roundtrip'),
+        sourceDeviceId: 'android-device',
+        snapshotHash: 'wholesale-roundtrip',
+        applyMasterState: true,
+        detectConflicts: false,
+      ),
+      isTrue,
+    );
+    expect((await DBHelper.getParties('customer')).single['customer_type'], 'Wholesale');
+    expect(
+      (await DBHelper.getSales()).every((sale) => sale['customer_type'] == 'Wholesale'),
+      isTrue,
+    );
+  });
+
+  test('Wholesale sale rejects a Khata account and leaves stock unchanged', () async {
+    await DBHelper.insertProduct({
+      'name': 'Rate Check Item',
+      'barcode': 'KB-WH-101',
+      'price': 20.0,
+      'purchasePrice': 10.0,
+      'wholesalePrice': 16.0,
+      'damaged_quantity': 0,
+      'quantity': 5,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    final customerId = await DBHelper.insertParty({
+      'name': 'Khata Only Account',
+      'phone': '03000000002',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+
+    await expectLater(
+      DBHelper.completeSale(
+        sale: {
+          'total_amount': 16.0,
+          'final_amount': 16.0,
+          'discount': 0.0,
+          'payment_type': 'Cash',
+          'customer_type': 'Wholesale',
+          'customer_id': customerId,
+          'received_amount': 16.0,
+          'date': '2026-11-15 10:10:00',
+        },
+        items: [
+          {
+            'barcode': 'KB-WH-101',
+            'name': 'Rate Check Item',
+            'quantity': 1,
+            'salePrice': 16.0,
+            'purchasePrice': 10.0,
+          },
+        ],
+      ),
+      throwsException,
+    );
+    expect((await DBHelper.getProducts()).single['quantity'], 5);
+    expect((await DBHelper.getSales()), isEmpty);
+  });
+
   test('Drive-primary mode prevents new Firestore outbox writes', () async {
     DBHelper.localOnlyMode = false;
     DBHelper.drivePrimaryMode = true;
@@ -392,5 +550,7 @@ void main() {
     expect((await DBHelper.getProducts()).single['stock_unit'], 'pcs');
     expect(await DBHelper.getDriveSyncConflictCount(), 0);
   });
+
+
 
 }

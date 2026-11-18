@@ -76,6 +76,7 @@ class _PartyScreenState extends State<PartyScreen> {
   void _showAddPartyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    String selectedCustomerType = 'Khata';
 
     showDialog(
       context: context,
@@ -99,6 +100,20 @@ class _PartyScreenState extends State<PartyScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Phone Number'),
                 ),
+                if (widget.type == 'customer') ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCustomerType,
+                    decoration: const InputDecoration(labelText: 'Customer Type'),
+                    items: const [
+                      DropdownMenuItem(value: 'Khata', child: Text('Khata')),
+                      DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setDialogState(() => selectedCustomerType = value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 15),
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -147,7 +162,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'name': nameController.text.trim(),
                       'phone': phoneController.text.trim(),
                       'type': widget.type,
-                      'customer_type': 'Khata',
+                      if (widget.type == 'customer') 'customer_type': selectedCustomerType,
                       'balance': 0.0,
                     });
                     _loadParties();
@@ -201,7 +216,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       columns: [
                         const DataColumn(label: Text('Name')),
                         const DataColumn(label: Text('Phone')),
-                        if (isCustomer) const DataColumn(label: Text('Account Status')),
+                        if (isCustomer) const DataColumn(label: Text('Customer Type / Status')),
                         const DataColumn(label: Text('Outstanding'), numeric: true),
                         const DataColumn(label: Text('Actions')),
                       ],
@@ -222,7 +237,7 @@ class _PartyScreenState extends State<PartyScreen> {
                           DataCell(Text(party['phone']?.toString() ?? '—')),
                           if (isCustomer)
                             DataCell(Text(
-                              overdue == null ? 'Regular' : 'OVERDUE ${overdue['overdue_days']} days',
+                              '${party['customer_type'] ?? 'Khata'} • ${overdue == null ? 'Regular' : 'OVERDUE ${overdue['overdue_days']} days'}',
                               style: TextStyle(
                                 color: overdue == null ? null : Colors.red.shade700,
                                 fontWeight: overdue == null ? FontWeight.normal : FontWeight.w600,
@@ -232,6 +247,27 @@ class _PartyScreenState extends State<PartyScreen> {
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (isCustomer)
+                                PopupMenuButton<String>(
+                                  tooltip: 'Change customer type',
+                                  icon: const Icon(Icons.category_outlined, color: Colors.blueGrey),
+                                  onSelected: (value) async {
+                                    try {
+                                      await DBHelper.updateCustomerType(id, value);
+                                      await _loadParties();
+                                    } catch (error) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'Khata', child: Text('Set as Khata')),
+                                    PopupMenuItem(value: 'Wholesale', child: Text('Set as Wholesale')),
+                                  ],
+                                ),
                               if (isCustomer && overdue != null)
                                 IconButton(
                                   tooltip: 'WhatsApp overdue reminder',
@@ -318,8 +354,8 @@ class _PartyScreenState extends State<PartyScreen> {
                     subtitle: Text(
                       widget.type == 'customer'
                           ? overdue == null
-                              ? 'Phone: ${party['phone']}  |  Khata Customer'
-                              : 'OVERDUE ${overdue['overdue_days']} days | Oldest unpaid: ${overdue['oldest_due_date']} | Phone: ${party['phone']}'
+                              ? 'Phone: ${party['phone']}  |  ${party['customer_type'] ?? 'Khata'} Customer'
+                              : '${party['customer_type'] ?? 'Khata'} | OVERDUE ${overdue['overdue_days']} days | Oldest unpaid: ${overdue['oldest_due_date']} | Phone: ${party['phone']}'
                           : 'Phone: ${party['phone']}',
                       style: TextStyle(
                         color: overdue != null ? Colors.red.shade900 : null,
@@ -337,6 +373,32 @@ class _PartyScreenState extends State<PartyScreen> {
                             fontSize: 16,
                           ),
                         ),
+                        if (isCustomer)
+                          PopupMenuButton<String>(
+                            tooltip: 'Change customer type',
+                            icon: const Icon(Icons.category_outlined, color: Colors.blueGrey),
+                            onSelected: (value) async {
+                              try {
+                                await DBHelper.updateCustomerType(partyId, value);
+                                await _loadParties();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Customer type updated to $value.')),
+                                  );
+                                }
+                              } catch (error) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+                                  );
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'Khata', child: Text('Set as Khata')),
+                              PopupMenuItem(value: 'Wholesale', child: Text('Set as Wholesale')),
+                            ],
+                          ),
                         if (overdue != null)
                           IconButton(
                             tooltip: 'WhatsApp overdue reminder',

@@ -1,9 +1,6 @@
 name: POS sync and invoice conversion tests
 
 on:
-  push:
-    branches:
-      - 'main'
   workflow_dispatch:
 
 permissions:
@@ -57,7 +54,8 @@ jobs:
             lib/customer_history_screen.dart \
             test/drive_sync_integration_test.dart \
             test/invoice_unit_converter_test.dart \
-            test/supplier_invoice_conversion_test.dart
+            test/supplier_invoice_conversion_test.dart \
+            test/recall_bill_test.dart
 
       - name: Run Google Drive reconciliation and invoice conversion tests
         shell: bash
@@ -65,4 +63,5 @@ jobs:
           flutter test \
             test/drive_sync_integration_test.dart \
             test/invoice_unit_converter_test.dart \
-            test/supplier_invoice_conversion_test.dart
+            test/supplier_invoice_conversion_test.dart \
+            test/recall_bill_test.dart

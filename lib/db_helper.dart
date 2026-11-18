@@ -241,7 +241,9 @@ class DBHelper {
         saleIds[localId] = syncId;
         final customerId = (row['customer_id'] as num?)?.toInt();
         final customerSyncId = customerId == null ? null : partyIds[customerId];
-        final customerType = customerId == null ? 'Walk-in' : 'Khata';
+        final customerType = customerId == null
+            ? 'Walk-in'
+            : (row['customer_type']?.toString() ?? 'Khata');
         if (newId || row['customer_sync_id'] != customerSyncId ||
             row['customer_type'] != customerType) {
           await txn.update('sales', {
@@ -456,7 +458,7 @@ class DBHelper {
           ..remove('_deleted')
           ..remove('updated_at')
           ..['sync_id'] = doc.id;
-        values['customer_type'] = 'Khata';
+        values['customer_type'] ??= 'Khata';
         values['balance'] ??= 0.0;
         await _upsertSyncRecord(txn, 'parties', doc.id, values);
       }
@@ -1911,10 +1913,6 @@ class DBHelper {
         if (oldVersion < 16) {
           await _ensureColumn(db, 'purchases', 'unit_label', 'TEXT');
         }
-        if (oldVersion < 18) {
-          await _ensureColumn(db, 'sale_items', 'stock_unit', 'TEXT');
-          await _ensureColumn(db, 'sale_return_items', 'stock_unit', 'TEXT');
-        }
         if (oldVersion < 17) {
           await _ensureColumn(db, 'products', 'stock_unit', 'TEXT');
           await _ensureColumn(db, 'purchases', 'invoice_quantity', 'REAL');
@@ -2118,6 +2116,11 @@ class DBHelper {
             cost_total REAL NOT NULL,
             condition TEXT NOT NULL DEFAULT 'saleable'
           )''');
+        }
+
+        if (oldVersion < 18) {
+          await _ensureColumn(db, 'sale_items', 'stock_unit', 'TEXT');
+          await _ensureColumn(db, 'sale_return_items', 'stock_unit', 'TEXT');
         }
 
         if (oldVersion < 8) {
@@ -2342,7 +2345,14 @@ class DBHelper {
     final db = await database;
     final saleData = Map<String, dynamic>.from(sale);
     final customerId = saleData['customer_id'];
-    final customerType = customerId == null ? 'Walk-in' : 'Khata';
+    final customerType = saleData['customer_type']?.toString() ??
+        (customerId == null ? 'Walk-in' : 'Khata');
+    if (!const {'Walk-in', 'Khata', 'Wholesale'}.contains(customerType)) {
+      throw Exception('Customer type must be Walk-in, Khata or Wholesale.');
+    }
+    if ((customerType == 'Walk-in') != (customerId == null)) {
+      throw Exception('Walk-in sale must not have a customer account; Khata/Wholesale sale requires a selected customer.');
+    }
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
     final receivedAmount = customerId == null
@@ -2373,6 +2383,23 @@ class DBHelper {
 
     // Check stock and save the sale atomically.
     final saleId = await db.transaction<int>((txn) async {
+      if (customerId != null) {
+        final account = await txn.query(
+          'parties',
+          columns: ['customer_type'],
+          where: 'id = ? AND type = ?',
+          whereArgs: [customerId, 'customer'],
+          limit: 1,
+        );
+        if (account.isEmpty) {
+          throw Exception('Selected customer account was not found.');
+        }
+        final storedType = account.first['customer_type']?.toString() ?? 'Khata';
+        if (storedType != customerType) {
+          throw Exception('Selected account is $storedType, not $customerType. Customer list refresh karein.');
+        }
+      }
+
       // Validate every product before changing any stock.
       for (final entry in quantitiesByBarcode.entries) {
         final barcode = entry.key;
@@ -2535,6 +2562,137 @@ class DBHelper {
     return saleId;
   }
 
+  // Safe overwrite path for recalled bills. Any return or any receipt beyond the
+  // original checkout receipt blocks overwrite; caller can then save a new bill.
+  static Future<void> updateSaleFromRecall({
+    required int saleId, required Map<String, dynamic> sale,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    if (items.isEmpty) throw Exception('Cart empty hai.');
+    await _ensureLegacySyncIds();
+    final db = await database;
+    await db.transaction((txn) async {
+      final sales = await txn.query('sales', where: 'id = ?', whereArgs: [saleId], limit: 1);
+      if (sales.isEmpty) throw Exception('Original bill nahi mila.');
+      final old = Map<String, dynamic>.from(sales.first);
+      final returns = await txn.query('sale_returns', columns: ['id'], where: 'sale_id = ?', whereArgs: [saleId], limit: 1);
+      if (returns.isNotEmpty) throw Exception('Is bill par return mojood hai. Sirf Save as New Bill karein.');
+      final partyId = (old['customer_id'] as num?)?.toInt();
+      if ((sale['customer_id'] as num?)?.toInt() != partyId) throw Exception('Existing bill ka customer change nahi ho sakta. Save as New Bill karein.');
+      final oldCustomerType = old['customer_type']?.toString() ?? (partyId == null ? 'Walk-in' : 'Khata');
+      if ((sale['customer_type']?.toString() ?? 'Walk-in') != oldCustomerType) throw Exception('Existing bill ka customer type change nahi ho sakta. Save as New Bill karein.');
+      if (partyId != null) {
+        final accounts = await txn.query('parties', columns: ['customer_type'], where: "id = ? AND type = 'customer'", whereArgs: [partyId], limit: 1);
+        if (accounts.isEmpty || (accounts.first['customer_type']?.toString() ?? 'Khata') != oldCustomerType) throw Exception('Original customer account verify nahi ho saka.');
+        final originalSaleDate = old['date']?.toString() ?? '';
+        final ownReceiptNote = 'Cash received at sale #' + saleId.toString();
+        final ownReceiptRows = await txn.query(
+          'khata_transactions',
+          columns: ['id'],
+          where: 'party_id = ? AND note = ?',
+          whereArgs: [partyId, ownReceiptNote],
+          orderBy: 'id DESC',
+          limit: 1,
+        );
+        final originalReceiptId = ownReceiptRows.isEmpty
+            ? null
+            : (ownReceiptRows.first['id'] as num).toInt();
+        // Date strings have second-level precision. Use the local row ID as a
+        // tie-breaker so a later receipt in the same second cannot slip through.
+        // If the original sale had no receipt, same-second receipts are blocked
+        // conservatively because their order cannot be proven.
+        final receipts = await txn.query(
+          'khata_transactions',
+          where: "party_id = ? AND type = 'receipt' AND note != ? AND (date > ? OR (date = ? AND (? IS NULL OR id > ?)))",
+          whereArgs: [partyId, ownReceiptNote, originalSaleDate, originalSaleDate, originalReceiptId, originalReceiptId],
+        );
+        if (receipts.isNotEmpty) throw Exception('Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.');
+      }
+      final oldItems = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      final restore = <int, int>{};
+      for (final row in oldItems) {
+        final pid = (row['product_id'] as num?)?.toInt();
+        if (pid == null) throw Exception('Purane bill ka product link missing hai.');
+        restore[pid] = (restore[pid] ?? 0) + ((row['quantity'] as num?)?.toInt() ?? 0);
+      }
+      for (final e in restore.entries) {
+        if (await txn.rawUpdate('UPDATE products SET quantity = quantity + ? WHERE id = ?', [e.value, e.key]) != 1) throw Exception('Original stock restore nahi hua.');
+      }
+      final quantities = <String, int>{};
+      final prepared = <Map<String, dynamic>>[];
+      var subtotal = 0.0;
+      for (final item in items) {
+        final barcode = item['barcode']?.toString() ?? '';
+        final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+        if (barcode.isEmpty || qty <= 0) throw Exception('Barcode ya quantity valid nahi.');
+        quantities[barcode] = (quantities[barcode] ?? 0) + qty;
+        final rows = await txn.query('products', where: 'barcode = ?', whereArgs: [barcode], limit: 1);
+        if (rows.isEmpty) throw Exception('Product nahi mila: ' + barcode);
+        final p = Map<String, dynamic>.from(rows.first);
+        final price = ((item['salePrice'] ?? item['price'] ?? p['price'] ?? 0) as num).toDouble();
+        final cost = ((item['purchasePrice'] ?? p['purchasePrice'] ?? 0) as num).toDouble();
+        if (!price.isFinite || !cost.isFinite || price < cost) throw Exception('Sale rate purchase cost se kam hai: ' + p['name'].toString());
+        subtotal += price * qty;
+        prepared.add({'product': p, 'barcode': barcode, 'qty': qty, 'price': price, 'cost': cost, 'name': (item['name'] ?? p['name'] ?? barcode).toString(), 'unit': (item['stockUnit'] ?? p['stock_unit'] ?? 'pcs').toString()});
+      }
+      for (final e in quantities.entries) {
+        final rows = await txn.query('products', where: 'barcode = ?', whereArgs: [e.key], limit: 1);
+        final stock = (rows.first['quantity'] as num?)?.toInt() ?? 0;
+        if (stock < e.value) throw Exception('Stock kam hai: ' + rows.first['name'].toString());
+      }
+      final discount = (sale['discount'] as num?)?.toDouble() ?? 0;
+      // Recalculate from the edited cart. The stored final_amount belongs to the old invoice.
+      final finalAmount = subtotal - discount;
+      final received = (sale['received_amount'] as num?)?.toDouble() ?? 0;
+      if (!discount.isFinite || discount < 0 || discount > subtotal || !finalAmount.isFinite || finalAmount < 0 || finalAmount > subtotal || !received.isFinite || received < 0 || received > finalAmount) throw Exception('Discount, total ya received amount valid nahi.');
+      final due = partyId == null ? 0.0 : finalAmount - received;
+      for (final e in quantities.entries) {
+        if (await txn.rawUpdate('UPDATE products SET quantity = quantity - ? WHERE barcode = ? AND quantity >= ?', [e.value, e.key, e.value]) != 1) throw Exception('Stock update fail hua: ' + e.key);
+        final rows = await txn.query('products', where: 'barcode = ?', whereArgs: [e.key], limit: 1);
+        final product = Map<String, dynamic>.from(rows.first)..remove('id');
+        await _queueSync(txn, collection: 'products', documentId: e.key, payload: product);
+      }
+      final saleSync = old['sync_id']?.toString();
+      if (saleSync == null || saleSync.isEmpty) throw Exception('Original bill sync ID missing hai.');
+      final oldDue = _effectiveBalanceDue(old);
+      final updated = Map<String, dynamic>.from(old)..['total_amount'] = subtotal..['discount'] = discount..['final_amount'] = finalAmount..['received_amount'] = received..['balance_due'] = due..['payment_type'] = sale['payment_type'] ?? old['payment_type'];
+      await txn.update('sales', updated, where: 'id = ?', whereArgs: [saleId]);
+      await _queueRow(txn, 'sales', updated, remove: ['customer_id']);
+      for (final row in oldItems) {
+        final id = row['sync_id']?.toString();
+        if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
+      }
+      await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      for (final item in prepared) {
+        final p = item['product'] as Map<String, dynamic>;
+        final row = <String, dynamic>{'sale_id': saleId, 'product_id': p['id'], 'barcode': item['barcode'], 'product_name': item['name'], 'quantity': item['qty'], 'sale_price': item['price'], 'purchase_price': item['cost'], 'line_total': item['price'] * item['qty'], 'cost_total': item['cost'] * item['qty'], 'stock_unit': item['unit'], 'sync_id': _newSyncId(), 'sale_sync_id': saleSync};
+        await txn.insert('sale_items', row);
+        await _queueRow(txn, 'sale_items', row, remove: ['sale_id', 'product_id']);
+      }
+      if (partyId != null) {
+        final oldLedger = await txn.query('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
+        for (final row in oldLedger) {
+          final id = row['sync_id']?.toString();
+          if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
+        }
+        await txn.delete('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
+        final partyRows = await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [partyId], limit: 1);
+        final partySync = partyRows.isEmpty ? null : partyRows.first['sync_id']?.toString();
+        final credit = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'credit', 'amount': finalAmount, 'note': 'Sale #' + saleId.toString(), 'date': old['date'].toString()};
+        await txn.insert('khata_transactions', credit);
+        await _queueRow(txn, 'khata_transactions', credit, remove: ['party_id']);
+        if (received > 0) {
+          final receipt = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'receipt', 'amount': received, 'note': 'Cash received at sale #' + saleId.toString(), 'date': old['date'].toString()};
+          await txn.insert('khata_transactions', receipt);
+          await _queueRow(txn, 'khata_transactions', receipt, remove: ['party_id']);
+        }
+        await txn.rawUpdate('UPDATE parties SET balance = COALESCE(balance,0) - ? + ? WHERE id = ?', [oldDue, due, partyId]);
+        final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
+        if (updatedParty.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updatedParty.first));
+      }
+    });
+    unawaited(syncPendingChanges());
+  }
   // Sales Operations + Firebase Sync
 
   static Future<int> insertSale(Map<String, dynamic> sale) async {
@@ -2748,7 +2906,7 @@ class DBHelper {
   static Future<int> insertParty(Map<String, dynamic> party) async {
     final db = await database;
     final data = Map<String, dynamic>.from(party)..['sync_id'] = _newSyncId();
-    if (data['type'] == 'customer') data['customer_type'] = 'Khata';
+    if (data['type'] == 'customer') data['customer_type'] ??= 'Khata';
     final result = await db.transaction<int>((txn) async {
       final id = await txn.insert('parties', data);
       await _queueRow(txn, 'parties', data);
@@ -2756,6 +2914,32 @@ class DBHelper {
     });
     unawaited(syncPendingChanges());
     return result;
+  }
+
+  static Future<void> updateCustomerType(int id, String customerType) async {
+    if (customerType != 'Khata' && customerType != 'Wholesale') {
+      throw Exception('Customer type must be Khata or Wholesale.');
+    }
+    final db = await database;
+    await db.transaction((txn) async {
+      final existing = await txn.query(
+        'parties',
+        columns: ['id'],
+        where: 'id = ? AND type = ?',
+        whereArgs: [id, 'customer'],
+        limit: 1,
+      );
+      if (existing.isEmpty) throw Exception('Customer account not found.');
+      await txn.update(
+        'parties',
+        {'customer_type': customerType},
+        where: 'id = ? AND type = ?',
+        whereArgs: [id, 'customer'],
+      );
+      final updated = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (updated.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(updated.first));
+    });
+    unawaited(syncPendingChanges());
   }
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {

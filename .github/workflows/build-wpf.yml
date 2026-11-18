@@ -1,11 +1,18 @@
-name: Validate Native WPF POS (No Publish Artifacts)
+name: Build and Test Native WPF POS + Windows x64 Artifact
 
 on:
   push:
-    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
-  pull_request:
-    paths: ['desktop-wpf/**', 'desktop-wpf.Tests/**', '.github/workflows/build-wpf.yml']
+    branches:
+      - integration/wpf-mainline
+    paths:
+      - 'desktop-wpf/**'
+      - 'desktop-wpf.Tests/**'
+      - '.github/workflows/build-wpf.yml'
   workflow_dispatch:
+
+concurrency:
+  group: validate-wpf-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -21,3 +28,26 @@ jobs:
       - run: dotnet restore desktop-wpf/KhanBabaPos.Wpf.csproj
       - run: dotnet build desktop-wpf/KhanBabaPos.Wpf.csproj --configuration Release --no-restore
       - run: dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj --configuration Release
+
+      - name: Publish self-contained Windows x64 test app
+        shell: pwsh
+        run: |
+          dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
+          @'
+          KHAN BABA POS — WINDOWS WPF TEST ARTIFACT
+          =========================================
+          This is an unsigned self-contained Windows x64 test build.
+          Extract the ZIP and run KhanBabaPos.Wpf.exe on a Windows 10/11 x64 test PC.
+          Use a disposable copy of the existing SQLite v18 database and take a separate backup first.
+          This artifact is not a signed production release or a completed owner-acceptance build.
+          Scanner, printer, Google Drive OAuth/sync, update flow and full feature parity require separate target-PC verification.
+          '@ | Set-Content artifacts/publish/TEST-INSTRUCTIONS.txt
+          Compress-Archive -Path artifacts/publish/win-x64/*,artifacts/publish/TEST-INSTRUCTIONS.txt -DestinationPath artifacts/KhanBabaPOS-Windows-x64.zip -Force
+
+      - name: Upload Windows x64 test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanBabaPOS-Windows-x64-${{ github.run_number }}
+          path: artifacts/KhanBabaPOS-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30

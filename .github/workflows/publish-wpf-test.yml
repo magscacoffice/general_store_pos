@@ -48,6 +48,7 @@ jobs:
           IMPORTANT
           - Windows 10/11 x64 is required.
           - .NET 10 runtime is bundled; no separate .NET installation should be needed.
+          - The app uses the existing local data path and must not be pointed at the live store database for first testing.
           - Google Drive sync, Windows login/role parity, automatic updates, scanner hardware and physical printer output are not production-accepted yet.
           - Do not treat this build as a production-ready installer.
           '@ | Set-Content artifacts/KhanBabaPOS-Windows-Test/TEST-INSTRUCTIONS.txt

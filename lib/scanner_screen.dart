@@ -8,8 +8,13 @@ import 'db_helper.dart';
 
 class ScannerScreen extends StatefulWidget {
   final bool captureBarcodeOnly;
+  final String customerType;
 
-  const ScannerScreen({super.key, this.captureBarcodeOnly = false});
+  const ScannerScreen({
+    super.key,
+    this.captureBarcodeOnly = false,
+    this.customerType = 'Walk-in',
+  });
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -26,6 +31,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Map<String, dynamic>? lastScannedProduct;
   List<Map<String, dynamic>> allProducts = [];
   List<Map<String, dynamic>> searchResults = [];
+
+  double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
+    final cost = purchasePriceOverride ?? (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+    final retail = (product['price'] as num?)?.toDouble() ?? cost;
+    final wholesale = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
+    final configured = widget.customerType == 'Wholesale' && wholesale > 0 ? wholesale : retail;
+    return configured < cost ? cost : configured;
+  }
 
   @override
   void initState() {
@@ -136,10 +149,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           'barcode': barcode,
           'name': product['name'],
           'purchasePrice': product['purchasePrice'] ?? 0.0,
-          'salePrice': (product['price'] as num).toDouble() <
-                  (product['purchasePrice'] as num? ?? 0).toDouble()
-              ? (product['purchasePrice'] as num? ?? 0).toDouble()
-              : (product['price'] as num).toDouble(),
+          'salePrice': _salePriceForProduct(product),
           'quantity': 1,
         });
       }
@@ -216,9 +226,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       'purchasePrice': cost,
                       // This bill must never sell below the newly entered cost.
                       // The saved product sale price is deliberately unchanged.
-                      'salePrice': (product['price'] as num).toDouble() < cost
-                          ? cost
-                          : (product['price'] as num).toDouble(),
+                      'salePrice': _salePriceForProduct(product, purchasePriceOverride: cost),
                       'quantity': saleQty,
                     });
                   });

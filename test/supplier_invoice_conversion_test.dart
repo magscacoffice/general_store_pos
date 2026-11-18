@@ -276,4 +276,80 @@ void main() {
     expect(returnItemColumns.map((row) => row['name']), contains('stock_unit'));
   });
 
+  test('upgrades a version-3 database after creating sale and return item tables', () async {
+    await DBHelper.closeDatabase();
+    final legacyPath = p.join(tempDirectory.path, 'legacy-v3.db');
+    final legacy = await openDatabase(
+      legacyPath,
+      version: 3,
+      onCreate: (db, version) async {
+        await db.execute('''CREATE TABLE products(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          barcode TEXT UNIQUE NOT NULL,
+          price REAL NOT NULL,
+          purchasePrice REAL DEFAULT 0,
+          quantity INTEGER NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE sales(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          total_amount REAL NOT NULL,
+          discount REAL DEFAULT 0,
+          final_amount REAL DEFAULT 0,
+          payment_type TEXT DEFAULT 'Cash',
+          customer_id INTEGER,
+          date TEXT NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE expenses(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          amount REAL NOT NULL,
+          date TEXT NOT NULL
+        )''');
+        await db.execute('''CREATE TABLE reminders(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          details TEXT,
+          date TEXT NOT NULL,
+          is_done INTEGER DEFAULT 0
+        )''');
+        await db.insert('products', {
+          'name': 'Legacy Version 3 Item',
+          'barcode': 'LEGACY-V3-1',
+          'price': 20,
+          'purchasePrice': 10,
+          'quantity': 12,
+        });
+        await db.insert('sales', {
+          'total_amount': 40,
+          'discount': 0,
+          'final_amount': 40,
+          'payment_type': 'Cash',
+          'customer_id': null,
+          'date': '2026-11-01 10:00:00',
+        });
+      },
+    );
+    await legacy.close();
+
+    DBHelper.databasePathOverrideForTests = legacyPath;
+    final upgraded = await DBHelper.database;
+    final version = await upgraded.rawQuery('PRAGMA user_version');
+    final products = await upgraded.query('products');
+    final sales = await upgraded.query('sales');
+    final saleItemColumns = await upgraded.rawQuery('PRAGMA table_info(sale_items)');
+    final returnItemColumns = await upgraded.rawQuery('PRAGMA table_info(sale_return_items)');
+
+    expect(version.single.values.single, 18);
+    expect(products.single['name'], 'Legacy Version 3 Item');
+    expect(products.single['quantity'], 12);
+    expect(products.single['stock_unit'], isNull);
+    expect(products.single['is_active'], 1);
+    expect(sales.single['final_amount'], 40);
+    expect(sales.single['salesman_uid'], isNull);
+    expect(saleItemColumns.map((row) => row['name']), contains('stock_unit'));
+    expect(returnItemColumns.map((row) => row['name']), contains('stock_unit'));
+    expect(await upgraded.query('sale_returns'), isEmpty);
+  });
+
 }

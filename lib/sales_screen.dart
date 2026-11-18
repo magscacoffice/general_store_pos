@@ -1,26 +1,17 @@
-import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'db_helper.dart';
 import 'scanner_screen.dart';
 import 'printer_screen.dart';
-import 'windows/pos_windows.dart';
-
-// Dashboard restore uses this hook to flush the active cashier bill first.
-Future<void> Function()? windowsBeforeDatabaseRestore;
 
 class SalesScreen extends StatefulWidget {
-  final String? billId;
   final bool embeddedInDashboard;
 
   const SalesScreen({
     super.key,
-    this.billId,
     this.embeddedInDashboard = false,
   });
 
@@ -35,10 +26,7 @@ class SalesScreenState extends State<SalesScreen> {
   String selectedSaleType = 'Walk-in';
   String customerPaymentMode = 'Cash';
   final TextEditingController receivedAmountController = TextEditingController();
-  final TextEditingController _usbBarcodeController = TextEditingController();
-  final FocusNode _usbBarcodeFocusNode = FocusNode();
   final TextEditingController _productSearchController = TextEditingController();
-  List<Map<String, dynamic>> _productSearchCache = [];
 
   Map<String, dynamic>? get selectedCustomer {
     if (selectedCustomerId == null) return null;
@@ -51,211 +39,18 @@ class SalesScreenState extends State<SalesScreen> {
   double overallDiscount = 0.0;
   bool isPercentageDiscount = false;
   bool isCheckingOut = false;
-  late String _activeBillId;
-  List<Map<String, dynamic>> _openBills = [];
-  Future<void> _pendingSaveQueue = Future<void>.value();
-  bool _restoringBills = false;
+  int? _recalledSaleId;
 
   @override
   void initState() {
     super.initState();
-    if (Platform.isWindows) windowsBeforeDatabaseRestore = _flushBillBeforeDatabaseRestore;
-    _activeBillId = widget.billId ?? PosWindows.newBillId();
     _loadCustomers();
-    if (Platform.isWindows) {
-      unawaited(_loadProductSearchCache());
-
-    }
-  }
-
-
-  Map<String, dynamic> _snapshotCurrentBill() => {
-    'bill_id': _activeBillId,
-    'label': _billLabel(_activeBillId),
-    'cart': cart.map((item) => Map<String, dynamic>.from(item)).toList(),
-    'selectedCustomerId': selectedCustomerId,
-    'selectedSaleType': selectedSaleType,
-    'customerPaymentMode': customerPaymentMode,
-    'overallDiscount': overallDiscount,
-    'isPercentageDiscount': isPercentageDiscount,
-    'receivedAmount': receivedAmountController.text,
-  };
-
-  String _billLabel(String billId) {
-    for (final bill in _openBills) {
-      if (bill['bill_id'] == billId) return bill['label']?.toString() ?? 'Pending Bill';
-    }
-    final suffix = billId.length > 4
-        ? billId.substring(billId.length - 4)
-        : billId;
-    return 'Bill #$suffix';
-  }
-
-  Future<void> _persistActiveBill() async {
-    if (!Platform.isWindows || _restoringBills || _activeBillId.isEmpty) return;
-    if (cart.isEmpty) {
-      final billId = _activeBillId;
-      _openBills.removeWhere((bill) => bill['bill_id'] == billId);
-      _pendingSaveQueue = _pendingSaveQueue.then((_) async {
-        await DBHelper.deletePendingBill(billId);
-      }).catchError((Object error) {
-        debugPrint('Empty pending bill cleanup failed: $error');
-      });
-      await _pendingSaveQueue;
-      return;
-    }
-    final snapshot = _snapshotCurrentBill();
-    final index = _openBills.indexWhere((bill) => bill['bill_id'] == _activeBillId);
-    if (index >= 0) {
-      _openBills[index] = snapshot;
-    } else {
-      _openBills.insert(0, snapshot);
-    }
-    _pendingSaveQueue = _pendingSaveQueue.then((_) async {
-      await DBHelper.savePendingBill(snapshot);
-    }).catchError((Object error) {
-      debugPrint('Pending bill save failed: $error');
-    });
-    await _pendingSaveQueue;
-  }
-
-  Future<void> _restorePendingBills() async {
-    _restoringBills = true;
-    try {
-      final saved = await DBHelper.getPendingBills();
-      if (!mounted) return;
-      final matching = saved.where(
-        (bill) => bill['bill_id']?.toString() == _activeBillId,
-      ).toList();
-      if (matching.isNotEmpty) {
-        _openBills = [matching.first];
-        _applyBillSnapshot(matching.first);
-      } else {
-        _openBills = [_snapshotCurrentBill()];
-      }
-    } catch (error) {
-      debugPrint('Pending bills restore failed: $error');
-      if (mounted) _openBills = [_snapshotCurrentBill()];
-    } finally {
-      _restoringBills = false;
-      if (mounted) await _persistActiveBill();
-    }
-  }
-
-  void _applyBillSnapshot(Map<String, dynamic> snapshot) {
-    _restoringBills = true;
-    setState(() {
-      _activeBillId = snapshot['bill_id'].toString();
-      cart = (snapshot['cart'] as List? ?? [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-      selectedCustomerId = (snapshot['selectedCustomerId'] as num?)?.toInt();
-      selectedSaleType = snapshot['selectedSaleType']?.toString() ?? 'Walk-in';
-      customerPaymentMode = snapshot['customerPaymentMode']?.toString() ?? 'Cash';
-      overallDiscount = (snapshot['overallDiscount'] as num?)?.toDouble() ?? 0.0;
-      isPercentageDiscount = snapshot['isPercentageDiscount'] == true;
-      receivedAmountController.text = snapshot['receivedAmount']?.toString() ?? '';
-    });
-    _restoringBills = false;
-  }
-
-  Future<void> _createNewBill() async {
-    if (Platform.isWindows && !widget.embeddedInDashboard) {
-      await _persistActiveBill();
-      await PosWindows.openSale();
-      return;
-    }
-    await _persistActiveBill();
-    final nextId = PosWindows.newBillId();
-    final nextLabel = 'Bill ${_openBills.length + 1}';
-    setState(() {
-      _activeBillId = nextId;
-      cart = [];
-      selectedCustomerId = null;
-      selectedSaleType = 'Walk-in';
-      customerPaymentMode = 'Cash';
-      overallDiscount = 0;
-      isPercentageDiscount = false;
-      receivedAmountController.clear();
-      _openBills.insert(0, {
-        'bill_id': nextId,
-        'label': nextLabel,
-        'cart': <Map<String, dynamic>>[],
-        'selectedCustomerId': null,
-        'selectedSaleType': 'Walk-in',
-        'customerPaymentMode': 'Cash',
-        'overallDiscount': 0.0,
-        'isPercentageDiscount': false,
-        'receivedAmount': '',
-      });
-    });
-    await _persistActiveBill();
-  }
-
-  Future<void> startNewBillFromDashboard() => _createNewBill();
-
-  Future<void> _switchBill(String billId) async {
-    if (billId == _activeBillId) return;
-    await _persistActiveBill();
-    final selected = _openBills.firstWhere(
-      (bill) => bill['bill_id'] == billId,
-      orElse: () => <String, dynamic>{},
-    );
-    if (selected.isEmpty || !mounted) return;
-    _applyBillSnapshot(selected);
-  }
-
-  Future<void> _completeActiveBill() async {
-    await _pendingSaveQueue;
-    await DBHelper.deletePendingBill(_activeBillId);
-    _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
-    if (_openBills.isNotEmpty) {
-      _applyBillSnapshot(_openBills.first);
-    } else {
-      final nextId = DateTime.now().microsecondsSinceEpoch.toString();
-      setState(() {
-        _activeBillId = nextId;
-        cart = [];
-        selectedCustomerId = null;
-        selectedSaleType = 'Walk-in';
-        customerPaymentMode = 'Cash';
-        overallDiscount = 0;
-        isPercentageDiscount = false;
-        receivedAmountController.clear();
-      });
-      await _persistActiveBill();
-    }
-  }
-
-
-  bool _isPreparingForDatabaseRestore = false;
-
-  Future<void> _flushBillBeforeDatabaseRestore() async {
-    if (!Platform.isWindows) return;
-    _isPreparingForDatabaseRestore = true;
-    try {
-      await _pendingSaveQueue;
-      await _persistActiveBill();
-      await _pendingSaveQueue;
-    } catch (_) {
-      _isPreparingForDatabaseRestore = false;
-      rethrow;
-    }
   }
 
   @override
   void dispose() {
-    if (Platform.isWindows) windowsBeforeDatabaseRestore = null;
-    // The restore handler has already flushed the bill and closed SQLite.
-    // Do not let dispose() reopen the database while the restore replaces it.
-    if (!_isPreparingForDatabaseRestore) {
-      unawaited(_persistActiveBill());
-    }
     receivedAmountController.dispose();
-    _usbBarcodeController.dispose();
     _productSearchController.dispose();
-    _usbBarcodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -272,16 +67,17 @@ class SalesScreenState extends State<SalesScreen> {
       customerPaymentMode = 'Cash';
       receivedAmountController.clear();
     });
-    unawaited(_persistActiveBill());
   }
 
-  Future<void> _loadProductSearchCache() async {
-    try {
-      final data = await DBHelper.getProducts();
-      if (mounted) setState(() => _productSearchCache = data);
-    } catch (error) {
-      debugPrint('Product suggestion cache load failed: $error');
-    }
+  double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
+    final purchasePrice = purchasePriceOverride ??
+        (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
+    final retailPrice = (product['price'] as num?)?.toDouble() ?? purchasePrice;
+    final wholesalePrice = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
+    final configuredPrice = selectedSaleType == 'Wholesale' && wholesalePrice > 0
+        ? wholesalePrice
+        : retailPrice;
+    return configuredPrice < purchasePrice ? purchasePrice : configuredPrice;
   }
 
   Future<void> _loadCustomers() async {
@@ -290,12 +86,98 @@ class SalesScreenState extends State<SalesScreen> {
     setState(() {
       customers = data;
       if (selectedCustomerId != null &&
-          !customers.any((c) => (c['id'] as num?)?.toInt() == selectedCustomerId)) {
+          !customers.any((c) =>
+              (c['id'] as num?)?.toInt() == selectedCustomerId &&
+              (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)) {
         selectedCustomerId = null;
       }
     });
   }
 
+  Future<void> _startNewBill() async {
+    if (cart.isNotEmpty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('New Bill'),
+          content: const Text('Current cart ko clear karke naya bill shuru karna hai?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('New Bill')),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    setState(() {
+      cart.clear();
+      _recalledSaleId = null;
+      overallDiscount = 0;
+      isPercentageDiscount = false;
+      selectedSaleType = 'Walk-in';
+      selectedCustomerId = null;
+      customerPaymentMode = 'Cash';
+      receivedAmountController.clear();
+    });
+  }
+
+  Future<void> _recallRecentBill() async {
+    if (cart.isNotEmpty) {
+      final choice = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Current bill save karein?'),
+        content: const Text('Recall se pehle current cart clear ho jayega. Kya aap continue karna chahte hain?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue'))],
+      ));
+      if (choice != true || !mounted) return;
+    }
+    try {
+      final bills = await DBHelper.getSales();
+      if (!mounted) return;
+      if (bills.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abhi koi saved bill nahi hai.'))); return; }
+      final selected = await showDialog<Map<String, dynamic>>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Recall / Recent Bills'),
+        content: SizedBox(width: 560, height: 420, child: ListView.builder(itemCount: bills.length > 100 ? 100 : bills.length, itemBuilder: (ctx, index) {
+          final bill = bills[index];
+          return ListTile(dense: true, title: Text('Bill #${bill['id']}  •  Rs. ${bill['effective_amount'] ?? bill['final_amount'] ?? bill['total_amount']}'),
+            subtitle: Text('${bill['date']}  |  ${bill['customer_type'] ?? 'Walk-in'}  |  ${bill['payment_type'] ?? 'Cash'}'),
+            onTap: () => Navigator.pop(ctx, Map<String, dynamic>.from(bill)));
+        })),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))],
+      ));
+      if (selected == null || !mounted) return;
+      final id = (selected['id'] as num).toInt();
+      final rows = await DBHelper.getSaleItems(id);
+      if (!mounted) return;
+      final partyId = (selected['customer_id'] as num?)?.toInt();
+      Map<String, dynamic>? customer;
+      if (partyId != null) {
+        for (final candidate in customers) {
+          if ((candidate['id'] as num?)?.toInt() == partyId) {
+            customer = candidate;
+            break;
+          }
+        }
+      }
+      setState(() {
+        cart = rows.map((row) => <String, dynamic>{
+          'barcode': row['barcode']?.toString() ?? '', 'name': row['product_name']?.toString() ?? 'Product',
+          'purchasePrice': (row['purchase_price'] as num?)?.toDouble() ?? 0,
+          'salePrice': (row['sale_price'] as num?)?.toDouble() ?? 0,
+          'stockUnit': row['stock_unit']?.toString() ?? 'pcs', 'quantity': (row['quantity'] as num?)?.toInt() ?? 1,
+        }).toList();
+        selectedSaleType = selected['customer_type']?.toString() ?? 'Walk-in';
+        selectedCustomerId = customer == null ? null : partyId;
+        overallDiscount = (selected['discount'] as num?)?.toDouble() ?? 0;
+        isPercentageDiscount = false;
+        customerPaymentMode = selected['payment_type'] == 'Khata' ? 'Credit' : (selected['payment_type'] == 'Partial' ? 'Partial' : 'Cash');
+        receivedAmountController.text = (selected['received_amount'] as num?)?.toString() ?? '';
+        _recalledSaleId = id;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill #$id recall ho gaya. Update ya Save as New Bill choose karein.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bill recall nahi ho saka: $e')));
+    }
+  }
   Future<void> _addKhataCustomer() async {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
@@ -303,7 +185,7 @@ class SalesScreenState extends State<SalesScreen> {
       final createdId = await showDialog<int>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text('Add New Khata Customer'),
+          title: Text('Add New $selectedSaleType Customer'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -366,7 +248,7 @@ class SalesScreenState extends State<SalesScreen> {
                     'name': name,
                     'phone': phoneController.text.trim(),
                     'type': 'customer',
-                    'customer_type': 'Khata',
+                    'customer_type': selectedSaleType,
                     'balance': 0.0,
                   });
                   if (dialogContext.mounted) Navigator.pop(dialogContext, id);
@@ -387,9 +269,9 @@ class SalesScreenState extends State<SalesScreen> {
         await _loadCustomers();
         if (!mounted) return;
         setState(() => selectedCustomerId = createdId);
-        await _persistActiveBill();
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('New Khata customer added and selected.')),
+          SnackBar(content: Text('New $selectedSaleType customer added and selected.')),
         );
       }
     } finally {
@@ -503,8 +385,7 @@ class SalesScreenState extends State<SalesScreen> {
         return;
       }
       final purchasePrice = (selected['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-      final configuredSalePrice = (selected['price'] as num?)?.toDouble() ?? 0.0;
-      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+      final safeSalePrice = _salePriceForProduct(selected);
       setState(() {
         if (existingIndex >= 0) {
           cart[existingIndex]['quantity'] = alreadyInCart + 1;
@@ -520,7 +401,7 @@ class SalesScreenState extends State<SalesScreen> {
         }
         _productSearchController.text = selected['name']?.toString() ?? '';
       });
-      await _persistActiveBill();
+
     } finally {
       searchController.dispose();
     }
@@ -541,7 +422,7 @@ class SalesScreenState extends State<SalesScreen> {
       return;
     }
     if (!mounted) return;
-    setState(() => _productSearchCache = latestProducts);
+    
     final matches = latestProducts.where(
       (product) => product['barcode']?.toString() == barcode,
     );
@@ -564,8 +445,7 @@ class SalesScreenState extends State<SalesScreen> {
       return;
     }
     final purchasePrice = (currentProduct['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-    final configuredSalePrice = (currentProduct['price'] as num?)?.toDouble() ?? 0.0;
-    final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+    final safeSalePrice = _salePriceForProduct(currentProduct);
     setState(() {
       if (existingIndex >= 0) {
         cart[existingIndex]['quantity'] = alreadyInCart + 1;
@@ -579,16 +459,16 @@ class SalesScreenState extends State<SalesScreen> {
           'quantity': 1,
         });
       }
-      _usbBarcodeController.clear();
+
     });
-    await _persistActiveBill();
+
   }
 
   Future<void> _handleUnifiedProductInput(String rawInput) async {
     final value = rawInput.trim();
     if (value.isEmpty || !mounted) return;
-    _usbBarcodeController.clear();
-    final exactBarcode = _productSearchCache.any(
+    final products = await DBHelper.getProducts();
+    final exactBarcode = products.any(
       (product) => product['barcode']?.toString().trim() == value,
     );
     if (exactBarcode) {
@@ -602,7 +482,7 @@ class SalesScreenState extends State<SalesScreen> {
   Future<void> _addUsbBarcode(String rawBarcode) async {
     final barcode = rawBarcode.trim();
     if (barcode.isEmpty || !mounted) return;
-    _usbBarcodeController.clear();
+
     try {
       final products = await DBHelper.getProducts();
       if (!mounted) return;
@@ -618,8 +498,7 @@ class SalesScreenState extends State<SalesScreen> {
       final product = matches.first;
       final stock = (product['quantity'] as num?)?.toInt() ?? 0;
       final purchasePrice = (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-      final configuredSalePrice = (product['price'] as num?)?.toDouble() ?? 0.0;
-      final safeSalePrice = configuredSalePrice < purchasePrice ? purchasePrice : configuredSalePrice;
+      final safeSalePrice = _salePriceForProduct(product);
       final existingIndex = cart.indexWhere(
         (item) => item['barcode']?.toString() == barcode,
       );
@@ -644,14 +523,14 @@ class SalesScreenState extends State<SalesScreen> {
           });
         }
       });
-      await _persistActiveBill();
+
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Barcode add nahi ho saka: $error')),
       );
     } finally {
-      if (mounted && Platform.isWindows) _usbBarcodeFocusNode.requestFocus();
+      
     }
   }
 
@@ -731,8 +610,7 @@ class SalesScreenState extends State<SalesScreen> {
         quantity: quantity,
         unitCost: cost,
       );
-      final salePrice = (product['price'] as num?)?.toDouble() ?? cost;
-      final effectiveSalePrice = salePrice < cost ? cost : salePrice;
+      final effectiveSalePrice = _salePriceForProduct(product, purchasePriceOverride: cost);
       setState(() {
         final index = cart.indexWhere((item) => item['barcode']?.toString() == barcode);
         if (index >= 0) {
@@ -752,12 +630,12 @@ class SalesScreenState extends State<SalesScreen> {
           });
         }
       });
-      await _persistActiveBill();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Stock purchase record ho gaya aur item bill mein add ho gaya.')),
       );
-      _usbBarcodeFocusNode.requestFocus();
+      
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -773,7 +651,7 @@ class SalesScreenState extends State<SalesScreen> {
   void _scanAndAddToCart() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ScannerScreen()),
+      MaterialPageRoute(builder: (context) => ScannerScreen(customerType: selectedSaleType)),
     );
 
     if (!mounted) return;
@@ -810,7 +688,7 @@ class SalesScreenState extends State<SalesScreen> {
           }
         }
       });
-      await _persistActiveBill();
+
     }
   }
 
@@ -853,7 +731,7 @@ class SalesScreenState extends State<SalesScreen> {
           return;
         }
         setState(() => cart[index]['quantity'] = updatedQuantity);
-        await _persistActiveBill();
+
       }
     } finally {
       controller.dispose();
@@ -861,6 +739,7 @@ class SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _editSalePrice(int index) async {
+    if (selectedSaleType != 'Wholesale') return;
     final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
     final purchasePrice =
         (cart[index]['purchasePrice'] as num?)?.toDouble() ?? 0.0;
@@ -914,7 +793,7 @@ class SalesScreenState extends State<SalesScreen> {
       );
       if (updatedPrice != null && mounted) {
         setState(() => cart[index]['salePrice'] = updatedPrice);
-        await _persistActiveBill();
+
       }
     } finally {
       controller.dispose();
@@ -1010,7 +889,7 @@ class SalesScreenState extends State<SalesScreen> {
                       overallDiscount = value;
                       isPercentageDiscount = isPercent;
                     });
-                    unawaited(_persistActiveBill());
+
                     Navigator.pop(context);
                   },
                   child: const Text('Apply'),
@@ -1022,90 +901,6 @@ class SalesScreenState extends State<SalesScreen> {
       },
     );
     discountController.dispose();
-  }
-
-  Future<void> _openPendingBills() async {
-    await _persistActiveBill();
-    final pending = await DBHelper.getPendingBills();
-    if (!mounted) return;
-    if (pending.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Koi held/pending bill mojood nahi hai.')),
-      );
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Held / Pending Bills'),
-        content: SizedBox(
-          width: 520,
-          height: 380,
-          child: ListView.separated(
-            itemCount: pending.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final bill = pending[index];
-              final id = bill['bill_id'].toString();
-              final items = (bill['cart'] as List? ?? []).length;
-              final updated = bill['updated_at']?.toString() ?? '';
-              return ListTile(
-                leading: const Icon(Icons.receipt_long, color: Colors.teal),
-                title: Text(bill['label']?.toString() ?? 'Pending Bill'),
-                subtitle: Text('$items items  •  $updated'),
-                trailing: const Icon(Icons.open_in_new),
-                onTap: () {
-                  Navigator.pop(dialogContext);
-                  if (id == _activeBillId) return;
-                  unawaited(PosWindows.openSale(billId: id));
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<bool> _confirmLeaveBill() async {
-    if (!Platform.isWindows) return true;
-    if (cart.isEmpty) {
-      await _persistActiveBill();
-      return true;
-    }
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Bill abhi complete nahi hua'),
-        content: const Text(
-          'Aap ke bill mein items mojood hain. Billing jari rakhne ke liye Continue Billing dabayen, ya bill band karne ke liye Discard Bill.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Continue Billing'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Discard Bill'),
-          ),
-        ],
-      ),
-    );
-    if (discard == true) {
-      await _pendingSaveQueue;
-      await DBHelper.deletePendingBill(_activeBillId);
-      _openBills.removeWhere((bill) => bill['bill_id'] == _activeBillId);
-      return true;
-    }
-    await _persistActiveBill();
-    return false;
   }
 
   Future<void> _checkout() async {
@@ -1176,26 +971,46 @@ class SalesScreenState extends State<SalesScreen> {
 
     try {
       // Stock, sale aur customer balance ek transaction mein update honge.
-      final saleId = await DBHelper.completeSale(
-        sale: sale,
-        items: completedCart,
-      );
+      var saveAsNew = false;
+      if (_recalledSaleId != null) {
+        final action = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('Recalled Bill #$_recalledSaleId'),
+            content: const Text('Existing bill update karna hai ya naya bill save karna hai? Return ya baad ki Khata receipt wali bill overwrite nahi ho sakti.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, 'cancel'), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, 'new'), child: const Text('Save as New Bill')),
+              ElevatedButton(onPressed: () => Navigator.pop(dialogContext, 'update'), child: const Text('Update Existing Bill')),
+            ],
+          ),
+        );
+        if (action == null || action == 'cancel') {
+          if (mounted) setState(() => isCheckingOut = false);
+          return;
+        }
+        saveAsNew = action == 'new';
+      }
+      final int saleId;
+      if (_recalledSaleId != null && !saveAsNew) {
+        await DBHelper.updateSaleFromRecall(saleId: _recalledSaleId!, sale: sale, items: completedCart);
+        saleId = _recalledSaleId!;
+      } else {
+        saleId = await DBHelper.completeSale(sale: sale, items: completedCart);
+      }
 
       if (!mounted) return;
 
       // Sirf successful sale ke baad cart clear karein.
-      if (Platform.isWindows) {
-        await _completeActiveBill();
-      } else {
-        setState(() {
-          cart.clear();
-          overallDiscount = 0.0;
-          isPercentageDiscount = false;
-          selectedCustomerId = null;
-          customerPaymentMode = 'Cash';
-          receivedAmountController.clear();
-        });
-      }
+      setState(() {
+        cart.clear();
+        _recalledSaleId = null;
+        overallDiscount = 0.0;
+        isPercentageDiscount = false;
+        selectedCustomerId = null;
+        customerPaymentMode = 'Cash';
+        receivedAmountController.clear();
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1269,6 +1084,7 @@ class SalesScreenState extends State<SalesScreen> {
                             items: const [
                               DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
                               DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                              DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
                             ],
                             onChanged: (value) {
                               if (value != null) _setSaleType(value);
@@ -1293,6 +1109,7 @@ class SalesScreenState extends State<SalesScreen> {
                           border: const OutlineInputBorder(),
                         ),
                         items: customers
+                            .where((c) => (c['customer_type']?.toString() ?? 'Khata') == selectedSaleType)
                             .map((c) => DropdownMenuItem<int>(
                                   value: (c['id'] as num).toInt(),
                                   child: Text('${c['name']}  |  Balance Rs. ${c['balance']}'),
@@ -1300,7 +1117,7 @@ class SalesScreenState extends State<SalesScreen> {
                             .toList(),
                         onChanged: (id) {
                           setState(() => selectedCustomerId = id);
-                          unawaited(_persistActiveBill());
+
                         },
                       ),
                     ] else
@@ -1308,7 +1125,7 @@ class SalesScreenState extends State<SalesScreen> {
                         padding: EdgeInsets.only(top: 6),
                         child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
                       ),
-                    if (selectedSaleType == 'Khata') ...[
+                    if (selectedSaleType == 'Khata' || selectedSaleType == 'Wholesale') ...[
                       const SizedBox(height: 8),
                       const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
@@ -1324,7 +1141,7 @@ class SalesScreenState extends State<SalesScreen> {
                             customerPaymentMode = selection.first;
                             receivedAmountController.clear();
                           });
-                          unawaited(_persistActiveBill());
+
                         },
                       ),
                       if (customerPaymentMode == 'Partial') ...[
@@ -1332,8 +1149,7 @@ class SalesScreenState extends State<SalesScreen> {
                         TextField(
                           controller: receivedAmountController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (_) => unawaited(_persistActiveBill()),
-                          decoration: const InputDecoration(
+                                                    decoration: const InputDecoration(
                             labelText: 'Cash Received (Rs.)',
                             isDense: true,
                             border: OutlineInputBorder(),
@@ -1353,108 +1169,44 @@ class SalesScreenState extends State<SalesScreen> {
                 ),
               );
 
-  Widget _buildBillReviewHeading() =>
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Bill Review - Save/Print se pehle items check karein', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
-              );
+  Widget _buildBillReviewHeading() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+    child: Row(children: [
+      const Expanded(child: Text('Bill Review - Save/Print se pehle items check karein', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal))),
+      OutlinedButton.icon(onPressed: _startNewBill, icon: const Icon(Icons.add), label: const Text('New Bill')),
+      const SizedBox(width: 6),
+      OutlinedButton.icon(onPressed: _recallRecentBill, icon: const Icon(Icons.history), label: const Text('Recall Bills')),
+    ]),
+  );
 
   Widget _buildCartList() => Expanded(
     child: cart.isEmpty
         ? const Center(child: Text('Cart is empty. Scan or search for products.'))
-        : Platform.isWindows
-            ? Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(color: const Color(0xFFD9E0E6)),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SingleChildScrollView(
-                      child: DataTable(
-                        headingRowHeight: 40,
-                        dataRowMinHeight: 42,
-                        dataRowMaxHeight: 50,
-                        columns: const [
-                          DataColumn(label: Text('Product')),
-                          DataColumn(label: Text('Barcode')),
-                          DataColumn(label: Text('Qty'), numeric: true),
-                          DataColumn(label: Text('Unit Rate'), numeric: true),
-                          DataColumn(label: Text('Line Total'), numeric: true),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: cart.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final item = entry.value;
-                          final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-                          final rate = (item['salePrice'] as num?)?.toDouble() ?? 0;
-                          return DataRow(cells: [
-                            DataCell(SizedBox(
-                              width: 220,
-                              child: Text(
-                                item['name']?.toString() ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            )),
-                            DataCell(SizedBox(
-                              width: 120,
-                              child: Text(item['barcode']?.toString() ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            )),
-                            DataCell(Text('$quantity ${item['stockUnit'] ?? 'pcs'}')),
-                            DataCell(Text('Rs. ${rate.toStringAsFixed(2)}')),
-                            DataCell(Text('Rs. ${(rate * quantity).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600))),
-                            DataCell(Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                                IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit_outlined, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                                IconButton(
-                                  tooltip: 'Remove item',
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () {
-                                    setState(() => cart.removeAt(index));
-                                    unawaited(_persistActiveBill());
-                                  },
-                                ),
-                              ],
-                            )),
-                          ]);
-                        }).toList(),
-                      ),
-                    ),
+        : ListView.builder(
+            itemCount: cart.length,
+            itemBuilder: (context, index) {
+              final item = cart[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: ListTile(
+                  title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('Rate: Rs. ${item['salePrice']} per ${item['stockUnit'] ?? 'pcs'}  |  Qty: ${item['quantity']} ${item['stockUnit'] ?? 'pcs'}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
+                  trailing: Wrap(
+                    spacing: 0,
+                    children: [
+                      IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
+                      if (selectedSaleType == 'Wholesale')
+                        IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
+                      IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                        setState(() => cart.removeAt(index));
+
+                      }),
+                    ],
                   ),
                 ),
-              )
-            : ListView.builder(
-                itemCount: cart.length,
-                itemBuilder: (context, index) {
-                  final item = cart[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    child: ListTile(
-                      title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('Rate: Rs. ${item['salePrice']} per ${item['stockUnit'] ?? 'pcs'}  |  Qty: ${item['quantity']} ${item['stockUnit'] ?? 'pcs'}  |  Amount: Rs. ${((item['salePrice'] as num).toDouble() * (item['quantity'] as num).toInt()).toStringAsFixed(2)}'),
-                      trailing: Wrap(
-                        spacing: 0,
-                        children: [
-                          IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                          IconButton(tooltip: 'Edit sale rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
-                          IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
-                            setState(() => cart.removeAt(index));
-                            unawaited(_persistActiveBill());
-                          }),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+              );
+            },
+          ),
   );
 
   Widget _buildCheckoutPanel() =>
@@ -1489,7 +1241,7 @@ class SalesScreenState extends State<SalesScreen> {
                             Text(
                               'Rs. $finalTotal',
                               style: TextStyle(
-                                fontSize: Platform.isWindows ? 16 : 22,
+                                fontSize: 22,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.teal,
                               ),
@@ -1499,7 +1251,7 @@ class SalesScreenState extends State<SalesScreen> {
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal,
-                            foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                               vertical: 12,
                               horizontal: 16,
@@ -1520,62 +1272,16 @@ class SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _confirmLeaveBill,
-      child: Focus(
-        autofocus: Platform.isWindows,
-        onKeyEvent: (node, event) {
-          if (!Platform.isWindows) return KeyEventResult.ignored;
-          if (event is KeyDownEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.keyN &&
-                HardwareKeyboard.instance.isControlPressed) {
-              unawaited(_createNewBill());
-              return KeyEventResult.handled;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.f2) {
-              unawaited(_searchAndAddProduct());
-              return KeyEventResult.handled;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.f5) {
-              unawaited(_openPendingBills());
-              return KeyEventResult.handled;
-            }
-            if (event.logicalKey == LogicalKeyboardKey.f4) {
-              // Hold the current bill and open a fresh one.
-              unawaited(_createNewBill());
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
-        },
-        child: Scaffold(
+    return Scaffold(
       appBar: widget.embeddedInDashboard ? null : AppBar(
-        automaticallyImplyLeading: !Platform.isWindows,
+        automaticallyImplyLeading: true,
         title: Text(
-          Platform.isWindows ? 'KHAN BABA POS  |  NEW SALE' : 'POS Billing (Quick & Khata)',
+          'POS Billing (Quick & Khata)',
           style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.3),
         ),
-        backgroundColor: Platform.isWindows ? const Color(0xFFF7F9FB) : Colors.teal.shade800,
-        foregroundColor: Platform.isWindows ? const Color(0xFF263442) : Colors.white,
+        backgroundColor: Colors.teal.shade800,
+        foregroundColor: Colors.white,
         actions: [
-          if (Platform.isWindows && !widget.embeddedInDashboard) ...[
-            IconButton(
-              tooltip: 'New Bill - Ctrl+N',
-              icon: const Icon(Icons.add_box_outlined),
-              onPressed: _createNewBill,
-            ),
-            IconButton(
-              tooltip: 'Open Held Bills - F5',
-              icon: const Icon(Icons.inventory_2_outlined),
-              onPressed: _openPendingBills,
-            ),
-            IconButton(
-              tooltip: 'Open Dashboard in a separate window',
-              icon: const Icon(Icons.dashboard_outlined),
-              onPressed: PosWindows.openDashboard,
-            ),
-            const SizedBox(width: 8),
-          ],
           IconButton(
             tooltip: 'Scan barcode',
             icon: const Icon(Icons.qr_code_scanner),
@@ -1584,127 +1290,13 @@ class SalesScreenState extends State<SalesScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Platform.isWindows
-          ? Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: SizedBox(
-                      height: 42,
-                      child: RawAutocomplete<Map<String, dynamic>>(
-                        textEditingController: _usbBarcodeController,
-                        focusNode: _usbBarcodeFocusNode,
-                        displayStringForOption: (option) => option['name']?.toString() ?? '',
-                        optionsBuilder: (value) {
-                          final term = value.text.trim().toLowerCase();
-                          if (term.isEmpty) return const <Map<String, dynamic>>[];
-                          if (_productSearchCache.any((product) =>
-                              product['barcode']?.toString().trim() == value.text.trim())) {
-                            return const <Map<String, dynamic>>[];
-                          }
-                          return _productSearchCache.where((product) {
-                            final name = product['name']?.toString().toLowerCase() ?? '';
-                            final barcode = product['barcode']?.toString().toLowerCase() ?? '';
-                            return name.contains(term) || barcode.contains(term);
-                          }).take(12);
-                        },
-                        onSelected: (product) => unawaited(_addSelectedSearchProduct(product)),
-                        optionsViewBuilder: (context, onSelected, options) {
-                          final matches = options.toList();
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              elevation: 8,
-                              borderRadius: BorderRadius.circular(8),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 620, maxHeight: 300),
-                                child: ListView.separated(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: matches.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final product = matches[index];
-                                    final stock = (product['quantity'] as num?)?.toInt() ?? 0;
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(product['name']?.toString() ?? 'Product',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      subtitle: Text(
-                                        'Barcode: ${product['barcode'] ?? '—'} | Stock: $stock | Rate: Rs. ${product['price'] ?? 0}',
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      onTap: () => onSelected(product),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                          return TextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            autofocus: true,
-                            onSubmitted: (value) {
-                              final term = value.trim().toLowerCase();
-                              final exactBarcode = _productSearchCache.any((product) =>
-                                  product['barcode']?.toString().trim() == value.trim());
-                              final hasMatches = !exactBarcode && _productSearchCache.any((product) =>
-                                  (product['name']?.toString().toLowerCase() ?? '').contains(term) ||
-                                  (product['barcode']?.toString().toLowerCase() ?? '').contains(term));
-                              if (value.trim().isNotEmpty && !hasMatches) {
-                                unawaited(_handleUnifiedProductInput(value));
-                              }
-                              onFieldSubmitted();
-                            },
-                            textInputAction: TextInputAction.done,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.qr_code_scanner),
-                              labelText: 'Scan / Search Product',
-                              hintText: 'Barcode scan karein ya product name type karein',
-                              suffixIcon: Icon(Icons.search),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                  Expanded(
-                    flex: 7,
-                    child: Column(
-                      children: [
-                        _buildCustomerPanel(),
-                        const SizedBox(height: 8),
-                        _buildBillReviewHeading(),
-                        _buildCartList(),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  SizedBox(width: 340, child: _buildCheckoutPanel()),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                _buildCustomerPanel(),
-                _buildBillReviewHeading(),
-                _buildCartList(),
-                _buildCheckoutPanel(),
-              ],
-            ),
-      ),
+      body: Column(
+        children: [
+          _buildCustomerPanel(),
+          _buildBillReviewHeading(),
+          _buildCartList(),
+          _buildCheckoutPanel(),
+        ],
       ),
     );
   }
