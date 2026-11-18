@@ -220,7 +220,13 @@ public partial class MainWindow : Window
                 return;
             }
             var update = await updater.CheckForUpdateAsync();
-            if (update is null) return;
+            if (update is null)
+            {
+                UpdateButton.Content = "No Windows update published";
+                UpdateStatusText.Text = $"GitHub release {latest} has no signed Windows installer package.";
+                UpdateStatusText.Foreground = Brushes.Gray;
+                return;
+            }
             UpdateButton.Content = $"⬆ Update {update.Version} available";
             UpdateButton.Background = new SolidColorBrush(Color.FromRgb(220, 239, 226));
             UpdateButton.Foreground = new SolidColorBrush(Color.FromRgb(23, 75, 49));
@@ -1080,8 +1086,15 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var update = await updater.CheckForUpdateAsync()
-                ?? throw new InvalidDataException("Latest release update details could not be loaded.");
+            var update = await updater.CheckForUpdateAsync();
+            if (update is null)
+            {
+                UpdateStatusText.Text = $"Windows version: installed {installed} • GitHub release {latest} has no Windows installer";
+                MessageBox.Show(
+                    $"GitHub ki latest release ({latest}) mein Windows installer aur signed manifest nahi hain. Is liye Windows update abhi available nahi.",
+                    "No Windows update package", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             var message = $"Installed version: {installed}\nLatest version: {latest}\n\n{update.ReleaseNotes}";
             UpdateStatusText.Text = $"Update available: installed {installed} • latest {latest}";
             if (!updater.CanInstallSignedUpdates)

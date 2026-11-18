@@ -39,6 +39,31 @@ public sealed class NativeUpdateServiceTests
         Assert.False(NativeUpdateService.IsUpdateAvailable(new Version(1, 4, 0), new Version(1, 3, 0)));
     }
 
+    [Theory]
+    [InlineData("v1.0.0-build225", "1.0.0")]
+    [InlineData("1.2.3-build7", "1.2.3")]
+    [InlineData("V2.4.6-build17", "2.4.6")]
+    [InlineData("v1.2.3", "1.2.3")]
+    [InlineData("1.2.3.4", "1.2.3.4")]
+    public void ReleaseTagsAcceptProductVersionAndOptionalBuildSuffix(string tag, string expected)
+    {
+        Assert.True(NativeUpdateService.TryParseReleaseTag(tag, out var parsed));
+        Assert.Equal(new Version(expected), parsed);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("build225")]
+    [InlineData("v1.0.0-build")]
+    [InlineData("v1.0.0-beta1")]
+    [InlineData("v1.0.0-build225-extra")]
+    [InlineData("v1.0-build225")]
+    [InlineData("v1.0.0.1-build225")]
+    public void ReleaseTagRejectsUnsupportedOrMalformedSuffixes(string tag)
+    {
+        Assert.False(NativeUpdateService.TryParseReleaseTag(tag, out _));
+    }
+
     [Fact]
     public void UpdateDownloadDirectoryIsUnderLocalApplicationData()
     {

@@ -1255,3 +1255,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] PDF export uses a narrow 80mm receipt page and the same prepared receipt text/content order.
 - [x] Added Windows receipt regression tests. Tests have been authored but are not marked passed until a validation run is executed.
 - [ ] Owner-side BC-86AC physical acceptance remains pending; no build artifact is to be generated without separate explicit authorization.
+
+
+## Work log — 2026-11-18 (Windows updater release-tag parsing fix)
+
+- [x] Root cause verified against the live latest GitHub release: tag is `v1.0.0-build225`; the old `Version.TryParse(tag.TrimStart('v','V'))` rejects the `-build225` suffix.
+- [x] Added a release-tag parser for `vMajor.Minor.Patch`, optional `-buildNNN`, and normal four-part numeric tags. The CI build suffix is validated but deliberately excluded from the Windows product version.
+- [x] Applied the same parser to GitHub release tags and signed manifest versions.
+- [x] Confirmed the current latest release contains only Android APK and SHA-256 assets. WPF updater now treats a release without `khan-baba-release.json` as an Android/non-Windows release rather than reporting a false update error.
+- [x] Startup and manual Windows update checks now show a clear no-Windows-installer status when no signed Windows release package is attached.
+- [x] Added updater parser regression tests for `v1.0.0-build225`, normal SemVer tags, four-part numeric versions, and malformed tags.
+- [ ] Run validation-only Windows tests when permitted; do not generate a Windows ZIP, installer, APK, or release artifact without explicit authorization.

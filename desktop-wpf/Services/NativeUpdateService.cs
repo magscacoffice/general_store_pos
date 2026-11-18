@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -29,14 +30,59 @@ public sealed class NativeUpdateService
     public static bool IsUpdateAvailable(Version installed, Version latest) =>
         latest > installed;
 
+    /// <summary>
+    /// Parses stable release tags such as v1.2.3 and v1.2.3-build225.
+    /// The Android CI build suffix is validated but excluded from the Windows
+    /// product version; it is not the WPF AssemblyVersion revision.
+    /// </summary>
+    public static bool TryParseReleaseTag(string? tag, out Version version)
+    {
+        version = new Version(0, 0);
+        if (string.IsNullOrWhiteSpace(tag)) return false;
+
+        var normalized = tag.Trim();
+        if (normalized.StartsWith('v') || normalized.StartsWith('V'))
+            normalized = normalized[1..];
+        if (normalized.Length == 0) return false;
+
+        const string buildMarker = "-build";
+        var markerIndex = normalized.LastIndexOf(buildMarker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            if (!Version.TryParse(normalized, out var parsedVersion) || parsedVersion is null)
+                return false;
+            version = parsedVersion;
+            return true;
+        }
+
+        if (markerIndex == 0 ||
+            normalized.IndexOf(buildMarker, markerIndex + buildMarker.Length, StringComparison.OrdinalIgnoreCase) >= 0)
+            return false;
+
+        var versionPart = normalized[..markerIndex];
+        var buildPart = normalized[(markerIndex + buildMarker.Length)..];
+        if (!Version.TryParse(versionPart, out var productVersion) ||
+            productVersion is null ||
+            productVersion.Build < 0 ||
+            productVersion.Revision >= 0 ||
+            !int.TryParse(buildPart, NumberStyles.None, CultureInfo.InvariantCulture, out var buildNumber) ||
+            buildNumber < 0)
+            return false;
+
+        // Keep major.minor.patch only. The -buildNNN suffix is an Android CI
+        // build number and must not make Windows think it has a newer app.
+        version = productVersion;
+        return true;
+    }
+
     public async Task<Version> GetLatestVersionAsync(CancellationToken cancellationToken = default)
     {
         using var response = await Http.GetAsync(ReleaseApi, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var release = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         var tag = release.RootElement.GetProperty("tag_name").GetString() ?? "";
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version))
-            throw new InvalidDataException("Latest GitHub release tag is not a valid version.");
+        if (!TryParseReleaseTag(tag, out var version))
+            throw new InvalidDataException($"Latest GitHub release tag '{tag}' is not a supported version. Use vMajor.Minor.Patch or vMajor.Minor.Patch-buildNumber.");
         return version;
     }
 
@@ -47,15 +93,17 @@ public sealed class NativeUpdateService
         using var release = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         var root = release.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? "";
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion))
-            throw new InvalidDataException("Latest GitHub release tag is not a valid version.");
+        if (!TryParseReleaseTag(tag, out var latestVersion))
+            throw new InvalidDataException($"Latest GitHub release tag '{tag}' is not a supported version. Use vMajor.Minor.Patch or vMajor.Minor.Patch-buildNumber.");
         var currentVersion = GetInstalledVersion();
         if (latestVersion <= currentVersion) return null;
 
         var assets = root.GetProperty("assets").EnumerateArray().ToArray();
         var manifestAsset = assets.FirstOrDefault(x => x.GetProperty("name").GetString() == ManifestAssetName);
+        // The latest GitHub release may be an Android-only APK release.
+        // It is not a Windows update unless the signed Windows manifest is attached.
         if (manifestAsset.ValueKind == JsonValueKind.Undefined)
-            throw new InvalidDataException("Release is missing its signed update manifest.");
+            return null;
         var manifestUrl = ValidateReleaseAssetUrl(
             manifestAsset.GetProperty("browser_download_url").GetString() ?? "");
 
@@ -64,7 +112,7 @@ public sealed class NativeUpdateService
         using var manifest = JsonDocument.Parse(await manifestResponse.Content.ReadAsStringAsync(cancellationToken));
         var data = manifest.RootElement;
         var versionText = data.GetProperty("version").GetString() ?? "";
-        if (!Version.TryParse(versionText, out var manifestVersion) || manifestVersion != latestVersion)
+        if (!TryParseReleaseTag(versionText, out var manifestVersion) || manifestVersion != latestVersion)
             throw new InvalidDataException("Release manifest version does not match the GitHub release tag.");
 
         var installerName = data.GetProperty("installerAsset").GetString() ?? "";
