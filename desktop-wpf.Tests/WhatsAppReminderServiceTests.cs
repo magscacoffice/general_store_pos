@@ -40,15 +40,31 @@ public sealed class NativeUpdateServiceTests
     }
 
     [Theory]
-    [InlineData("v1.0.0-build225", "1.0.0")]
-    [InlineData("1.2.3-build7", "1.2.3")]
-    [InlineData("V2.4.6-build17", "2.4.6")]
-    [InlineData("v1.2.3", "1.2.3")]
+    [InlineData("v1.0.0-build225", "1.0.0.0")]
+    [InlineData("1.2.3-build7", "1.2.3.0")]
+    [InlineData("V2.4.6-build17", "2.4.6.0")]
+    [InlineData("v1.2.3", "1.2.3.0")]
     [InlineData("1.2.3.4", "1.2.3.4")]
+    [InlineData("v1.0.1.0", "1.0.1.0")]
     public void ReleaseTagsAcceptProductVersionAndOptionalBuildSuffix(string tag, string expected)
     {
         Assert.True(NativeUpdateService.TryParseReleaseTag(tag, out var parsed));
         Assert.Equal(new Version(expected), parsed);
+    }
+
+    [Fact]
+    public void PatchReleaseVersionIsDetectedAgainstFourPartInstalledVersion()
+    {
+        Assert.True(NativeUpdateService.IsUpdateAvailable(new Version(1, 0, 0, 0), new Version(1, 0, 1, 0)));
+        Assert.False(NativeUpdateService.IsUpdateAvailable(new Version(1, 0, 1, 0), new Version(1, 0, 1, 0)));
+    }
+
+    [Fact]
+    public void AndroidCiBuildSuffixDoesNotCreateAWindowsUpdate()
+    {
+        Assert.True(NativeUpdateService.TryParseReleaseTag("v1.0.0-build226", out var parsed));
+        Assert.Equal(new Version(1, 0, 0, 0), parsed);
+        Assert.False(NativeUpdateService.IsUpdateAvailable(new Version(1, 0, 0, 0), parsed));
     }
 
     [Theory]

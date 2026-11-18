@@ -22,10 +22,16 @@ From the repository root:
 dotnet restore desktop-wpf/KhanBabaPos.Wpf.csproj
 dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj -c Release
 dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
-ISCC.exe /DAppVersion=1.0.0 installer/KhanBabaPOS.iss
+ISCC.exe /DAppVersion=1.0.1.0 installer/KhanBabaPOS.iss
 ```
 
 The output is written to `artifacts/installer/KhanBabaPOS-Setup-x64.exe`. Do not distribute an unsigned installer.
+
+## Windows versioning
+
+The WPF application, AssemblyVersion, FileVersion, installer AppVersion, GitHub Windows release tag and `khan-baba-release.json` version must use the same four-part version (for example, `1.0.1.0`). Increment the patch component for each Windows maintenance update (for example, `1.0.2.0`); use the minor or major component for larger feature or compatibility releases.
+
+Android CI tags such as `v1.0.0-build225` are parsed safely but their build suffix is not a Windows version. A three-part product version is normalized to four parts before comparing it with the installed Windows AssemblyVersion.
 
 ## Update release manifest
 
@@ -33,7 +39,7 @@ A GitHub release must include both the installer and a `khan-baba-release.json` 
 
 ```json
 {
-  "version": "1.0.1",
+  "version": "1.0.1.0",
   "installerAsset": "KhanBabaPOS-Setup-x64.exe",
   "sha256": "<64-character SHA-256 of the installer>",
   "publisherThumbprint": "<40-character SHA-1 certificate thumbprint>"

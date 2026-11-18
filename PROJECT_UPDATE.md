@@ -1266,3 +1266,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Startup and manual Windows update checks now show a clear no-Windows-installer status when no signed Windows release package is attached.
 - [x] Added updater parser regression tests for `v1.0.0-build225`, normal SemVer tags, four-part numeric versions, and malformed tags.
 - [ ] Run validation-only Windows tests when permitted; do not generate a Windows ZIP, installer, APK, or release artifact without explicit authorization.
+
+
+## Work log — 2026-11-18 (Windows updater and versioning alignment)
+
+- [x] Set the WPF product, AssemblyVersion, FileVersion and InformationalVersion explicitly to `1.0.1.0`; this is the next Windows patch version after the previous default `1.0.0.0`.
+- [x] Normalize three-part Windows release tags and Android tags such as `v1.0.0-build225` to four-part Windows versions before comparing them with the installed WPF AssemblyVersion. Android CI build suffixes are validated but ignored for Windows version ordering.
+- [x] Added regression tests for the 1.0.0.0 → 1.0.1.0 patch update, equal-version handling, four-part tag normalization and the rule that an Android build suffix alone must not trigger a Windows update.
+- [x] Aligned the Inno Setup default, installer validation workflow and release-manifest example with the four-part Windows version contract.
+- [x] Enabled the grouped WPF Release/test/Windows x64 test-ZIP workflow on pushes to `main` as well as `integration/wpf-mainline`, so this authorized main-branch update gets a Windows validation run.
+- [ ] Confirm the resulting main-branch WPF Release build and full automated test run; record the successful run and test artifact only after GitHub Actions completes.
+- [ ] Production Windows Release `v1.0.1.0` remains blocked until the owner supplies the production code-signing certificate and approved publisher thumbprint. Do not publish an unsigned installer or bypass the Authenticode/SHA-256 updater checks.

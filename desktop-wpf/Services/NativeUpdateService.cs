@@ -31,13 +31,14 @@ public sealed class NativeUpdateService
         latest > installed;
 
     /// <summary>
-    /// Parses stable release tags such as v1.2.3 and v1.2.3-build225.
-    /// The Android CI build suffix is validated but excluded from the Windows
-    /// product version; it is not the WPF AssemblyVersion revision.
+    /// Parses Windows release tags and Android CI tags such as v1.2.3-build225.
+    /// Three-part product versions are normalized to four parts so comparisons
+    /// match the WPF AssemblyVersion (Major.Minor.Build.Revision).
+    /// The Android CI build suffix is validated but never used as a Windows version.
     /// </summary>
     public static bool TryParseReleaseTag(string? tag, out Version version)
     {
-        version = new Version(0, 0);
+        version = new Version(0, 0, 0, 0);
         if (string.IsNullOrWhiteSpace(tag)) return false;
 
         var normalized = tag.Trim();
@@ -46,32 +47,30 @@ public sealed class NativeUpdateService
         if (normalized.Length == 0) return false;
 
         const string buildMarker = "-build";
-        var markerIndex = normalized.LastIndexOf(buildMarker, StringComparison.OrdinalIgnoreCase);
-        if (markerIndex < 0)
+        var markerIndex = normalized.IndexOf(buildMarker, StringComparison.OrdinalIgnoreCase);
+        var versionPart = markerIndex < 0 ? normalized : normalized[..markerIndex];
+
+        if (markerIndex >= 0)
         {
-            if (!Version.TryParse(normalized, out var parsedVersion) || parsedVersion is null)
+            if (markerIndex == 0 ||
+                normalized.IndexOf(buildMarker, markerIndex + buildMarker.Length, StringComparison.OrdinalIgnoreCase) >= 0)
                 return false;
-            version = parsedVersion;
-            return true;
+
+            var buildPart = normalized[(markerIndex + buildMarker.Length)..];
+            if (!int.TryParse(buildPart, NumberStyles.None, CultureInfo.InvariantCulture, out var buildNumber) ||
+                buildNumber < 0)
+                return false;
         }
 
-        if (markerIndex == 0 ||
-            normalized.IndexOf(buildMarker, markerIndex + buildMarker.Length, StringComparison.OrdinalIgnoreCase) >= 0)
+        if (!Version.TryParse(versionPart, out var parsedVersion) ||
+            parsedVersion is null ||
+            parsedVersion.Build < 0 ||
+            (markerIndex >= 0 && parsedVersion.Revision >= 0))
             return false;
 
-        var versionPart = normalized[..markerIndex];
-        var buildPart = normalized[(markerIndex + buildMarker.Length)..];
-        if (!Version.TryParse(versionPart, out var productVersion) ||
-            productVersion is null ||
-            productVersion.Build < 0 ||
-            productVersion.Revision >= 0 ||
-            !int.TryParse(buildPart, NumberStyles.None, CultureInfo.InvariantCulture, out var buildNumber) ||
-            buildNumber < 0)
-            return false;
-
-        // Keep major.minor.patch only. The -buildNNN suffix is an Android CI
-        // build number and must not make Windows think it has a newer app.
-        version = productVersion;
+        version = parsedVersion.Revision < 0
+            ? new Version(parsedVersion.Major, parsedVersion.Minor, parsedVersion.Build, 0)
+            : parsedVersion;
         return true;
     }
 
@@ -82,7 +81,7 @@ public sealed class NativeUpdateService
         using var release = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         var tag = release.RootElement.GetProperty("tag_name").GetString() ?? "";
         if (!TryParseReleaseTag(tag, out var version))
-            throw new InvalidDataException($"Latest GitHub release tag '{tag}' is not a supported version. Use vMajor.Minor.Patch or vMajor.Minor.Patch-buildNumber.");
+            throw new InvalidDataException($"Latest GitHub release tag '{tag}' is not a supported version. Use vMajor.Minor.Patch.0 or vMajor.Minor.Patch-buildNumber.");
         return version;
     }
 
