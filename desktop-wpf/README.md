@@ -5,6 +5,7 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 ## Integrated implementation
 
 - Dashboard-hosted cashier workspace with scanner-ready focus, exact barcode lookup (including the wholesale-price column), product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
+- Printer & Invoice can be opened directly from the main navigation before a sale to select the saved workstation printer, configure 80mm receipt margins/header/total sizing and run a test print.
 - Separate Walk-in, Khata and Wholesale customer types; Wholesale accounts support Cash/Credit/Partial payments, saved wholesale-rate defaults and editable per-item rates with purchase-cost validation.
 - Transactional sale posting, inventory CRUD/search (including wholesale price), purchase entry, stock movements and protected product deletion.
 - Customer/supplier list, customer Khata ledger and receipt posting, sales history and invoice details.
@@ -16,7 +17,7 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 
 ## Google Drive sync migration status
 
-The native WPF project contains the PKCE loopback OAuth flow, DPAPI-protected Windows token storage, Google Drive v3 transport, schema-v2 snapshot export/envelope validation, Windows-master manifest, transactional SQLite v18 reconciliation, stable party aliases, conflict review, tombstones, processed-snapshot tracking, verified pre-merge backups, sync status UI and periodic/offline retry source. Protocol and initial merge tests have passed CI. **Remote device imports remain deliberately disabled** in `WindowsDriveSyncService` until the complete Android-parity regression matrix and owner acceptance pass. Real Google OAuth/account testing, end-to-end multi-device round-trip, rollback/recovery tests and target-PC acceptance remain pending. Do not connect a production store or treat Drive sync as fully operational while imports are paused.
+The native WPF project contains the PKCE loopback OAuth flow, DPAPI-protected Windows token storage, Google Drive v3 transport, schema-v2 snapshot export/envelope validation, Windows-master manifest, transactional SQLite v18 reconciliation, stable party aliases, tombstones, processed-snapshot tracking, snapshot-scoped verified pre-merge backups, sync status UI and two-minute offline retry source. **Owner-approved Drive sync and device-snapshot imports are enabled in the current source.** Conflicting Windows stock, price and Khata values are automatically resolved in favour of Windows Master; Android-created records and non-conflicting changes continue through the merge path. The import path validates the envelope/hash/schema and creates or verifies a pre-merge backup before applying a snapshot. Protocol and 51-test WPF suite passed in the earlier Actions run #425, but that run predates the latest consolidated source changes. Real Google OAuth/account testing, end-to-end Android/Windows multi-device round-trip, update/delete identity parity, rollback/recovery and target-PC acceptance remain pending. Use only disposable database copies until those gates pass.
 
 ## Build and test
 

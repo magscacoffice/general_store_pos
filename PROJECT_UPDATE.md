@@ -1206,3 +1206,16 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Cashier shortcut review: Ctrl+Delete, Ctrl+Shift+Delete and Ctrl+P now defer to normal text editing when a TextBox or PasswordBox has focus; F9 remains the dedicated print shortcut.
 - [x] Startup update status retains both installed and latest version when an update is available.
 - [ ] Runtime compilation, automated test execution and Windows-device acceptance are still outstanding. Do not run commands that generate build artifacts until the owner authorizes that step.
+
+
+## Source audit and pre-build completion — 2026-11-18
+
+- [x] Re-checked the live `integration/wpf-mainline` head (`82724289dec37db9638ab7316bb732307f57363e`) and the native WPF source rather than relying on older checklist notes.
+- [x] Corrected the WPF README: the current `WindowsDriveSyncService` source has both `EnableDriveSync` and `EnableDeviceSnapshotImports` enabled following the owner's explicit approval. Conflicting Windows stock, price and Khata values use the Windows-master-wins policy; Android-created and non-conflicting records continue through the import path. Real Google OAuth, Android round-trip, update/delete identity parity and target-PC recovery remain unverified acceptance gates.
+- [x] Removed the last explicit placeholder navigation action found in the reviewed main WPF shell: the old Settings button invoked `ComingSoon_Click`. It now opens the existing Printer & Invoice window directly, so printer selection, saved workstation preference, 80mm receipt configuration and test print can be reached before a sale.
+- [x] Existing cashier shortcuts, WhatsApp review-before-handoff, update version display and signing-gated download workflow were rechecked in source. No unsupported claim of message delivery or unsigned installer execution is introduced.
+- [x] The latest successful WPF Actions run #425 (51/51 tests) predates commit `82724289dec37db9638ab7316bb732307f57363e`; it is a historical baseline, not validation of the newer reminder/updater/shortcut or this navigation change.
+- [ ] One final grouped WPF Release build and complete regression test run is required after this consolidated source update. The branch push is expected to trigger the existing WPF workflow once and produce the single Windows x64 test ZIP requested by the owner. No Android APK, production installer or stable release is authorized by this step.
+- [ ] After that build, owner-side Windows acceptance remains separate: login/role visibility, actual display/DPI/resizing, scanner focus and repeated scans, saved BC-86AC printer/cutter and receipt spacing, PDF/Unicode output, backup/restore, and Google OAuth/Android round-trip on disposable database copies.
+- [ ] Production updater download/install remains blocked until the owner supplies the production signing certificate and trusted thumbprint. Do not bypass this security gate.
+- [ ] Keep all work on `integration/wpf-mainline`; do not merge to `main` until automated validation and owner acceptance gates are complete.

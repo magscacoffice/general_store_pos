@@ -1154,11 +1154,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ComingSoon_Click(object sender, RoutedEventArgs e)
+    private void PrinterSettings_Click(object sender, RoutedEventArgs e)
     {
-        if (!EnsureAdminAccess()) return;
-        MessageBox.Show("This WPF module is not implemented yet. Android app remains unchanged.",
-            "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
+        // Printer selection and receipt preferences are also available before the first sale.
+        new PrinterInvoiceWindow { Owner = this }.ShowDialog();
+        _ = LoadPrinterStatusAsync();
         FocusScanner();
     }
 }
