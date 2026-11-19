@@ -122,6 +122,9 @@ public sealed class WindowsDriveSyncService
                     {
                         SetStatus($"Creating verified safety backup before importing {validated.DeviceId}...");
                         var createdBackupPath = await _backups.CreateBackupAsync(path, backupDirectory, cancellationToken);
+                        if (!await _backups.IsVerifiedBackupAsync(createdBackupPath, cancellationToken))
+                            throw new InvalidDataException(
+                                $"The safety backup for {validated.DeviceId} did not pass SHA-256, schema and SQLite integrity verification. Device data was not imported.");
                         manifest.SetPreMergeBackup(validated.DeviceId,
                             Path.GetFileName(createdBackupPath), validated.SnapshotHash);
                     }

@@ -132,7 +132,7 @@ public sealed class DriveSyncWindow : Window
     private async void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdmin()) return;
-        if (MessageBox.Show("Google Drive disconnect karna hai? Local POS aur database par koi asar nahi hoga.",
+        if (MessageBox.Show("Sirf is Windows device se Google Drive disconnect karna hai? Is se Windows ke saved credentials remove honge. Android Drive access aur local database par koi asar nahi hoga.",
                 Title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         await RunAsync(async () => { await _sync.DisconnectAsync(); return new DriveSyncSummary(0, 0, 0, DateTimeOffset.UtcNow); });
     }
