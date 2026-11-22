@@ -289,6 +289,7 @@ public sealed class DriveSnapshotMergeService
                 var saleId = await FindIdAsync(db, tx, "sales", "sync_id", Text(remote, "sale_sync_id"), cancellationToken);
                 if (saleId is null) { skipped++; deferredRecords++; continue; }
                 var productId = await FindIdAsync(db, tx, "products", "barcode", Text(remote, "barcode"), cancellationToken);
+                if (productId is null) { skipped++; deferredRecords++; continue; }
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("sale_id"); values.Remove("product_id");
                 values["sync_id"] = syncId; values["sale_id"] = saleId; values["product_id"] = productId;
