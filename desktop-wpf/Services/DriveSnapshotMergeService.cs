@@ -12,6 +12,9 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class DriveSnapshotMergeService
 {
+    public static bool IsSnapshotFullyAccepted(int pendingConflicts, int deferredRecords) =>
+        pendingConflicts == 0 && deferredRecords == 0;
+
     private static readonly string[] ProductFields =
         ["name", "price", "purchasePrice", "wholesalePrice", "damaged_quantity", "quantity", "is_active", "stock_unit"];
     private static readonly string[] PartyFields = ["name", "phone", "type", "customer_type", "balance"];
