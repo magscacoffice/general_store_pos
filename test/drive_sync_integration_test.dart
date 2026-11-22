@@ -345,7 +345,7 @@ void main() {
     expect((await DBHelper.getPurchases()).length, 2);
   });
 
-  test('Wholesale cash and partial sales preserve customer type and post same-account receipts', () async {
+  test('Khata cash and partial sales preserve customer type and post same-account receipts', () async {
     await DBHelper.insertProduct({
       'name': 'Wholesale Sugar',
       'barcode': 'KB-WH-100',
@@ -358,13 +358,13 @@ void main() {
       'stock_unit': 'pcs',
     });
     final customerId = await DBHelper.insertParty({
-      'name': 'Wholesale Test Account',
+      'name': 'Khata Test Account',
       'phone': '03000000001',
       'type': 'customer',
       'customer_type': 'Khata',
       'balance': 0.0,
     });
-    await DBHelper.updateCustomerType(customerId, 'Wholesale');
+    await DBHelper.updateCustomerType(customerId, 'Khata');
 
     await DBHelper.completeSale(
       sale: {
@@ -411,12 +411,12 @@ void main() {
     );
 
     final customer = (await DBHelper.getParties('customer')).single;
-    expect(customer['customer_type'], 'Wholesale');
+    expect(customer['customer_type'], 'Khata');
     expect(customer['balance'], 26.0);
 
     final sales = await DBHelper.getSales();
     expect(sales.length, 2);
-    expect(sales.every((sale) => sale['customer_type'] == 'Wholesale'), isTrue);
+    expect(sales.every((sale) => sale['customer_type'] == 'Khata'), isTrue);
     expect(sales.any((sale) => sale['payment_type'] == 'Partial' && sale['received_amount'] == 10.0), isTrue);
     expect(sales.any((sale) => sale['payment_type'] == 'Cash' && sale['received_amount'] == 18.0), isTrue);
 
@@ -435,7 +435,7 @@ void main() {
     final syncedParty = (snapshot['parties'] as List)
         .cast<Map>()
         .singleWhere((party) => party['sync_id'] == customer['sync_id']);
-    expect(syncedParty['customer_type'], 'Wholesale');
+    expect(syncedParty['customer_type'], 'Khata');
 
     await useDatabase(windowsPath);
     expect(
@@ -448,9 +448,9 @@ void main() {
       ),
       isTrue,
     );
-    expect((await DBHelper.getParties('customer')).single['customer_type'], 'Wholesale');
+    expect((await DBHelper.getParties('customer')).single['customer_type'], 'Khata');
     expect(
-      (await DBHelper.getSales()).every((sale) => sale['customer_type'] == 'Wholesale'),
+      (await DBHelper.getSales()).every((sale) => sale['customer_type'] == 'Khata'),
       isTrue,
     );
   });
