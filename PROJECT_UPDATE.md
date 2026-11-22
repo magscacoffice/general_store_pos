@@ -1617,5 +1617,5 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Windows WPF Release build succeeded with 0 warnings and 0 errors on Actions run #472 (commit `aec503cc8fff6bd20865af9c28f3692fff73bf25`).
 - [x] WPF test suite passed: 106 passed, 0 failed, 0 skipped. The new recalled-sale integration test passed for first import and repeated delivery.
 - [x] Flutter sync/invoice workflow passed on commit `21c6f24bb6cafb305fb8291ee4aeaabe1b04a8cb`; both Ubuntu and Windows jobs succeeded.
-- [ ] A final WPF validation run for the subsequent ledger-tombstone suffix-match correction is running on commit `70d3352a77736672c101c6e4c223d9c62b014f96`; record its result after completion.
-- [ ] Add/run a focused Flutter test for the Android master-state sale-replacement path; current Flutter CI covers existing sync tests but does not yet directly exercise this new sale-revision behavior.
+- [x] Final WPF validation on commit `70d3352a77736672c101c6e4c223d9c62b014f96` succeeded: Release build 0 warnings/0 errors and 106/106 tests passed. Actions run: https://github.com/magscacoffice/general_store_pos/actions/runs/45009832493.
+- [x] Added a focused Flutter integration test for Android applying a Windows-master recalled-sale revision, replacing invoice items and Khata ledger rows, and replaying the same snapshot without duplicates. Actions run #475 is validating this test on Ubuntu and Windows; record the result after completion.
