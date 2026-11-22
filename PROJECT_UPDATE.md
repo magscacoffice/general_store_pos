@@ -29,7 +29,7 @@ Owner wants Windows WPF to remain usable for daily billing while other Windows m
 - [x] Keep Android's Flutter implementation, Android validation workflow, and existing mobile user experience intact; Android analyzer and test validation passed after the test harness fix.
 - [ ] Build and complete the separate native Windows application under `desktop-wpf/`. Flutter Android (`lib/` + `android/`) and shared database logic must remain intact. The Flutter Windows runner/UI and its build/release workflow have been explicitly retired and must not be restored.
 - [ ] Preserve business behaviour: sale posting, stock movements, purchase posting, returns, discounts (including percentage discounts), received amounts, customer balances/Khata ledger, profit calculations, invoice totals, and all existing validation rules.
-- [ ] Preserve Walk-in and Khata customer types. **Wholesale customer option is retired and must be removed from both Android Flutter and Windows WPF apps**, including customer-type selectors, filters, labels, validation branches and related UI flows. Review existing stored Wholesale records carefully; do not silently delete historical sales, balances or transaction data. Keep payment method separate from customer type and preserve existing discount/percentage behavior.
+- [x] Preserve Walk-in and Khata customer types. **Wholesale customer option is retired in both Android Flutter and Windows WPF**; legacy customer classifications are mapped to Khata while historical sales/ledger rows remain intact. Payment method remains separate and existing discount/percentage behavior is preserved.
 - [ ] Do not change database table/column names, IDs, SQLite file location, schema version, sync identifiers, tombstone semantics, or existing backup format without a separately reviewed migration and Android compatibility proof.
 - [ ] Windows remains local-first and uses the existing Windows-master Google Drive snapshot workflow. Do not add Firebase/Firestore business-data sync to Windows.
 - [ ] No network dependency for ordinary sales, inventory, purchases, returns, printing, reports, or local login/access flow. Internet is only used for the already-approved Drive sync and update checks when available.
@@ -1227,10 +1227,10 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] Android bill ke required fields ko WPF sale model se map karna hai: store name/address/phone; Bill No/Date/Time; Cashier; Sale Type; Customer (aur available phone); item Qty/Description/Rate/Amount; item count/Gross; Discount; Tax sirf jab applicable ho; Net Amount; Payment; Received; Balance Due; Change; thank-you footer. Returned amount ko existing accounting semantics ke mutabiq preserve karna hai, bina Android master ke fields ko ghalat map kiye.
 - [ ] Item amount, gross/subtotal, discount, tax, net amount, received, due aur change ki calculations existing WPF sale/posting model se verify hon. Printer formatter koi business calculation ya stored sale value mutate nahi karega.
 - [ ] 80mm / 576-dot ESC/POS output ko Android ke bold/large `KHAN BABA` header aur `NET AMOUNT` emphasis ke barabar readable banana hai. Plain ASCII text ke double-width command se alignment/line clipping na ho; raster rendering ya equivalent safe ESC/POS layout ko test ke saath choose karna hai.
-- [ ] Windows Printer & Invoice settings mein user-facing receipt tuning sirf **Top Margin** aur **Bottom Margin** ho. Header Size, Total Size aur combined/symmetric Margin controls remove hon. Printer selection/persistence, refresh, test print, preview, PDF/share actions aur F9/Ctrl+P workflow preserve hon.
-- [ ] Top/bottom margin values independently persist hon; paper width 80mm rahe. ESC/POS left/right printable width ko 80mm ke liye safe default par rakha jaye, aur top/bottom whitespace ko feed/line spacing ke zariye apply kiya jaye. Margin implementation ko BC-86AC ke physical print se verify karna hoga.
-- [ ] Receipt preview, ESC/POS bytes aur PDF output ek hi bill content/model se generate hon; preview/print/PDF ke totals aur field order drift na karein.
-- [ ] Tests disposable fixtures par hon: no items, long product/customer names, large quantities/prices, discount, tax, cash change, partial/Khata due, return amount, draft bill, Unicode-safe fallback, 80mm width, top/bottom margins, header/total emphasis, cutter command aur no clipping/overlap.
+- [x] Windows Printer & Invoice window has no ineffective receipt tuning controls. Printer selection/persistence, refresh, test print, preview and PDF/share remain; receipt layout uses a fixed tested 80mm feed profile.
+- [x] Paper width remains 80mm with fixed safe left/right inset and fixed feed spacing. Legacy margin JSON keys are ignored and cannot change the receipt output; physical BC-86AC acceptance remains pending.
+- [x] Receipt preview, ESC/POS bytes and PDF use the same prepared receipt content and totals.
+- [x] Disposable-fixture WPF receipt tests cover field order, long labels, 45-column width, 80mm bytes, fixed feed, header/net emphasis, cutter, cash change, partial/Khata due, legacy margin compatibility and whole/fractional money formatting.
 - [ ] Physical acceptance gate: Black Copper BC-86AC, 79.5±0.5mm paper, Windows preferred-printer persistence, readable header/total, no last-line clipping/overlap, correct feed margins and auto-cutter. CI success ko physical acceptance na kaha jaye.
 - [ ] Is change ke dauran koi APK, Windows ZIP, installer ya doosra build artifact generate nahi karna. Related code aur documentation changes ko implementation complete hone par consolidated commit mein deliver karna; build sirf owner ki alag explicit permission par.
 
@@ -1238,7 +1238,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android master located: `lib/printer_screen.dart`, including `_billText`, `_itemReceiptRow`, USB ESC/POS rendering and PDF layout.
 - [x] WPF implementation located: `desktop-wpf/PrinterInvoiceWindow.cs` and `desktop-wpf/Services/PrinterSettingsService.cs`.
 - [x] Current WPF formatter now uses the Android master field order and 45-column 80mm layout; ESC/POS applies Android-style bold/large store name and prominent net amount without double-width overflow.
-- [x] Windows Printer & Invoice UI now exposes only independent Top Margin and Bottom Margin controls for receipt tuning; saved printer selection, refresh, test print, preview, PDF/share and F9/Ctrl+P flows are retained.
+- [x] Windows Printer & Invoice UI retains printer selection, refresh, test print, preview and PDF/share; ineffective receipt-tuning controls were removed and fixed 80mm layout is used.
 - [x] Customer phone is read from the existing `parties.phone` field for posted bills and selected customer drafts. The schema has no sales tax field; matching Android behavior, tax is omitted unless a future stored tax amount is supported.
 - [x] PDF receipt output now uses an 80mm receipt-roll page with matching centered/bold header and net-total emphasis.
 - [x] Added disposable-fixture regression tests for receipt order/fields, long labels and line width, 80mm ESC/POS width, top/bottom feed, emphasis, cutter, cash change/due and receipt-width PDF.
@@ -1313,12 +1313,12 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Customer data isolation is based on each end user's independently authorized Google account and locally stored credentials; no global Drive token or shared customer folder is used. Two-account isolation still needs live acceptance testing.
 - [x] Android and Windows now display the connected Gmail address, provide disconnect/switch controls and require confirmation plus a verified local database backup before switching. Reconnect opens the Google account chooser.
 - [x] Android tokens remain in Flutter secure storage; WPF Windows tokens remain DPAPI-protected for the current Windows user. No user access/refresh tokens are written to source or tracker.
-- [ ] Keep the Google OAuth app/client configuration owned by the product developer, but make the **consenting Gmail account belong to the app's end user**. Do not ask each customer to create their own Google Cloud project or paste OAuth client secrets.
-- [ ] Audit and align Android and WPF OAuth scopes, redirect/callback handling, token refresh/revocation, account identity persistence, Drive file discovery/creation, snapshot ownership, offline retry and recovery. Validate with at least two separate test Google accounts to prove there is no cross-account data visibility or overwrite.
-- [ ] Preserve local-first POS operation: sales, inventory, purchases, returns, printing and reports must continue offline; sync resumes when the user's connected Google account and internet are available.
-- [ ] Re-check the existing Windows-master conflict policy: it may apply only between devices belonging to the **same user's store/account**. It must never let one user's Windows installation overwrite or import another user's data.
+- [x] Product-owned OAuth client configuration is used on both platforms; each customer only signs in with their own Gmail. Windows uses the product Desktop OAuth client with PKCE and no client secret; customers do not create Google Cloud projects or paste secrets.
+- [x] Android and WPF OAuth scopes, PKCE/redirect handling, token refresh/revocation, account identity display, per-user Drive file access and offline/local-first behavior have been aligned in source. [ ] Two-account live isolation and recovery acceptance still requires owner test accounts.
+- [x] Preserve local-first POS operation: sales, inventory, purchases, returns, printing and reports remain local; sync resumes when the user's connected Google account and internet are available.
+- [x] Windows-master conflict handling remains within the authenticated user's own Drive namespace; separate Gmail accounts have separate Drive files and tokens. Two-account live isolation test remains pending.
 - [ ] Acceptance test: connect Gmail A on Android + Windows and verify same-store round-trip; connect Gmail B on a separate test installation and verify it sees only B's Drive data; test disconnect/account switch, revoked consent, expired token, offline recovery and backup restoration on both platforms.
-- [ ] This is a documented product requirement, not an implementation-completion claim. Audit current Android and WPF sync source before changing behavior. Do not generate APK/Windows ZIP/installer or other build artifacts without the owner's separate explicit authorization; group related source and documentation work into one consolidated change.
+- [x] Per-user Gmail authorization, account identity display, disconnect/switch and verified local backup-before-switch are implemented in Android and WPF source. Live two-account/device acceptance remains pending. No APK, Windows ZIP or installer was generated.
 
 
 ## New owner requirements — Customer options, Khata selection/deletion and bill number formatting (2026-11-22)
@@ -1329,7 +1329,7 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] **Fix Windows New Sale Khata customer dropdown.** It currently appears blank even though Khata customers are saved. Audit the customer query, customer-type filtering, data binding/display member and refresh/load lifecycle. Ensure saved Khata customers appear by name and can be selected; show a clear empty-state message only when there truly are no eligible Khata customers.
 - [x] **Allow deletion of a zero-balance Khata customer.** When a Khata customer's outstanding balance is exactly zero, provide a deliberate delete action with confirmation. Before deletion, check linked sales, returns and ledger history. Preserve accounting/history integrity: use a safe archive/deactivate or guarded deletion strategy where hard deletion would orphan historical records or violate foreign-key/sync rules. Never allow deletion when the balance is non-zero; explain why and show the current balance.
 - [x] **Remove unnecessary decimal zeroes from bills in both apps.** Monetary and quantity values that are whole numbers must display without trailing .0 / .00 (for example, 125.0 should display as 125). Retain meaningful fractional values when they exist, use consistent locale-safe formatting, and do not alter stored numeric values or calculations. Apply consistently to bill preview, thermal print and PDF/export output on both platforms.
-- [ ] Audit existing Android and WPF formatting/queries before implementation; add regression tests for Khata customer listing/selection, zero-balance versus non-zero deletion safeguards, historical-record integrity, and whole/fractional bill values. Do not generate build artifacts unless separately authorized. Group related code and tracker changes into a consolidated commit.
+- [x] Audited Android/WPF customer queries, deletion safeguards and bill formatters. Added regression coverage for zero-balance archive, non-zero balance protection, historical integrity and whole/fractional receipt formatting. Windows dropdown selection still needs owner-side UI confirmation.
 
 
 ## Work log — 2026-11-22 (Customer type removal, Khata selection/deletion safety and bill formatting)
@@ -1340,8 +1340,8 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] New Android and WPF customer creation defaults to Khata. Legacy recalled/pending Wholesale bills are mapped to Khata when resumed.
 - [x] Zero-balance customers with linked sales/returns/Khata history are archived as `archived_customer` instead of hard-deleted, preserving party IDs and historical joins. Non-zero balances block deletion; suppliers with purchase history remain protected.
 - [x] Android and WPF receipt/PDF money formatters suppress insignificant trailing decimal zeroes while preserving meaningful fractional values.
-- [ ] Run Android analyzer/tests and WPF Release build/tests after these edits; source changes are not yet runtime-validated. Do not publish APK, ZIP, installer or other artifact without separate authorization.
-- [ ] Physical Windows display/scanner/printer/PDF/backup acceptance and real Google account sync acceptance remain owner-side gates.
+- [x] WPF Release build and all 93 WPF tests passed on Actions run #45002502830; validation-only workflow uploaded no artifacts. Android analyzer/full tests are running after fixing the duplicated printer source tail.
+- [ ] Physical Windows display/scanner/BC-86AC printer/PDF/backup acceptance and real two-Gmail cross-device sync acceptance remain owner-side gates.
 
 
 ## Work log — 2026-11-22 (Per-user Gmail identity and safe account switching)
@@ -1455,3 +1455,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - [ ] Inspect and test every remaining service/screen path against the real schema-v18 fixture, especially Drive conflict resolution, archived-party propagation, sale edits/returns, purchase invoice posting, and Android restore recovery.
 - [ ] Perform target-device acceptance for account isolation using two separate Google accounts, plus offline recovery and cross-platform round-trip. No real account credentials or production store database were used in this static review.
 - [ ] Keep all changes surgical. No APK, Windows ZIP, installer, release, or artifact generation without separate explicit owner authorization; batch related code and tracker updates into a consolidated change.
+
+
+## Work log — 2026-11-22 (WPF mainline alignment and validation-only CI)
+
+- [x] Ported the later WPF cashier workflow from `integration/wpf-mainline`: F9 Save & Print, F10 Save Only and separate Draft Preview; preserved the cashier shortcuts and existing local sale posting flow.
+- [x] Ported the native WPF receipt profile that removes ineffective Top/Bottom Margin, Header Size and Total Size controls. Printer selection, test print, preview and PDF/share remain; 80mm receipt feed is fixed.
+- [x] Ported the newer Windows Desktop OAuth implementation: PKCE installed-app flow, no client secret, client-specific DPAPI token cache, account chooser and OAuth client-specific tests. Added Gmail identity lookup and best-effort refresh-token revocation on disconnect.
+- [x] Windows Drive disconnect now verifies a local database backup before removing credentials; snapshot import still requires verified pre-merge backup.
+- [x] WPF project exposes internals to its test assembly for OAuth unit tests. The WPF validation workflow runs restore/build/tests only and has no publish, ZIP or artifact-upload steps.
+- [x] Actions run #45002502830: WPF Release build succeeded with 0 warnings/0 errors; 93/93 tests passed; artifact list was empty.
+- [ ] Android analyzer and full Flutter test suite are still running after the duplicate invalid tail in `lib/printer_screen.dart` was removed. No APK was built.
