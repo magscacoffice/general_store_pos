@@ -762,6 +762,21 @@ class DBHelper {
     );
   }
 
+  static Future<int> _nextDriveSaleRevision(DatabaseExecutor txn, String saleSyncId) async {
+    final prefix = '$saleSyncId|';
+    final rows = await txn.rawQuery(
+      "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type = 'sale_revision' AND substr(entity_key, 1, ?) = ?",
+      [prefix.length, prefix],
+    );
+    var current = 0;
+    for (final row in rows) {
+      final key = row['entity_key']?.toString() ?? '';
+      final revision = int.tryParse(key.substring(prefix.length));
+      if (revision != null && revision > current) current = revision;
+    }
+    return current + 1;
+  }
+
   /// Export relational data without SQLite row IDs. Cloud references use stable sync IDs.
   static Future<Map<String, dynamic>> exportDriveSnapshot() async {
     await _ensureLegacySyncIds();
@@ -2682,8 +2697,13 @@ class DBHelper {
       await _queueRow(txn, 'sales', updated, remove: ['customer_id']);
       for (final row in oldItems) {
         final id = row['sync_id']?.toString();
-        if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
+        if (id != null && id.isNotEmpty) {
+          await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
+          await _recordDriveTombstone(txn, 'sale_item', id);
+        }
       }
+      final saleRevision = await _nextDriveSaleRevision(txn, saleSync);
+      await _recordDriveTombstone(txn, 'sale_revision', '$saleSync|$saleRevision');
       await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
       for (final item in prepared) {
         final p = item['product'] as Map<String, dynamic>;
@@ -2695,7 +2715,10 @@ class DBHelper {
         final oldLedger = await txn.query('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
         for (final row in oldLedger) {
           final id = row['sync_id']?.toString();
-          if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
+          if (id != null && id.isNotEmpty) {
+            await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
+            await _recordDriveTombstone(txn, 'khata_transaction', id);
+          }
         }
         await txn.delete('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
         final partyRows = await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [partyId], limit: 1);
