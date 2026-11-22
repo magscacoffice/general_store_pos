@@ -1507,3 +1507,11 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] If backup creation/verification or disconnect is cancelled/fails while credentials remain, restart auto-sync rather than leaving a connected account silently paused.
 - [ ] Run the WPF Release build and full test suite for this follow-up commit. Earlier validation (93/93 WPF tests and 0 build warnings/errors) applies to the preceding source revision, not this concurrency fix.
 - [ ] Real Windows laptop and two-Gmail cross-device acceptance remains owner-side; no APK, ZIP, installer or release artifact is authorized.
+
+## Follow-up hardening — WAL-safe restore rollback snapshot (2026-11-22)
+
+- [x] Shared Android/Windows Backup & Restore screen now creates the pre-restore safety copy through SQLite `VACUUM INTO` while the live database connection is still open, so committed WAL transactions are included.
+- [x] Opens the new safety snapshot read-only and requires `PRAGMA integrity_check = ok` before closing the live database or switching the active database pointer.
+- [x] Removed the raw live `.db` file copy from this restore safety path; a failed snapshot/integrity check cancels restore before changing the active database.
+- [ ] Re-run Android tests on Android/Linux and Windows runners, plus WPF Release build/tests, against the updated source. Earlier test counts apply to their recorded revisions only.
+- [ ] Verify restore with a deliberately WAL-pending write and then test rollback/reopen on physical Android and Windows devices. No build artifacts generated.
