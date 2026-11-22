@@ -1565,7 +1565,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task PartyDeleteBlocksCustomerLedgerHistoryAndSupplierPurchaseHistory()
+    public async Task PartyDeleteArchivesZeroBalanceCustomerHistoryAndProtectsOtherAccounts()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
@@ -1597,7 +1597,15 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await setBalance.ExecuteNonQueryAsync();
             }
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(balanceOnlyId, "customer", path));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(customerId, "customer", path));
+            Assert.Equal(1, await service.DeleteAsync(customerId, "customer", path));
+            await using (var archivedDb = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await archivedDb.OpenAsync();
+                await using var archivedType = archivedDb.CreateCommand();
+                archivedType.CommandText = "SELECT type FROM parties WHERE id=$id;";
+                archivedType.Parameters.AddWithValue("$id", customerId);
+                Assert.Equal("archived_customer", await archivedType.ExecuteScalarAsync());
+            }
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(supplierId, "supplier", path));
         }
         finally
