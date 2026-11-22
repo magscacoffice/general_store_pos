@@ -2945,12 +2945,14 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
     if (type == 'customer') {
+      var normalizedLegacyRows = false;
       await db.transaction((txn) async {
         final legacy = await txn.query(
           'parties',
           columns: ['id'],
           where: "type = 'customer' AND customer_type = 'Wholesale'",
         );
+        normalizedLegacyRows = legacy.isNotEmpty;
         for (final row in legacy) {
           final id = (row['id'] as num).toInt();
           await txn.update('parties', {'customer_type': 'Khata'},
@@ -2962,7 +2964,7 @@ class DBHelper {
           }
         }
       });
-      unawaited(syncPendingChanges());
+      if (normalizedLegacyRows) unawaited(syncPendingChanges());
     }
     return await db.query(
       'parties',
