@@ -271,3 +271,14 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Keep Android and Windows version numbers documented together in `PROJECT_UPDATE.md` for every coordinated release, clearly identifying each platform's version and build/release number. If only one platform is released, update and document that platform without falsely changing the other platform's release version.
 - [ ] Follow the repository's existing versioning scheme; inspect the current configuration before choosing the next number. Increment versions for actual app releases, not for every source commit or documentation-only change.
 - [ ] Verify the version shown in app/package metadata matches the version recorded in `PROJECT_UPDATE.md` and the release artifact/manifest before marking a release complete.
+
+
+## Coordinated test release preparation (2026-11-22)
+
+- [x] Android test release version bumped to **1.0.1+2** in `pubspec.yaml`.
+- [x] Windows WPF test release metadata set to **1.0.1** (assembly/file version **1.0.1.0**, informational version **1.0.1-test**).
+- [x] Windows CI workflow packages a self-contained unsigned x64 test ZIP after successful Release build and tests; artifact retention is 30 days.
+- [ ] Android CI test-release workflow must build and upload an unsigned APK; signing/release-key setup remains separate.
+- [ ] Dispatch the manual unsigned Windows installer validation workflow only for this explicitly authorized test release; production signing is not included.
+- [ ] Verify both platform workflows on `main` after merge. This is an unsigned acceptance release only; it is not production approval.
+- [ ] Physical Android/Windows and Google Drive acceptance remains pending.
