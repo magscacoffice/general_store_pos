@@ -1,6 +1,13 @@
 name: POS sync and invoice conversion tests
 
 on:
+  push:
+    branches:
+      - feature/complete-project-pendings
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - '.github/workflows/test-pos-sync.yml'
   workflow_dispatch:
 
 permissions:
