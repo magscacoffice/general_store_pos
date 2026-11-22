@@ -2944,7 +2944,26 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
-
+    if (type == 'customer') {
+      await db.transaction((txn) async {
+        final legacy = await txn.query(
+          'parties',
+          columns: ['id'],
+          where: "type = 'customer' AND customer_type = 'Wholesale'",
+        );
+        for (final row in legacy) {
+          final id = (row['id'] as num).toInt();
+          await txn.update('parties', {'customer_type': 'Khata'},
+              where: 'id = ?', whereArgs: [id]);
+          final updated = await txn.query('parties',
+              where: 'id = ?', whereArgs: [id], limit: 1);
+          if (updated.isNotEmpty) {
+            await _queueRow(txn, 'parties', Map<String, dynamic>.from(updated.first));
+          }
+        }
+      });
+      unawaited(syncPendingChanges());
+    }
     return await db.query(
       'parties',
       where: 'type = ?',
