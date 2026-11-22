@@ -345,6 +345,121 @@ void main() {
     expect((await DBHelper.getPurchases()).length, 2);
   });
 
+  test('Windows master sale revision replaces Android invoice items and ledger without duplicates', () async {
+    await DBHelper.insertProduct({
+      'name': 'Revision Sugar',
+      'barcode': 'KB-REV-1',
+      'price': 20.0,
+      'purchasePrice': 10.0,
+      'wholesalePrice': 18.0,
+      'damaged_quantity': 0,
+      'quantity': 10,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    await DBHelper.insertParty({
+      'name': 'Revision Customer',
+      'phone': '03000000009',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+    final androidCustomer = (await DBHelper.getParties('customer')).single;
+    await DBHelper.completeSale(
+      sale: {
+        'total_amount': 20.0,
+        'final_amount': 20.0,
+        'discount': 0.0,
+        'payment_type': 'Partial',
+        'customer_type': 'Khata',
+        'customer_id': androidCustomer['id'],
+        'received_amount': 5.0,
+        'date': '2026-11-22 11:00:00',
+      },
+      items: [
+        {
+          'barcode': 'KB-REV-1',
+          'name': 'Revision Sugar',
+          'quantity': 1,
+          'salePrice': 20.0,
+          'purchasePrice': 10.0,
+        },
+      ],
+    );
+
+    final initial = await DBHelper.exportDriveSnapshot();
+    await useDatabase(windowsPath);
+    expect(
+      await DBHelper.mergeDriveSnapshot(
+        envelope(initial, deviceId: 'android-device', hash: 'revision-initial'),
+        sourceDeviceId: 'android-device',
+        snapshotHash: 'revision-initial',
+      ),
+      isTrue,
+    );
+    final windowsSale = (await DBHelper.getSales()).single;
+    final windowsCustomer = (await DBHelper.getParties('customer')).single;
+    await DBHelper.updateSaleFromRecall(
+      saleId: (windowsSale['id'] as num).toInt(),
+      sale: {
+        'customer_id': windowsCustomer['id'],
+        'customer_type': 'Khata',
+        'discount': 5.0,
+        'received_amount': 5.0,
+        'payment_type': 'Partial',
+      },
+      items: [
+        {
+          'barcode': 'KB-REV-1',
+          'name': 'Revision Sugar',
+          'quantity': 2,
+          'salePrice': 25.0,
+          'purchasePrice': 10.0,
+          'stockUnit': 'pcs',
+        },
+      ],
+    );
+
+    final master = await DBHelper.exportDriveSnapshot();
+    await useDatabase(androidPath);
+    final masterEnvelope = envelope(master, deviceId: 'windows-master', hash: 'revision-master-1');
+    expect(
+      await DBHelper.mergeDriveSnapshot(
+        masterEnvelope,
+        sourceDeviceId: 'windows-master',
+        snapshotHash: 'revision-master-1',
+        applyMasterState: true,
+        detectConflicts: false,
+      ),
+      isTrue,
+    );
+
+    final sale = (await DBHelper.getSales()).single;
+    expect(sale['final_amount'], 45.0);
+    expect(sale['balance_due'], 40.0);
+    final items = await DBHelper.getSaleItems((sale['id'] as num).toInt());
+    expect(items.length, 1);
+    expect(items.single['quantity'], 2);
+    expect(items.single['sale_price'], 25.0);
+    expect((await DBHelper.getProducts()).single['quantity'], 7);
+    final customer = (await DBHelper.getParties('customer')).single;
+    expect(customer['balance'], 40.0);
+    final ledger = await DBHelper.getKhataTransactions((customer['id'] as num).toInt());
+    expect(ledger.length, 2);
+    expect(ledger.where((row) => row['type'] == 'credit').single['amount'], 45.0);
+    expect(ledger.where((row) => row['type'] == 'receipt').single['amount'], 5.0);
+
+    await DBHelper.mergeDriveSnapshot(
+      masterEnvelope,
+      sourceDeviceId: 'windows-master',
+      snapshotHash: 'revision-master-1',
+      applyMasterState: true,
+      detectConflicts: false,
+    );
+    expect((await DBHelper.getSaleItems((sale['id'] as num).toInt())).length, 1);
+    expect((await DBHelper.getKhataTransactions((customer['id'] as num).toInt())).length, 2);
+  });
+
   test('Khata cash and partial sales preserve customer type and post same-account receipts', () async {
     await DBHelper.insertProduct({
       'name': 'Wholesale Sugar',
