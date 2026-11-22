@@ -42,6 +42,8 @@ class DriveSyncService {
   static GoogleSignInAccount? _androidAccount;
   static bool _syncing = false;
   static bool _disconnecting = false;
+  static bool _connecting = false;
+  static Completer<void>? _connectionCompletion;
   static Completer<void>? _syncCompletion;
   static bool get isSyncing => _syncing;
   static String? lastSyncAt;
@@ -509,6 +511,10 @@ class DriveSyncService {
 
   static Future<void> connectAndSync() async {
     if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
+    if (_connecting) throw StateError('Google Drive connection is already in progress.');
+    _connecting = true;
+    final connectionCompletion = Completer<void>();
+    _connectionCompletion = connectionCompletion;
     status = 'Connecting to Google Drive...';
     lastError = null;
     try {
@@ -557,6 +563,10 @@ class DriveSyncService {
       }
       if (!_disconnecting) startAutoSync();
       rethrow;
+    } finally {
+      _connecting = false;
+      if (identical(_connectionCompletion, connectionCompletion)) _connectionCompletion = null;
+      if (!connectionCompletion.isCompleted) connectionCompletion.complete();
     }
   }
 
@@ -890,6 +900,8 @@ class DriveSyncService {
       await stopAutoSync();
       // Let any already-running upload/import finish before taking the safety
       // snapshot or revoking credentials. New sync attempts are blocked above.
+      final inFlightConnection = _connectionCompletion?.future;
+      if (inFlightConnection != null) await inFlightConnection;
       final inFlightSync = _syncCompletion?.future;
       if (inFlightSync != null) await inFlightSync;
       if (Platform.isAndroid) {
@@ -903,17 +915,17 @@ class DriveSyncService {
       await _secureStorage.delete(key: 'drive_access_expires_at');
       await _secureStorage.delete(key: 'drive_refresh_token');
       await _secureStorage.delete(key: 'drive_sync_enabled');
-    // Keep Drive as the sole business-data provider after disconnect. Local
-    // POS operations continue, and Firestore is not silently re-enabled.
-    if (Platform.isAndroid) {
-      try {
-        await GoogleSignIn.instance.disconnect();
-      } catch (_) {
-        // Local sign-out must still work if Google revocation is unavailable offline.
-        await GoogleSignIn.instance.signOut();
+      // Keep Drive as the sole business-data provider after disconnect. Local
+      // POS operations continue, and Firestore is not silently re-enabled.
+      if (Platform.isAndroid) {
+        try {
+          await GoogleSignIn.instance.disconnect();
+        } catch (_) {
+          // Local sign-out must still work if Google revocation is unavailable offline.
+          await GoogleSignIn.instance.signOut();
+        }
+        _androidAccount = null;
       }
-      _androidAccount = null;
-    }
       connectedAccountEmail = null;
       status = 'Cloud sync disconnected';
     } catch (_) {
