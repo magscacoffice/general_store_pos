@@ -323,6 +323,7 @@ class _PartyScreenState extends State<PartyScreen> {
               itemBuilder: (context, index) {
                 final party = _parties[index];
                 final partyId = (party['id'] as num).toInt();
+                final balance = (party['balance'] as num?)?.toDouble() ?? 0;
                 final overdue = _overdueByParty[partyId];
                 return Card(
                   margin: const EdgeInsets.symmetric(
