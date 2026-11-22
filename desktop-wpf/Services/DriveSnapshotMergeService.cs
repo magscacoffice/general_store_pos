@@ -24,6 +24,9 @@ public sealed class DriveSnapshotMergeService
     private static readonly string[] ProductFields =
         ["name", "price", "purchasePrice", "wholesalePrice", "damaged_quantity", "quantity", "is_active", "stock_unit"];
     private static readonly string[] PartyFields = ["name", "phone", "type", "customer_type", "balance"];
+    private static readonly string[] SaleFields = ["total_amount", "discount", "final_amount", "payment_type",
+        "customer_type", "received_amount", "balance_due", "date", "salesman_uid", "salesman_name",
+        "customer_sync_id"];
 
     public async Task<DriveMergeResult> MergeAsync(
         ValidatedDriveSnapshot snapshot,
@@ -306,11 +309,19 @@ public sealed class DriveSnapshotMergeService
                 }
 
                 var remoteRevision = remoteSaleRevisions.GetValueOrDefault(syncId);
-                if (remoteRevision <= 0 || remoteRevision <= await GetSaleRevisionAsync(db, tx, syncId, cancellationToken))
-                    continue;
+                var localRevision = await GetSaleRevisionAsync(db, tx, syncId, cancellationToken);
+                if (remoteRevision <= 0 || remoteRevision < localRevision) continue;
 
                 var localSale = await ReadOneAsync(db, tx, "sales", "id", existingSaleId.Value, cancellationToken);
                 if (localSale is null) { skipped++; deferredRecords++; continue; }
+                if (remoteRevision == localRevision)
+                {
+                    var comparableLocal = new Dictionary<string, object?>(localSale, StringComparer.Ordinal);
+                    comparableLocal.Remove("id");
+                    if (Different(comparableLocal, values, SaleFields))
+                        await AddConflictAsync("sale_revision", syncId, comparableLocal, values);
+                    continue;
+                }
                 var localCustomerId = localSale.TryGetValue("customer_id", out var localCustomerValue) &&
                     localCustomerValue is not null ? Convert.ToInt64(localCustomerValue, CultureInfo.InvariantCulture) : (long?)null;
                 if (localCustomerId != partyId)
