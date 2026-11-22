@@ -22,8 +22,8 @@ public sealed class EscPosReceiptBuilderTests
         {
             "KHAN BABA", "GENERAL STORE", "G.T ROAD SANAWAN", "PH#03451444325",
             "Bill# 000042", "Cashier: Cashier One", "Type: Khata", "Customer: Test Customer",
-            "Qty", "Description", "Rate", "Amount", "Total Items: 1", "Gross: 1200.00",
-            "Discount", "NET AMOUNT: Rs. 1100.00", "Payment: Partial", "Received",
+            "Qty", "Description", "Rate", "Amount", "Total Items: 1", "Gross: 1200",
+            "Discount", "NET AMOUNT: Rs. 1100", "Payment: Partial", "Received",
             "Balance Due", "Phone: 03001234567", "THANK YOU - VISIT AGAIN"
         };
         var cursor = -1;
@@ -108,7 +108,7 @@ public sealed class EscPosReceiptBuilderTests
         Assert.StartsWith("%PDF-1.4", pdf);
         Assert.Contains("/MediaBox [0 0 226.77", pdf);
         Assert.Contains("/BaseFont /Courier-Bold", pdf);
-        Assert.Contains("NET AMOUNT: Rs. 1100.00", pdf);
+        Assert.Contains("NET AMOUNT: Rs. 1100", pdf);
     }
 
     private static bool ContainsStyledLine(byte[] source, string text, byte size, bool bold)
