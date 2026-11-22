@@ -73,7 +73,7 @@ public sealed class WindowsDriveSyncService
             await _auth.GetAccessTokenAsync(promptForLogin: false, cancellationToken);
             var accountEmail = await _auth.GetConnectedAccountEmailAsync(cancellationToken)
                 ?? throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
-            await EnforceStoreAccountBindingAsync(path, accountEmail, cancellationToken);
+            await EnforceStoreAccountBindingAsync(accountEmail, cancellationToken);
             var folderId = await _drive.EnsureFolderAsync(cancellationToken);
             var deviceId = GetOrCreateDeviceId();
 
@@ -259,7 +259,7 @@ public sealed class WindowsDriveSyncService
     }
 
 
-    private static async Task EnforceStoreAccountBindingAsync(string databasePath, string accountEmail, CancellationToken cancellationToken)
+    private static async Task EnforceStoreAccountBindingAsync(string accountEmail, CancellationToken cancellationToken)
     {
         var normalizedEmail = accountEmail.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(normalizedEmail) || !normalizedEmail.Contains('@'))
