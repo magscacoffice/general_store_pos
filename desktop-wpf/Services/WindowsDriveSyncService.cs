@@ -36,6 +36,12 @@ public sealed class WindowsDriveSyncService
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSyncAtUtc { get; private set; }
     public bool HasSavedCredentials => _auth.HasSavedCredentials;
+    public async Task<string?> GetConnectedAccountEmailAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_auth.HasSavedCredentials) return null;
+        try { return await _auth.GetConnectedAccountEmailAsync(cancellationToken); }
+        catch { return null; }
+    }
     public event Action? StatusChanged;
 
     public WindowsDriveSyncService(AccessService access)
@@ -195,10 +201,16 @@ public sealed class WindowsDriveSyncService
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
+        var databasePath = PosDatabasePath.Resolve(requireExisting: true);
+        var backupDirectory = Path.Combine(Path.GetDirectoryName(databasePath)!, "Backups");
+        SetStatus("Creating verified local backup before disconnecting Google account...");
+        var backupPath = await _backups.CreateBackupAsync(databasePath, backupDirectory, cancellationToken);
+        if (!await _backups.IsVerifiedBackupAsync(backupPath, cancellationToken))
+            throw new InvalidDataException("Verified local backup could not be confirmed; Google account remains connected.");
         StopAutoSync();
         await _auth.DisconnectAsync(cancellationToken);
         LastError = null;
-        SetStatus("Google Drive disconnected. POS remains available offline.");
+        SetStatus("Google Drive disconnected. Verified local backup saved; POS remains available offline.");
     }
 
     public void StartAutoSync()
