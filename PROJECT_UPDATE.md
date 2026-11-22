@@ -1434,10 +1434,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Findings requiring attention
 
-- [x] **Resolved 2026-11-22 — Android manual backup WAL safety.** `lib/backup_screen.dart` reads the live database with `File.readAsBytes()` and sends those bytes to the file picker. It does not checkpoint WAL or use SQLite's online backup API. If committed changes remain in the `-wal` file while the app is open, the exported `.db` may not contain the latest data. Replace the raw read with a consistent SQLite backup/copy procedure and verify the produced database before reporting success. WPF's `DatabaseBackupService` already uses SQLite backup APIs and hash/schema/integrity verification; Android should provide equivalent guarantees.
-- [x] **Resolved 2026-11-22 — Gmail identity is bound to the local app data profile.** Android and WPF keep the local POS database separate from the Google token, then upload the current database to whichever Google account is connected. The UI warns that a clean database is required when switching to another business, but there is no enforced store/account binding or safe per-store database selection. A user can therefore connect another business's Gmail on an installation containing the previous business's data and upload the wrong store snapshot. Add a verified local store identity/account binding and block cross-store account switches until the correct isolated database is selected; retain same-store Android/Windows pairing.
-- [x] **Resolved 2026-11-22 — retired Wholesale-only product-rate UI removed; legacy DB column retained.** The customer-type selectors and sale-posting validation now use only Walk-in/Khata, and legacy Wholesale customer records are normalized/recalled as Khata. However, Android `lib/inventory_screen.dart` and Windows `desktop-wpf/InventoryWindow.cs` still expose an optional Wholesale sale-price field/column. This conflicts with the earlier tracker instruction to remove the wholesale-only per-item rate editor. Confirm whether this field is also to be retired; if yes, remove only its UI/use while preserving the legacy SQLite column and historical data.
-- [x] **Automated verification completed 2026-11-22:** Android analyzer and 22/22 Flutter tests passed on Windows and Ubuntu; WPF Release build passed with 0 warnings/errors and 97/97 tests. Physical-device OAuth/Drive, scanner, PDF and BC-86AC acceptance remains pending.
+- [x] **Resolved 2026-11-22 — Android manual backup WAL safety.** `lib/backup_screen.dart` now creates a consistent `VACUUM INTO` snapshot while SQLite is open, checks `integrity_check` and required POS tables, then exports the verified snapshot. The restore rollback snapshot is also created and verified before changing the active database pointer.
+- [x] **Resolved 2026-11-22 — Gmail identity is bound to the local app data profile.** Android stores the verified account email in protected app storage; Windows stores the binding under DPAPI protection. The binding remains after disconnect, restore and database filename changes. Another Gmail is blocked on that profile. A second business still requires a separate clean data profile/database and Gmail; a user-facing multi-store selector is not implemented.
+- [x] **Resolved 2026-11-22 — retired Wholesale-only UI removed.** Both clients expose only Walk-in/Khata customer choices and no Wholesale-only per-item price editor. Legacy Wholesale customer classifications are normalized to Khata at read/recall boundaries; legacy SQLite columns and historical values remain untouched for compatibility.
+- [x] **Automated verification completed 2026-11-22:** Android analyzer and 22/22 Flutter tests passed on Windows and Ubuntu; WPF Release build passed with 0 warnings/errors and 105/105 tests on Actions run [#471](https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801). Physical-device OAuth/Drive, scanner, PDF and BC-86AC acceptance remains pending.
 
 ### Confirmed source-level checks
 
@@ -1585,7 +1585,7 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] WPF Drive merge now defers a sale return when its non-empty `party_sync_id` cannot be resolved locally.
 - [x] WPF Drive merge now increments the deferred-record count when an expense or reminder has no stable `sync_id`; the snapshot therefore cannot be marked fully accepted after silently skipping that row.
 - [x] Added focused unit tests for required-party-reference and missing-stable-ID predicates in `DriveSnapshotMergeAcceptanceTests.cs`.
-- [ ] GitHub Actions WPF Release build/test for commit `474a5a79a5d5148f05b2e01d64b158df9198798d` is running. Record the final result here only after the workflow completes.
+- [x] GitHub Actions run #471 passed on commit `474a5a79a5d5148f05b2e01d64b158df9198798d`: WPF Release build 0 warnings/0 errors; 105 tests passed, 0 failed, 0 skipped. Run: https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801.
 - [ ] These are predicate/acceptance tests, not a substitute for a real Drive import retry test with disposable schema-v18 databases and an out-of-order parent.
 
 ### Critical outstanding finding — recalled sale edits are not reconciled by Drive snapshots
@@ -1595,3 +1595,12 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Consequence: after an Android recalled-sale edit, the Windows master can retain the old sale totals and old sale-item rows while adding replacement sale items. This can create stale totals and duplicate item history across devices. The reverse direction also cannot reliably reconcile independently edited existing bills.
 - [ ] Before production Drive use, design and test a versioned sale-revision/deletion protocol with explicit Windows-master conflict policy. Do not assume append-only behavior is sufficient for recalled bills. Include edits that change quantity, price, discount, payment/received amount, removed/replaced items, repeated snapshot delivery, returns, rollback and conflict resolution.
 - [ ] Until this is resolved and validated, Google Drive sync remains a development/acceptance feature, not production-accepted accounting synchronization. The owner-approved source flag is currently enabled; do not silently change the sync policy in this review without a separate decision.
+
+
+## Validation update — Drive dependency deferral fix (2026-11-22)
+
+- [x] WPF Release build succeeded with 0 warnings and 0 errors.
+- [x] WPF test suite passed: 105 passed, 0 failed, 0 skipped.
+- [x] GitHub Actions run #471 validated commit `474a5a79a5d5148f05b2e01d64b158df9198798d`: https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801
+- [ ] Real Drive retry tests for unresolved supplier/customer references and missing stable IDs remain pending; current tests cover the predicates and acceptance decision only.
+- [ ] The separate recalled-sale update/deletion protocol blocker remains unresolved and must be addressed before production Drive sync acceptance.
