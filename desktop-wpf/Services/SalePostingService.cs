@@ -420,7 +420,7 @@ public sealed class SalePostingService
             var saleRevision = await NextSaleRevisionAsync(connection, transaction, oldSaleSync, cancellationToken);
             foreach (var oldItem in oldItems)
                 if (!string.IsNullOrWhiteSpace(oldItem.SyncId))
-                    await RecordSaleSyncMarkerAsync(connection, transaction, "sale_item", oldItem.SyncId!, cancellationToken);
+                    await RecordSaleSyncMarkerAsync(connection, transaction, "sale_item", $"{oldSaleSync}|{oldItem.SyncId}", cancellationToken);
 
             var oldLedgerSyncIds = new List<string>();
             if (oldCustomerId is not null)
@@ -436,7 +436,7 @@ public sealed class SalePostingService
                     if (!ledgerReader.IsDBNull(0)) oldLedgerSyncIds.Add(ledgerReader.GetString(0));
             }
             foreach (var syncId in oldLedgerSyncIds)
-                await RecordSaleSyncMarkerAsync(connection, transaction, "khata_transaction", syncId, cancellationToken);
+                await RecordSaleSyncMarkerAsync(connection, transaction, "khata_transaction", $"{oldSaleSync}|{syncId}", cancellationToken);
 
             await using (var update = connection.CreateCommand())
             {
