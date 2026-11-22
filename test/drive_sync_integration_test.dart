@@ -503,6 +503,63 @@ void main() {
     expect((await DBHelper.getSales()), isEmpty);
   });
 
+  test('zero-balance Khata with history is archived and non-zero balance is protected', () async {
+    await DBHelper.insertProduct({
+      'name': 'Archive Test Item',
+      'barcode': 'KB-ARCHIVE-1',
+      'price': 10.0,
+      'purchasePrice': 5.0,
+      'wholesalePrice': 0.0,
+      'damaged_quantity': 0,
+      'quantity': 5,
+      'is_active': 1,
+      'stock_unit': 'pcs',
+    });
+    final customerId = await DBHelper.insertParty({
+      'name': 'Zero Balance Customer',
+      'phone': '03000000003',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 0.0,
+    });
+    await DBHelper.completeSale(
+      sale: {
+        'total_amount': 10.0,
+        'final_amount': 10.0,
+        'discount': 0.0,
+        'payment_type': 'Cash',
+        'customer_type': 'Khata',
+        'customer_id': customerId,
+        'received_amount': 10.0,
+        'date': '2026-11-22 10:10:00',
+      },
+      items: [
+        {
+          'barcode': 'KB-ARCHIVE-1',
+          'name': 'Archive Test Item',
+          'quantity': 1,
+          'salePrice': 10.0,
+          'purchasePrice': 5.0,
+        },
+      ],
+    );
+
+    await DBHelper.deleteParty(customerId);
+    expect(await DBHelper.getParties('customer'), isEmpty);
+    final archived = await DBHelper.getParties('archived_customer');
+    expect(archived.single['id'], customerId);
+
+    final owingCustomerId = await DBHelper.insertParty({
+      'name': 'Customer With Balance',
+      'phone': '03000000004',
+      'type': 'customer',
+      'customer_type': 'Khata',
+      'balance': 5.0,
+    });
+    await expectLater(DBHelper.deleteParty(owingCustomerId), throwsException);
+    expect((await DBHelper.getParties('customer')).single['id'], owingCustomerId);
+  });
+
   test('Drive-primary mode prevents new Firestore outbox writes', () async {
     DBHelper.localOnlyMode = false;
     DBHelper.drivePrimaryMode = true;
