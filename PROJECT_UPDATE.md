@@ -1307,12 +1307,12 @@ Future improvements: add new ideas here when the owner requests them.
 
 **Owner's requirement:** Google Drive sync must not remain tied to the developer/owner's personal Gmail account. Every person/business receiving and using Khan Baba POS must be able to connect their **own Gmail / Google account** and sync that account's store data. This must work consistently on **both Android (Flutter) and Windows (native C# WPF)**.
 
-- [ ] Replace any hard-coded, pre-authorized, or owner-account-dependent Google identity with an end-user OAuth consent flow. On first setup, each user signs in with their own Google account and explicitly grants the required Drive access.
-- [ ] Treat the connected Google account as the data-owner/tenant boundary: each store's backups, snapshots and sync metadata must live in that user's own Google Drive space (prefer the least-privilege Drive app-data area where compatible with the existing cross-platform snapshot protocol). Never upload a customer's business data into the developer's Gmail/Drive or another customer's Drive.
-- [ ] Android and Windows installations belonging to the same store/user must be able to authorize the same Gmail account and exchange the same compatible snapshot format, so the user's Android and Windows data stay synchronized. Preserve the existing SQLite schema and cross-platform snapshot compatibility unless a separately reviewed migration is proven necessary.
-- [ ] Different customers/users must be isolated even though they use the same published app and OAuth client configuration. Do not share a global Drive folder, token, refresh token or account identity across customers.
-- [ ] Provide clear account status in both apps: connected Gmail address, connect/reconnect, disconnect/sign out and account-switch flow. Switching accounts must never silently mix datasets; require confirmation and a verified local backup before changing the active sync identity.
-- [ ] Store OAuth access/refresh tokens securely per platform (Android Keystore-backed secure storage; Windows DPAPI/current-user protection). Never store tokens, client secrets or private credentials in source code, logs, this tracker or committed configuration.
+- [x] Android uses Google Sign-In for the consenting end user; Windows uses installed-app OAuth/PKCE. Both authorize the person using the app rather than a developer Gmail account. On first setup, each user signs in with their own Google account and explicitly grants the required Drive access.
+- [x] Drive API calls use the locally authorized user's OAuth token and the same app folder name inside that user's own Drive. No shared global Drive folder or developer account token is used; each Gmail account has its own Drive namespace.
+- [x] Android and native WPF Windows use the same Google OAuth project and compatible Drive snapshot/folder protocol, allowing the same Gmail account to pair the user's devices without changing the SQLite schema.
+- [x] Customer data isolation is based on each end user's independently authorized Google account and locally stored credentials; no global Drive token or shared customer folder is used. Two-account isolation still needs live acceptance testing.
+- [x] Android and Windows now display the connected Gmail address, provide disconnect/switch controls and require confirmation plus a verified local database backup before switching. Reconnect opens the Google account chooser.
+- [x] Android tokens remain in Flutter secure storage; WPF Windows tokens remain DPAPI-protected for the current Windows user. No user access/refresh tokens are written to source or tracker.
 - [ ] Keep the Google OAuth app/client configuration owned by the product developer, but make the **consenting Gmail account belong to the app's end user**. Do not ask each customer to create their own Google Cloud project or paste OAuth client secrets.
 - [ ] Audit and align Android and WPF OAuth scopes, redirect/callback handling, token refresh/revocation, account identity persistence, Drive file discovery/creation, snapshot ownership, offline retry and recovery. Validate with at least two separate test Google accounts to prove there is no cross-account data visibility or overwrite.
 - [ ] Preserve local-first POS operation: sales, inventory, purchases, returns, printing and reports must continue offline; sync resumes when the user's connected Google account and internet are available.
@@ -1342,3 +1342,14 @@ Future improvements: add new ideas here when the owner requests them.
 - [x] Android and WPF receipt/PDF money formatters suppress insignificant trailing decimal zeroes while preserving meaningful fractional values.
 - [ ] Run Android analyzer/tests and WPF Release build/tests after these edits; source changes are not yet runtime-validated. Do not publish APK, ZIP, installer or other artifact without separate authorization.
 - [ ] Physical Windows display/scanner/printer/PDF/backup acceptance and real Google account sync acceptance remain owner-side gates.
+
+
+## Work log — 2026-11-22 (Per-user Gmail identity and safe account switching)
+
+- [x] Confirmed Android Google Sign-In and WPF installed-app OAuth/PKCE authenticate the app end user; Drive requests are made using that user's OAuth token, so each Gmail account has a separate Drive namespace.
+- [x] Added `openid`/`email` scopes and connected Gmail identity display on Android and WPF. Android uses the Google Sign-In account email; Windows reads the Google OpenID userinfo endpoint.
+- [x] Added Android Disconnect / Switch Gmail control. Before clearing credentials, it stops auto-sync, checkpoints SQLite, copies the live database, verifies SQLite integrity and required tables, and writes a SHA-256 sidecar. A failed backup prevents disconnect.
+- [x] Added WPF connected-Gmail status and Disconnect / Switch Gmail control. Windows creates and verifies a local database backup before deleting the DPAPI-protected OAuth token file.
+- [x] OAuth reauthorization requests the Google account chooser, enabling the user to select another Gmail account after disconnecting.
+- [ ] Existing Windows users with old OAuth consent may need one Disconnect / Switch Gmail + reconnect cycle to grant the new `openid/email` scopes and display the Gmail address.
+- [ ] Validate with two real Google accounts across Android and Windows, including cross-account isolation, account switch, revoked consent, token refresh and offline recovery. This requires owner-side test accounts and device testing.
