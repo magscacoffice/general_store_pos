@@ -472,12 +472,15 @@ public sealed class DriveSnapshotMergeService
                     "entity_type='khata_transaction' AND instr(entity_key,'|')>0 AND substr(entity_key,instr(entity_key,'|')+1)=$key",
                     cancellationToken, ("$key", syncId));
                 if (wasDeletedBySaleRevision) continue;
+                var parentSaleSyncId = NullableText(remote, "sale_sync_id");
+                if (parentSaleSyncId is not null && !allowedSaleItemImports.Contains(parentSaleSyncId))
+                    continue; // never import ledger rows for a stale or rejected sale revision
                 if (await FindIdAsync(db, tx, "khata_transactions", "sync_id", syncId, cancellationToken) is not null) continue;
                 var remoteParty = Text(remote, "party_sync_id");
                 var partyId = await PartyIdForAsync(remoteParty);
                 if (partyId is null) { skipped++; deferredRecords++; continue; }
                 var values = Copy(remote);
-                values.Remove("id"); values.Remove("party_id");
+                values.Remove("id"); values.Remove("party_id"); values.Remove("sale_sync_id");
                 values["sync_id"] = syncId; values["party_id"] = partyId;
                 values["party_sync_id"] = await CanonicalPartySyncIdAsync(remoteParty);
                 await InsertRowAsync(db, tx, "khata_transactions", values, cancellationToken); created++;
