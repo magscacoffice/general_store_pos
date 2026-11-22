@@ -1354,6 +1354,34 @@ class DBHelper {
         return rows.isEmpty ? null : (rows.first['id'] as num).toInt();
       }
 
+      Future<int> saleRevisionFor(String saleSyncId) async {
+        final prefix = '$saleSyncId|';
+        final markers = await txn.rawQuery(
+          "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type = 'sale_revision' AND substr(entity_key, 1, ?) = ?",
+          [prefix.length, prefix],
+        );
+        var current = 0;
+        for (final marker in markers) {
+          final key = marker['entity_key']?.toString() ?? '';
+          final revision = int.tryParse(key.substring(prefix.length));
+          if (revision != null && revision > current) current = revision;
+        }
+        return current;
+      }
+
+      final remoteSaleRevisions = <String, int>{};
+      for (final marker in collection('tombstones')) {
+        if (marker['entity_type']?.toString() != 'sale_revision') continue;
+        final key = marker['entity_key']?.toString() ?? '';
+        final split = key.lastIndexOf('|');
+        if (split <= 0) continue;
+        final revision = int.tryParse(key.substring(split + 1));
+        if (revision == null || revision <= 0) continue;
+        final saleSyncId = key.substring(0, split);
+        final previous = remoteSaleRevisions[saleSyncId] ?? 0;
+        if (revision > previous) remoteSaleRevisions[saleSyncId] = revision;
+      }
+
       // Windows master snapshots are authoritative for sale revisions. Rebuild
       // the edited bill's item set atomically; ordinary device snapshots remain
       // append-only and cannot overwrite an existing bill.
@@ -1383,6 +1411,12 @@ class DBHelper {
         }
         if (!applyMasterState) continue;
 
+        final remoteRevision = remoteSaleRevisions[syncId] ?? 0;
+        final localRevision = await saleRevisionFor(syncId);
+        if (remoteRevision < localRevision) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
         final localReturns = await txn.query(
           'sale_returns',
           columns: ['id'],
@@ -1404,10 +1438,29 @@ class DBHelper {
           blockedMasterSales.add(syncId);
           continue;
         }
-        final localCustomerId = (localSales.first['customer_id'] as num?)?.toInt();
+        final localSale = localSales.first;
+        final localCustomerId = (localSale['customer_id'] as num?)?.toInt();
         if (localCustomerId != customerId) {
           blockedMasterSales.add(syncId);
           continue;
+        }
+        if (remoteRevision > 0 && remoteRevision == localRevision) {
+          const saleFields = [
+            'total_amount', 'discount', 'final_amount', 'payment_type',
+            'customer_type', 'received_amount', 'balance_due', 'date',
+            'salesman_uid', 'salesman_name', 'customer_sync_id',
+          ];
+          final differs = saleFields.any((field) {
+            final left = localSale[field];
+            final right = values[field];
+            if (left == null || right == null) return left != right;
+            if (left is num && right is num) return (left - right).abs() > 0.000001;
+            return left.toString() != right.toString();
+          });
+          if (differs) {
+            blockedMasterSales.add(syncId);
+            continue;
+          }
         }
         await txn.update('sales', values, where: 'id = ?', whereArgs: [existingSaleId]);
         await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [existingSaleId]);
@@ -1453,7 +1506,13 @@ class DBHelper {
 
       for (final remote in collection('khata_transactions')) {
         final syncId = remote['sync_id']?.toString() ?? '';
-        if (syncId.isEmpty || await localBySync('khata_transactions', syncId) != null) continue;
+        if (syncId.isEmpty) continue;
+        final wasDeletedBySaleRevision = await txn.rawQuery(
+          "SELECT id FROM drive_sync_tombstones WHERE entity_type = 'khata_transaction' AND instr(entity_key, '|') > 0 AND substr(entity_key, instr(entity_key, '|') + 1) = ? LIMIT 1",
+          [syncId],
+        );
+        if (wasDeletedBySaleRevision.isNotEmpty) continue;
+        if (await localBySync('khata_transactions', syncId) != null) continue;
         final remotePartySyncId = remote['party_sync_id']?.toString();
         final partyId = await partyIdFor(remotePartySyncId);
         if (partyId == null) continue;
