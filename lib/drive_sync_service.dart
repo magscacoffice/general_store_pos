@@ -470,8 +470,9 @@ class DriveSyncService {
     if (normalizedEmail.isEmpty || !normalizedEmail.contains('@')) {
       throw StateError('Google account email could not be verified. Sync was blocked.');
     }
-    final databasePath = await DBHelper.getDatabaseFilePath();
-    final key = 'drive_store_account_${sha256.convert(utf8.encode(p.normalize(p.absolute(databasePath)))).toString()}';
+    // One store per app data profile. Binding is deliberately not tied to a
+    // database filename, so restore/rename cannot bypass the Gmail restriction.
+    const key = 'drive_store_account_binding_v1';
     final boundEmail = await _secureStorage.read(key: key);
     if (boundEmail != null && boundEmail.trim().toLowerCase() != normalizedEmail) {
       throw StateError(
