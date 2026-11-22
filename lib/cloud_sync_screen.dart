@@ -52,7 +52,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Disconnect Google account?'),
-        content: const Text('POS data local device par rahega aur verified local backup banega. Naya Gmail connect karne par isi device ka current store data us account se sync hoga. Sirf isi store ke liye Gmail badlein; kisi doosray business ke liye pehle fresh/clean database use karein.'),
+        content: const Text('POS data local device par rahega aur verified local backup banega. Is database ke saath pehle se paired Gmail hi dobara connect ho sakta hai; disconnect karne se pairing remove nahi hoti. Isi store ke Android aur Windows devices par same Gmail use karein. Har doosray business ke liye separate clean POS database aur separate Gmail lazmi hai.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Backup & Disconnect')),
