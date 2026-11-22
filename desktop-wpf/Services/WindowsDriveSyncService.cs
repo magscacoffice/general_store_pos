@@ -55,8 +55,9 @@ public sealed class WindowsDriveSyncService
         _access.RequireAdmin();
         EnsureDriveSyncEnabled();
         await _auth.GetAccessTokenAsync(promptForLogin: true, cancellationToken);
+        var summary = await SyncNowAsync(databasePath, cancellationToken);
         StartAutoSync();
-        return await SyncNowAsync(databasePath, cancellationToken);
+        return summary;
     }
 
     public async Task<DriveSyncSummary> SyncNowAsync(string? databasePath = null, CancellationToken cancellationToken = default)
