@@ -57,6 +57,9 @@ jobs:
             lib/invoice_unit_converter.dart \
             lib/purchase_screen.dart \
             lib/sales_screen.dart \
+            lib/party_screen.dart \
+            lib/printer_screen.dart \
+            lib/scanner_screen.dart \
             lib/inventory_screen.dart \
             lib/customer_history_screen.dart \
             test/drive_sync_integration_test.dart \
@@ -67,8 +70,4 @@ jobs:
       - name: Run Google Drive reconciliation and invoice conversion tests
         shell: bash
         run: |
-          flutter test \
-            test/drive_sync_integration_test.dart \
-            test/invoice_unit_converter_test.dart \
-            test/supplier_invoice_conversion_test.dart \
-            test/recall_bill_test.dart
+          flutter test --no-pub
