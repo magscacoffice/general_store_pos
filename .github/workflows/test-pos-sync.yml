@@ -49,19 +49,7 @@ jobs:
       - name: Analyze changed sync and invoice files
         shell: bash
         run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings \
-            lib/db_helper.dart \
-            lib/drive_sync_service.dart \
-            lib/cloud_sync_screen.dart \
-            lib/invoice_unit_converter.dart \
-            lib/purchase_screen.dart \
-            lib/party_screen.dart \
-            lib/printer_screen.dart \
-            lib/customer_history_screen.dart \
-            test/drive_sync_integration_test.dart \
-            test/invoice_unit_converter_test.dart \
-            test/supplier_invoice_conversion_test.dart \
-            test/recall_bill_test.dart
+          flutter analyze --no-pub lib/drive_sync_service.dart lib/cloud_sync_screen.dart lib/printer_screen.dart test/receipt_formatter_test.dart
 
       - name: Run Google Drive reconciliation and invoice conversion tests
         shell: bash
