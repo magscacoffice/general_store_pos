@@ -830,8 +830,13 @@ class DriveSyncService {
 
   static Future<void> disconnect() async {
     await stopAutoSync();
-    if (Platform.isAndroid && connectedAccountEmail != null) {
-      await _createVerifiedLocalBackup();
+    if (Platform.isAndroid) {
+      try {
+        await _createVerifiedLocalBackup();
+      } catch (_) {
+        startAutoSync();
+        rethrow;
+      }
     }
     await _secureStorage.delete(key: 'drive_access_token');
     await _secureStorage.delete(key: 'drive_access_expires_at');
