@@ -1523,3 +1523,13 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Added focused WPF unit tests for the snapshot acceptance rule: fully complete snapshots are accepted; any pending conflict or deferred record keeps the snapshot pending.
 - [ ] Run WPF Release build and all tests after these sync changes. Previous 93/93 result is from an earlier revision and is not evidence for this new code.
 - [ ] Validate on real Android + Windows devices with out-of-order parent/child records, repeated polling, duplicate delivery and conflict resolution. No APK, ZIP, installer or other build artifact generated.
+
+## Follow-up hardening — sync lifecycle serialization (2026-11-22)
+
+- [x] Windows conflict resolution now uses the same sync gate as snapshot import/export and disconnect. A user-approved conflict choice can no longer race with a simultaneous sync merge and be overwritten by that merge.
+- [x] Android Drive disconnect now blocks new sync attempts, waits for an in-flight connection/migration and active sync to finish, then creates and verifies the safety snapshot before deleting credentials.
+- [x] If Android safety backup creation fails, credentials remain in place and auto-sync can resume after the disconnect gate is released.
+- [x] Windows merge now defers sale items when either their parent sale or referenced product is missing, keeping the snapshot unaccepted for a later retry.
+- [ ] Run current WPF Release build and unit tests after these changes; earlier workflow runs do not validate this latest revision.
+- [ ] Run Flutter analyze/tests and physical Android + Windows paired-device scenarios, including connect/disconnect during active sync, repeated polling, out-of-order parent/child delivery and simultaneous conflict resolution.
+- [ ] Confirm real-device retries complete deferred records and that duplicate deliveries remain idempotent. No APK, ZIP, installer or other build artifact generated.
