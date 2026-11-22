@@ -227,8 +227,7 @@ public sealed class ProductEditorWindow : Window
         if(name.Length>17){MessageBox.Show("Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.");return;}
         if(!int.TryParse(_quantity.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out var qty)||qty<0||
            !double.TryParse(_purchase.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var cost)||!double.IsFinite(cost)||cost<0||
-           !double.TryParse(_sale.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var price)||!double.IsFinite(price)||price<0||
-          ){
+           !double.TryParse(_sale.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var price)||!double.IsFinite(price)||price<0){
             MessageBox.Show("Stock aur prices valid non-negative numbers honi chahiye.");return;
         }
         Product=new ProductMutation(name,barcode,qty,unit,cost,price,_legacyWholesalePrice);DialogResult=true;
