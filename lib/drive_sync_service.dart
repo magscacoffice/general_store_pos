@@ -41,6 +41,8 @@ class DriveSyncService {
   static Timer? _pollTimer;
   static GoogleSignInAccount? _androidAccount;
   static bool _syncing = false;
+  static bool _disconnecting = false;
+  static Completer<void>? _syncCompletion;
   static bool get isSyncing => _syncing;
   static String? lastSyncAt;
   static String? lastError;
@@ -506,12 +508,15 @@ class DriveSyncService {
   }
 
   static Future<void> connectAndSync() async {
+    if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
     status = 'Connecting to Google Drive...';
     lastError = null;
     try {
       final token = await _accessToken(prompt: true);
       final accountEmail = await _verifiedGoogleEmail(token);
+      if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
       await _enforceStoreAccountBinding(accountEmail);
+      if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
       if (Platform.isAndroid && !DBHelper.drivePrimaryMode) {
         // Migrate any pending Firebase business data before making Drive primary.
         // Stop its background listener during the Drive cutover, but keep local
@@ -541,21 +546,22 @@ class DriveSyncService {
       } else {
         await _runSync(token);
       }
+      if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
       await _secureStorage.write(key: 'drive_sync_enabled', value: 'true');
-      startAutoSync();
+      if (!_disconnecting) startAutoSync();
     } catch (error) {
       lastError = error.toString();
       status = 'Google Drive connection needs attention';
-      if (Platform.isAndroid && !DBHelper.drivePrimaryMode) {
+      if (!_disconnecting && Platform.isAndroid && !DBHelper.drivePrimaryMode) {
         DBHelper.startAutoSync();
       }
-      startAutoSync();
+      if (!_disconnecting) startAutoSync();
       rethrow;
     }
   }
 
   static Future<void> syncNow() async {
-    if (_syncing) return;
+    if (_disconnecting || _syncing) return;
     try {
       final token = await _accessToken(prompt: false);
       final accountEmail = await _verifiedGoogleEmail(token);
@@ -605,8 +611,11 @@ class DriveSyncService {
   }
 
   static Future<void> _runSync(String token) async {
+    if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
     if (_syncing) return;
     _syncing = true;
+    final completion = Completer<void>();
+    _syncCompletion = completion;
     lastError = null;
     status = 'Preparing store data...';
     try {
@@ -739,10 +748,13 @@ class DriveSyncService {
       await _secureStorage.write(key: 'drive_last_sync_at', value: lastSyncAt);
     } finally {
       _syncing = false;
+      if (identical(_syncCompletion, completion)) _syncCompletion = null;
+      if (!completion.isCompleted) completion.complete();
     }
   }
 
   static void startAutoSync() {
+    if (_disconnecting) return;
     if (Platform.isAndroid) {
       unawaited(_startAndroidAutoSync());
     } else if (Platform.isWindows) {
@@ -872,19 +884,25 @@ class DriveSyncService {
   }
 
   static Future<void> disconnect() async {
-    await stopAutoSync();
-    if (Platform.isAndroid) {
-      try {
-        await _createVerifiedLocalBackup();
-      } catch (_) {
-        startAutoSync();
-        rethrow;
+    if (_disconnecting) throw StateError('Google Drive disconnect is already in progress.');
+    _disconnecting = true;
+    try {
+      await stopAutoSync();
+      // Let any already-running upload/import finish before taking the safety
+      // snapshot or revoking credentials. New sync attempts are blocked above.
+      final inFlightSync = _syncCompletion?.future;
+      if (inFlightSync != null) await inFlightSync;
+      if (Platform.isAndroid) {
+        try {
+          await _createVerifiedLocalBackup();
+        } catch (_) {
+          rethrow;
+        }
       }
-    }
-    await _secureStorage.delete(key: 'drive_access_token');
-    await _secureStorage.delete(key: 'drive_access_expires_at');
-    await _secureStorage.delete(key: 'drive_refresh_token');
-    await _secureStorage.delete(key: 'drive_sync_enabled');
+      await _secureStorage.delete(key: 'drive_access_token');
+      await _secureStorage.delete(key: 'drive_access_expires_at');
+      await _secureStorage.delete(key: 'drive_refresh_token');
+      await _secureStorage.delete(key: 'drive_sync_enabled');
     // Keep Drive as the sole business-data provider after disconnect. Local
     // POS operations continue, and Firestore is not silently re-enabled.
     if (Platform.isAndroid) {
@@ -896,7 +914,15 @@ class DriveSyncService {
       }
       _androidAccount = null;
     }
-    connectedAccountEmail = null;
-    status = 'Cloud sync disconnected';
+      connectedAccountEmail = null;
+      status = 'Cloud sync disconnected';
+    } catch (_) {
+      // A failed safety backup leaves credentials intact; resume polling only
+      // after the disconnect gate is lifted in finally.
+      rethrow;
+    } finally {
+      _disconnecting = false;
+      if (connectedAccountEmail != null) startAutoSync();
+    }
   }
 }
