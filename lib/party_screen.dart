@@ -341,32 +341,6 @@ class _PartyScreenState extends State<PartyScreen> {
                             fontSize: 16,
                           ),
                         ),
-                        if (isCustomer)
-                          PopupMenuButton<String>(
-                            tooltip: 'Change customer type',
-                            icon: const Icon(Icons.category_outlined, color: Colors.blueGrey),
-                            onSelected: (value) async {
-                              try {
-                                await DBHelper.updateCustomerType(partyId, value);
-                                await _loadParties();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Customer type updated to $value.')),
-                                  );
-                                }
-                              } catch (error) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-                                  );
-                                }
-                              }
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'Khata', child: Text('Set as Khata')),
-                              PopupMenuItem(value: 'Wholesale', child: Text('Set as Wholesale')),
-                            ],
-                          ),
                         if (overdue != null)
                           IconButton(
                             tooltip: 'WhatsApp overdue reminder',
