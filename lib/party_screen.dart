@@ -76,7 +76,6 @@ class _PartyScreenState extends State<PartyScreen> {
   void _showAddPartyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
-    String selectedCustomerType = 'Khata';
 
     showDialog(
       context: context,
@@ -102,17 +101,6 @@ class _PartyScreenState extends State<PartyScreen> {
                 ),
                 if (widget.type == 'customer') ...[
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedCustomerType,
-                    decoration: const InputDecoration(labelText: 'Customer Type'),
-                    items: const [
-                      DropdownMenuItem(value: 'Khata', child: Text('Khata')),
-                      DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setDialogState(() => selectedCustomerType = value);
-                    },
-                  ),
                 ],
                 const SizedBox(height: 15),
                 OutlinedButton.icon(
@@ -162,7 +150,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'name': nameController.text.trim(),
                       'phone': phoneController.text.trim(),
                       'type': widget.type,
-                      if (widget.type == 'customer') 'customer_type': selectedCustomerType,
+                      if (widget.type == 'customer') 'customer_type': 'Khata',
                       'balance': 0.0,
                     });
                     _loadParties();
@@ -247,35 +235,15 @@ class _PartyScreenState extends State<PartyScreen> {
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (isCustomer)
-                                PopupMenuButton<String>(
-                                  tooltip: 'Change customer type',
-                                  icon: const Icon(Icons.category_outlined, color: Colors.blueGrey),
-                                  onSelected: (value) async {
-                                    try {
-                                      await DBHelper.updateCustomerType(id, value);
-                                      await _loadParties();
-                                    } catch (error) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(value: 'Khata', child: Text('Set as Khata')),
-                                    PopupMenuItem(value: 'Wholesale', child: Text('Set as Wholesale')),
-                                  ],
-                                ),
                               if (isCustomer && overdue != null)
                                 IconButton(
                                   tooltip: 'WhatsApp overdue reminder',
                                   icon: const Icon(Icons.message_outlined, color: Colors.green),
                                   onPressed: () => _sendKhataReminder(party),
                                 ),
-                              IconButton(
-                                tooltip: 'Delete account',
+                              if (!isCustomer || balance.abs() <= 0.000001)
+                                IconButton(
+                                tooltip: 'Delete / archive account',
                                 icon: const Icon(Icons.delete_outline, color: Colors.red),
                                 onPressed: () async {
                                   try {
@@ -405,7 +373,9 @@ class _PartyScreenState extends State<PartyScreen> {
                             icon: const Icon(Icons.message, color: Colors.green),
                             onPressed: () => _sendKhataReminder(party),
                           ),
-                        IconButton(
+                        if (widget.type != 'customer' || balance.abs() <= 0.000001)
+                          IconButton(
+                          tooltip: 'Delete / archive account',
                           icon: const Icon(Icons.delete, color: Colors.grey),
                           onPressed: () async {
                             try {
