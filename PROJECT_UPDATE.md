@@ -1575,3 +1575,23 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Continue to follow the PassBook CLAUDE.md rules: document requirements first, surgical changes only, reproduce defects with tests, and report only validation actually run.
 
 **Artifact rule:** This review and follow-up work do not authorize any APK, Windows ZIP, installer, release or other build artifact. Keep work on `feature/complete-project-pendings`; do not merge to `main`.
+
+
+## Repository review follow-up — Drive record lifecycle and sale recall (2026-11-22)
+
+### Fixed in source; validation in progress
+
+- [x] WPF Drive merge now defers a purchase when its non-empty `supplier_sync_id` cannot be resolved locally. It no longer imports that purchase with a silently missing supplier link.
+- [x] WPF Drive merge now defers a sale return when its non-empty `party_sync_id` cannot be resolved locally.
+- [x] WPF Drive merge now increments the deferred-record count when an expense or reminder has no stable `sync_id`; the snapshot therefore cannot be marked fully accepted after silently skipping that row.
+- [x] Added focused unit tests for required-party-reference and missing-stable-ID predicates in `DriveSnapshotMergeAcceptanceTests.cs`.
+- [ ] GitHub Actions WPF Release build/test for commit `474a5a79a5d5148f05b2e01d64b158df9198798d` is running. Record the final result here only after the workflow completes.
+- [ ] These are predicate/acceptance tests, not a substitute for a real Drive import retry test with disposable schema-v18 databases and an out-of-order parent.
+
+### Critical outstanding finding — recalled sale edits are not reconciled by Drive snapshots
+
+- [ ] **High — existing sales and sale items are currently treated as append-only by the WPF Drive merge, but the POS allows recalled bills to be edited.** Android `DBHelper.updateSaleFromRecall` keeps the sale's existing `sync_id`, updates the sale totals, deletes the old `sale_items`, queues their `_deleted` events for Firestore, and inserts replacement sale items with new sync IDs. Windows `SalePostingService.UpdateSaleFromRecallAsync` follows the same general update/delete/reinsert pattern.
+- [ ] The Drive snapshot exporter currently exports only the current `sales` and `sale_items` rows plus product/party tombstones. It does not export the pending Firestore `sync_queue` deletion events as Drive tombstones. The WPF importer skips a sale when its `sync_id` already exists and skips sale items whose `sync_id` already exists; it does not update the existing sale or remove the old sale items.
+- [ ] Consequence: after an Android recalled-sale edit, the Windows master can retain the old sale totals and old sale-item rows while adding replacement sale items. This can create stale totals and duplicate item history across devices. The reverse direction also cannot reliably reconcile independently edited existing bills.
+- [ ] Before production Drive use, design and test a versioned sale-revision/deletion protocol with explicit Windows-master conflict policy. Do not assume append-only behavior is sufficient for recalled bills. Include edits that change quantity, price, discount, payment/received amount, removed/replaced items, repeated snapshot delivery, returns, rollback and conflict resolution.
+- [ ] Until this is resolved and validated, Google Drive sync remains a development/acceptance feature, not production-accepted accounting synchronization. The owner-approved source flag is currently enabled; do not silently change the sync policy in this review without a separate decision.
