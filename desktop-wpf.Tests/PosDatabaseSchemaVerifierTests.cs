@@ -2172,7 +2172,8 @@ public sealed class PosDatabaseSchemaVerifierTests
             var initialPayload = await exporter.ExportAsync(sourcePath);
             var initialSnapshot = new ValidatedDriveSnapshot(
                 "android-revision-device", initialPayload.Sha256, initialPayload.Data, initialPayload.Json);
-            var initialResult = await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath);
+            var initialResult = await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
             Assert.True(initialResult.SnapshotFullyAccepted);
 
             await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -2236,7 +2237,8 @@ public sealed class PosDatabaseSchemaVerifierTests
             var revisedPayload = await exporter.ExportAsync(sourcePath);
             var revisedSnapshot = new ValidatedDriveSnapshot(
                 "android-revision-device", revisedPayload.Sha256, revisedPayload.Data, revisedPayload.Json);
-            var firstRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath);
+            var firstRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
             Assert.True(firstRevision.SnapshotFullyAccepted);
 
             async Task<(long SaleTotal, long ItemCount, string ItemSync, long LedgerCount, string LedgerSync, long Stock, long PartyBalance)> ReadStateAsync()
@@ -2270,7 +2272,8 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal(7, afterFirst.Stock);
             Assert.Equal(50, afterFirst.PartyBalance);
 
-            var secondRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath);
+            var secondRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
             Assert.True(secondRevision.SnapshotFullyAccepted);
             Assert.Equal(afterFirst, await ReadStateAsync());
 
