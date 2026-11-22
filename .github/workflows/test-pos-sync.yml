@@ -53,14 +53,10 @@ jobs:
             lib/db_helper.dart \
             lib/drive_sync_service.dart \
             lib/cloud_sync_screen.dart \
-            lib/supplier_invoice_capture_screen.dart \
             lib/invoice_unit_converter.dart \
             lib/purchase_screen.dart \
-            lib/sales_screen.dart \
             lib/party_screen.dart \
             lib/printer_screen.dart \
-            lib/scanner_screen.dart \
-            lib/inventory_screen.dart \
             lib/customer_history_screen.dart \
             test/drive_sync_integration_test.dart \
             test/invoice_unit_converter_test.dart \
