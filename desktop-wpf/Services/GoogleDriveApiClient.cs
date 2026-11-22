@@ -82,6 +82,24 @@ public sealed class GoogleDriveAuthService
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
+        var tokens = await ReadTokensAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(tokens?.RefreshToken))
+        {
+            try
+            {
+                using var revoke = await Http.PostAsync(
+                    "https://oauth2.googleapis.com/revoke",
+                    new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                        ["token"] = tokens.RefreshToken
+                    }),
+                    cancellationToken);
+            }
+            catch
+            {
+                // Local sign-out must still succeed when the PC is offline.
+            }
+        }
         if (File.Exists(_tokenPath))
             await Task.Run(() => File.Delete(_tokenPath), cancellationToken);
     }
