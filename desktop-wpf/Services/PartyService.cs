@@ -8,7 +8,7 @@ public sealed class PartyService
  {
   if(type is not ("customer" or "supplier"))throw new ArgumentOutOfRangeException(nameof(type));
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
-  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="SELECT id,name,COALESCE(phone,''),COALESCE(balance,0),type,COALESCE(customer_type,'Khata') FROM parties WHERE type=$type ORDER BY name COLLATE NOCASE;";cmd.Parameters.AddWithValue("$type",type);
+  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="SELECT id,name,COALESCE(phone,''),COALESCE(balance,0),type,CASE WHEN COALESCE(customer_type,'Khata')='Wholesale' THEN 'Khata' ELSE COALESCE(customer_type,'Khata') END FROM parties WHERE type=$type ORDER BY name COLLATE NOCASE;";cmd.Parameters.AddWithValue("$type",type);
   await using var rd=await cmd.ExecuteReaderAsync(ct);var rows=new List<PartyRow>();while(await rd.ReadAsync(ct))rows.Add(new(rd.GetInt32(0),rd.GetString(1),rd.GetString(2),rd.GetDouble(3),rd.GetString(4),rd.IsDBNull(5)?"Khata":rd.GetString(5)));return rows;
  }
  public async Task AddAsync(string name,string phone,string type,string customerType="Khata",CancellationToken ct=default)
@@ -68,7 +68,7 @@ public sealed class PartyService
    references=Convert.ToInt32(await count.ExecuteScalarAsync(ct),CultureInfo.InvariantCulture);
   }
   if(Math.Abs(balance)>0.000001)
-   throw new InvalidOperationException($"Is Khata customer ka balance abhi Rs. {balance.ToString("N2",CultureInfo.InvariantCulture)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.");
+   throw new InvalidOperationException($"Is account ka balance abhi Rs. {balance.ToString("N2",CultureInfo.InvariantCulture)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.");
   if(references>0 && type=="customer")
   {
    await using var archive=db.CreateCommand();archive.Transaction=(SqliteTransaction)tx;
