@@ -7,9 +7,10 @@ namespace KhanBabaPos.Wpf.Tests;
 public sealed class EscPosReceiptBuilderTests
 {
     private static SaleHistoryRecord SampleSale(string customerName = "Test Customer",
-        string customerPhone = "03001234567", double received = 500, double due = 600) =>
+        string customerPhone = "03001234567", double received = 500, double due = 600,
+        double subtotal = 1200, double discount = 100, double finalAmount = 1100) =>
         new(42, "2026-11-18 08:30:00", customerName, "Khata", "Partial",
-            1200, 100, 1100, received, due, "Cashier One", 0, 0, 7, "cashier-uid", customerPhone);
+            subtotal, discount, finalAmount, received, due, "Cashier One", 0, 0, 7, "cashier-uid", customerPhone);
 
     private static IReadOnlyList<SaleHistoryItem> SampleItems(string name = "Milk 1L") =>
         [new SaleHistoryItem(1, "123", name, 2, "pcs", 100, 70, 200, 140)];
@@ -33,6 +34,20 @@ public sealed class EscPosReceiptBuilderTests
             Assert.True(next >= 0, $"Missing or out-of-order receipt content: {term}");
             cursor = next;
         }
+    }
+
+    [Fact]
+    public void ReceiptRemovesWholeNumberDecimalsAndKeepsMeaningfulFractions()
+    {
+        var sale = SampleSale(received: 125, due: 0, subtotal: 125.5, discount: 0.5, finalAmount: 125);
+        var items = new[] { new SaleHistoryItem(1, "123", "Milk", 1, "pcs", 125.5, 100, 125.5, 100) };
+        var text = EscPosReceiptBuilder.BuildText(sale, items, new PrinterPreferences());
+
+        Assert.Contains("Gross: 125.5", text);
+        Assert.Contains("NET AMOUNT: Rs. 125", text);
+        Assert.Contains("125.5", text);
+        Assert.DoesNotContain("125.50", text);
+        Assert.DoesNotContain("125.00", text);
     }
 
     [Fact]
