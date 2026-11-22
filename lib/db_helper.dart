@@ -1370,16 +1370,22 @@ class DBHelper {
       }
 
       final remoteSaleRevisions = <String, int>{};
+      final remoteSaleLedgerParents = <String, String>{};
       for (final marker in collection('tombstones')) {
-        if (marker['entity_type']?.toString() != 'sale_revision') continue;
+        final type = marker['entity_type']?.toString() ?? '';
         final key = marker['entity_key']?.toString() ?? '';
         final split = key.lastIndexOf('|');
         if (split <= 0) continue;
-        final revision = int.tryParse(key.substring(split + 1));
-        if (revision == null || revision <= 0) continue;
         final saleSyncId = key.substring(0, split);
-        final previous = remoteSaleRevisions[saleSyncId] ?? 0;
-        if (revision > previous) remoteSaleRevisions[saleSyncId] = revision;
+        final recordKey = key.substring(split + 1);
+        if (type == 'sale_revision') {
+          final revision = int.tryParse(recordKey);
+          if (revision == null || revision <= 0) continue;
+          final previous = remoteSaleRevisions[saleSyncId] ?? 0;
+          if (revision > previous) remoteSaleRevisions[saleSyncId] = revision;
+        } else if (type == 'sale_ledger' && recordKey.isNotEmpty) {
+          remoteSaleLedgerParents[recordKey] = saleSyncId;
+        }
       }
 
       // Windows master snapshots are authoritative for sale revisions. Rebuild
@@ -1512,7 +1518,7 @@ class DBHelper {
           [syncId],
         );
         if (wasDeletedBySaleRevision.isNotEmpty) continue;
-        final parentSaleSyncId = remote['sale_sync_id']?.toString();
+        final parentSaleSyncId = remoteSaleLedgerParents[syncId];
         if (applyMasterState && parentSaleSyncId != null &&
             blockedMasterSales.contains(parentSaleSyncId)) continue;
         if (await localBySync('khata_transactions', syncId) != null) continue;
@@ -1583,9 +1589,10 @@ class DBHelper {
         final type = tombstone['entity_type']?.toString() ?? '';
         final key = tombstone['entity_key']?.toString() ?? '';
         if (key.isEmpty) continue;
-        if (type == 'sale_revision') {
+        if (type == 'sale_revision' || type == 'sale_ledger') {
           final split = key.lastIndexOf('|');
-          if (split > 0 && int.tryParse(key.substring(split + 1)) != null) {
+          if (split > 0 && key.substring(split + 1).isNotEmpty &&
+              (type == 'sale_ledger' || int.tryParse(key.substring(split + 1)) != null)) {
             await txn.insert('drive_sync_tombstones', {
               'entity_type': type,
               'entity_key': key,
