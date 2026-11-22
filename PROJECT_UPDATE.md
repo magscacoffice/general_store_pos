@@ -1425,3 +1425,33 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+## Static code review — 2026-11-22 (PassBook CLAUDE.md rules applied)
+
+**Review baseline:** `feature/complete-project-pendings`, commit `4dc1038328eafe34338352e2a6e9e090761e9bd0` (after adding the source coding rules). Repository inventory contains 219 tracked files. Review focused on active Android Flutter, native Windows WPF, SQLite/data services, Drive/OAuth sync, backup/restore, POS transactions, Firestore rules/cloud function, automated tests and GitHub Actions. No live store database was opened or modified.
+
+### Findings requiring attention
+
+- [ ] **High — Android manual backup may omit live SQLite WAL data.** `lib/backup_screen.dart` reads the live database with `File.readAsBytes()` and sends those bytes to the file picker. It does not checkpoint WAL or use SQLite's online backup API. If committed changes remain in the `-wal` file while the app is open, the exported `.db` may not contain the latest data. Replace the raw read with a consistent SQLite backup/copy procedure and verify the produced database before reporting success. WPF's `DatabaseBackupService` already uses SQLite backup APIs and hash/schema/integrity verification; Android should provide equivalent guarantees.
+- [ ] **High — Gmail account identity is not technically bound to the local store database.** Android and WPF keep the local POS database separate from the Google token, then upload the current database to whichever Google account is connected. The UI warns that a clean database is required when switching to another business, but there is no enforced store/account binding or safe per-store database selection. A user can therefore connect another business's Gmail on an installation containing the previous business's data and upload the wrong store snapshot. Add a verified local store identity/account binding and block cross-store account switches until the correct isolated database is selected; retain same-store Android/Windows pairing.
+- [ ] **Medium — retired wholesale-only product-rate UI remains.** The customer-type selectors and sale-posting validation now use only Walk-in/Khata, and legacy Wholesale customer records are normalized/recalled as Khata. However, Android `lib/inventory_screen.dart` and Windows `desktop-wpf/InventoryWindow.cs` still expose an optional Wholesale sale-price field/column. This conflicts with the earlier tracker instruction to remove the wholesale-only per-item rate editor. Confirm whether this field is also to be retired; if yes, remove only its UI/use while preserving the legacy SQLite column and historical data.
+- [ ] **Medium — verification gap.** Source review does not replace execution. Android analyzer + complete Flutter tests, WPF .NET 10 Release build + all WPF tests, disposable schema-v18 transaction/sync/backup tests, and real Windows OAuth/Drive, scanner, PDF and BC-86AC acceptance still need validation. Do not mark any of these passed based on source inspection alone.
+
+### Confirmed source-level checks
+
+- [x] WPF sale posting validates only Walk-in/Khata; customer lookup filters active `type='customer'` records and maps legacy Wholesale classifications to Khata.
+- [x] Android sale recall and WPF pending/recalled-bill loading normalize legacy Wholesale sale types to Khata; this compatibility handling should remain until old bills are safely migrated/closed.
+- [x] Zero-balance customer deletion is guarded; customers with linked history are archived rather than hard-deleted, preserving historical references. Non-zero balances are rejected.
+- [x] WPF backup/restore uses a verified staged backup/restore design with SHA-256/schema/integrity checks; restore activates a staged database rather than overwriting the live file directly.
+- [x] WPF sale posting and returns use SQLite transactions, parameterized values and stock/return quantity guards in the reviewed service paths.
+- [x] Firestore rules restrict store data to active members and admin-only membership management; the callable salesman-creation function checks an active admin and validates inputs.
+- [x] The normal WPF validation workflow is build + tests only. The WPF test-artifact workflow is manual-dispatch only; Android APK workflow is restricted to main/workflow changes. This documentation-only commit does not match the code/test path filters, so it should not trigger those validation workflows. No build artifact was requested or generated as part of this review.
+
+### Review limitations / next verification loop
+
+- [ ] Run the targeted tests after the two high-priority data-safety items are addressed, then rerun the full Android and WPF validation suites.
+- [ ] Inspect and test every remaining service/screen path against the real schema-v18 fixture, especially Drive conflict resolution, archived-party propagation, sale edits/returns, purchase invoice posting, and Android restore recovery.
+- [ ] Perform target-device acceptance for account isolation using two separate Google accounts, plus offline recovery and cross-platform round-trip. No real account credentials or production store database were used in this static review.
+- [ ] Keep all changes surgical. No APK, Windows ZIP, installer, release, or artifact generation without separate explicit owner authorization; batch related code and tracker updates into a consolidated change.
