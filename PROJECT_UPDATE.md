@@ -1483,3 +1483,13 @@ The source work that can be completed safely without owner hardware, Google test
 
 - [x] Fixed malformed trailing non-YAML content in `.github/workflows/validate-windows-installer.yml`. The installer workflow is valid again and remains `workflow_dispatch`-only; it will not build or upload an installer on ordinary pushes.
 - [x] Latest Android run #45003053357: analyzer and full 22-test suite passed on both Windows and Ubuntu.
+
+## Implementation progress — account binding, safe backup, wholesale UI
+
+- [x] Owner approved one Google Gmail account per business/store; Android and Windows installations of the same store must use that same Gmail. A different business must use a separate clean POS database and a separate Gmail account.
+- [x] Android and Windows sync now verify the signed-in Google account email before sync and bind it to the active database path. A different Gmail is rejected; the binding intentionally survives Drive disconnect so disconnect/reconnect cannot silently move one store database to another account. A separately initialized database path receives its own binding.
+- [x] Android manual backup and Android account-switch safety backup now use SQLite `VACUUM INTO` snapshots (SQLite 3.27+), followed by integrity/table verification for the manual export. This captures committed WAL data rather than copying only the live main database file.
+- [x] Removed the retired Wholesale price editor/column from Android and Windows inventory UI while preserving the legacy `wholesalePrice` database value/column for compatibility with old databases and historical records.
+- [ ] Cross-platform end-to-end account-binding tests, Android analyzer/tests and WPF build/tests still need execution. No build artifacts have been generated.
+
+**Safety note:** Account binding is per active database path and is retained on disconnect. Do not manually delete the binding marker to switch businesses; create/select a separate clean database and use a separate Gmail. Existing paired Android/Windows devices must sign in with the same Google account. These changes are source edits only until automated validation passes.
