@@ -276,16 +276,24 @@ public sealed class DriveSnapshotMergeService
             // announces a recalled-bill edit. Revisions are monotonic per stable
             // sale ID; equal/older revisions never replace Windows-master state.
             var remoteSaleRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
+            var remoteSaleLedgerParents = new Dictionary<string, string>(StringComparer.Ordinal);
             var appliedSaleRevisions = new HashSet<string>(StringComparer.Ordinal);
             var allowedSaleItemImports = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var marker in collections["tombstones"].Where(x => Text(x, "entity_type") == "sale_revision"))
+            foreach (var marker in collections["tombstones"])
             {
+                var type = Text(marker, "entity_type");
                 var key = Text(marker, "entity_key");
                 var split = key.LastIndexOf('|');
-                if (split <= 0 || !long.TryParse(key[(split + 1)..], NumberStyles.None,
-                    CultureInfo.InvariantCulture, out var revision) || revision <= 0) continue;
+                if (split <= 0) continue;
                 var saleKey = key[..split];
-                remoteSaleRevisions[saleKey] = Math.Max(remoteSaleRevisions.GetValueOrDefault(saleKey), revision);
+                var recordKey = key[(split + 1)..];
+                if (type == "sale_revision")
+                {
+                    if (!long.TryParse(recordKey, NumberStyles.None, CultureInfo.InvariantCulture, out var revision) || revision <= 0) continue;
+                    remoteSaleRevisions[saleKey] = Math.Max(remoteSaleRevisions.GetValueOrDefault(saleKey), revision);
+                }
+                else if (type == "sale_ledger" && recordKey.Length > 0)
+                    remoteSaleLedgerParents[recordKey] = saleKey;
             }
 
             foreach (var remote in collections["sales"])
@@ -472,7 +480,7 @@ public sealed class DriveSnapshotMergeService
                     "entity_type='khata_transaction' AND instr(entity_key,'|')>0 AND substr(entity_key,instr(entity_key,'|')+1)=$key",
                     cancellationToken, ("$key", syncId));
                 if (wasDeletedBySaleRevision) continue;
-                var parentSaleSyncId = NullableText(remote, "sale_sync_id");
+                var parentSaleSyncId = remoteSaleLedgerParents.GetValueOrDefault(syncId);
                 if (parentSaleSyncId is not null && !allowedSaleItemImports.Contains(parentSaleSyncId))
                     continue; // never import ledger rows for a stale or rejected sale revision
                 if (await FindIdAsync(db, tx, "khata_transactions", "sync_id", syncId, cancellationToken) is not null) continue;
@@ -557,6 +565,13 @@ public sealed class DriveSnapshotMergeService
                         }
                         await RecordTombstoneAsync(db, tx, type, key, sourceDeviceId, cancellationToken);
                     }
+                    continue;
+                }
+                if (type == "sale_ledger")
+                {
+                    var split = key.LastIndexOf('|');
+                    if (split > 0 && key[(split + 1)..].Length > 0)
+                        await RecordTombstoneAsync(db, tx, type, key, sourceDeviceId, cancellationToken);
                     continue;
                 }
                 if (type is "sale_item" or "khata_transaction")
