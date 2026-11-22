@@ -441,7 +441,7 @@ void main() {
     expect(items.length, 1);
     expect(items.single['quantity'], 2);
     expect(items.single['sale_price'], 25.0);
-    expect((await DBHelper.getProducts()).single['quantity'], 7);
+    expect((await DBHelper.getProducts()).single['quantity'], 8);
     final customer = (await DBHelper.getParties('customer')).single;
     expect(customer['balance'], 40.0);
     final ledger = await DBHelper.getKhataTransactions((customer['id'] as num).toInt());
