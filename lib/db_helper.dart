@@ -2347,11 +2347,11 @@ class DBHelper {
     final customerId = saleData['customer_id'];
     final customerType = saleData['customer_type']?.toString() ??
         (customerId == null ? 'Walk-in' : 'Khata');
-    if (!const {'Walk-in', 'Khata', 'Wholesale'}.contains(customerType)) {
-      throw Exception('Customer type must be Walk-in, Khata or Wholesale.');
+    if (!const {'Walk-in', 'Khata'}.contains(customerType)) {
+      throw Exception('Customer type must be Walk-in or Khata.');
     }
     if ((customerType == 'Walk-in') != (customerId == null)) {
-      throw Exception('Walk-in sale must not have a customer account; Khata/Wholesale sale requires a selected customer.');
+      throw Exception('Walk-in sale must not have a customer account; Khata sale requires a selected customer.');
     }
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -2917,8 +2917,8 @@ class DBHelper {
   }
 
   static Future<void> updateCustomerType(int id, String customerType) async {
-    if (customerType != 'Khata' && customerType != 'Wholesale') {
-      throw Exception('Customer type must be Khata or Wholesale.');
+    if (customerType != 'Khata') {
+      throw Exception('Only Khata customer accounts are supported.');
     }
     final db = await database;
     await db.transaction((txn) async {
@@ -3123,8 +3123,17 @@ class DBHelper {
           : await txn.rawQuery('SELECT COUNT(*) AS count FROM purchases WHERE supplier_id = ?', [id]);
       final referenceCount = (references.first['count'] as num).toInt();
       final balance = (row['balance'] as num?)?.toDouble() ?? 0.0;
-      if (referenceCount > 0 || balance.abs() > 0.000001) {
-        throw Exception('Is account ki transaction history ya outstanding balance mojood hai. Ledger aur purane records mehfooz rakhne ke liye delete nahi kar sakte.');
+      if (balance.abs() > 0.000001) {
+        throw Exception('Is Khata customer ka balance abhi Rs. ${balance.toStringAsFixed(2)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.');
+      }
+      if (referenceCount > 0 && partyType == 'customer') {
+        await txn.update('parties', {'type': 'archived_customer', 'customer_type': 'Khata'}, where: 'id = ? AND type = ?', whereArgs: [id, 'customer']);
+        final archivedRows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+        if (archivedRows.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(archivedRows.first));
+        return 1;
+      }
+      if (referenceCount > 0) {
+        throw Exception('Is supplier ki purchase history mojood hai; history mehfooz rakhne ke liye delete nahi kar sakte.');
       }
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {
