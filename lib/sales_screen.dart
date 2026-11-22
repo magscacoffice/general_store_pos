@@ -73,11 +73,7 @@ class SalesScreenState extends State<SalesScreen> {
     final purchasePrice = purchasePriceOverride ??
         (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
     final retailPrice = (product['price'] as num?)?.toDouble() ?? purchasePrice;
-    final wholesalePrice = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-    final configuredPrice = selectedSaleType == 'Wholesale' && wholesalePrice > 0
-        ? wholesalePrice
-        : retailPrice;
-    return configuredPrice < purchasePrice ? purchasePrice : configuredPrice;
+    return retailPrice < purchasePrice ? purchasePrice : retailPrice;
   }
 
   Future<void> _loadCustomers() async {
@@ -165,7 +161,7 @@ class SalesScreenState extends State<SalesScreen> {
           'salePrice': (row['sale_price'] as num?)?.toDouble() ?? 0,
           'stockUnit': row['stock_unit']?.toString() ?? 'pcs', 'quantity': (row['quantity'] as num?)?.toInt() ?? 1,
         }).toList();
-        selectedSaleType = selected['customer_type']?.toString() ?? 'Walk-in';
+        selectedSaleType = selected['customer_type']?.toString() == 'Wholesale' ? 'Khata' : (selected['customer_type']?.toString() ?? 'Walk-in');
         selectedCustomerId = customer == null ? null : partyId;
         overallDiscount = (selected['discount'] as num?)?.toDouble() ?? 0;
         isPercentageDiscount = false;
@@ -738,68 +734,6 @@ class SalesScreenState extends State<SalesScreen> {
     }
   }
 
-  Future<void> _editSalePrice(int index) async {
-    if (selectedSaleType != 'Wholesale') return;
-    final currentPrice = (cart[index]['salePrice'] as num?)?.toDouble() ?? 0.0;
-    final purchasePrice =
-        (cart[index]['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-    final controller = TextEditingController(text: currentPrice.toString());
-    try {
-      final updatedPrice = await showDialog<double>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('Sale Price: ${cart[index]['name']}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Purchase Price: Rs. $purchasePrice'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Unit Sale Price (Rs.)',
-                  helperText: 'Minimum allowed: Rs. $purchasePrice',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = double.tryParse(controller.text.trim());
-                if (value == null || !value.isFinite || value < purchasePrice) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Sale Price purchase price (Rs. $purchasePrice) se kam nahi ho sakti.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(dialogContext, value);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      if (updatedPrice != null && mounted) {
-        setState(() => cart[index]['salePrice'] = updatedPrice);
-
-      }
-    } finally {
-      controller.dispose();
-    }
-  }
-
   double get subTotal => cart.fold(0.0, (sum, item) {
     double itemPrice =
         (item['salePrice'] - (item['itemDiscount'] ?? 0.0)) * item['quantity'];
@@ -1084,7 +1018,6 @@ class SalesScreenState extends State<SalesScreen> {
                             items: const [
                               DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
                               DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
-                              DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
                             ],
                             onChanged: (value) {
                               if (value != null) _setSaleType(value);
@@ -1125,7 +1058,7 @@ class SalesScreenState extends State<SalesScreen> {
                         padding: EdgeInsets.only(top: 6),
                         child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
                       ),
-                    if (selectedSaleType == 'Khata' || selectedSaleType == 'Wholesale') ...[
+                    if (selectedSaleType == 'Khata') ...[
                       const SizedBox(height: 8),
                       const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
@@ -1195,8 +1128,6 @@ class SalesScreenState extends State<SalesScreen> {
                     spacing: 0,
                     children: [
                       IconButton(tooltip: 'Edit quantity', icon: const Icon(Icons.numbers, color: Colors.deepOrange), onPressed: () => _editQuantity(index)),
-                      if (selectedSaleType == 'Wholesale')
-                        IconButton(tooltip: 'Edit wholesale unit rate', icon: const Icon(Icons.edit, color: Colors.teal), onPressed: () => _editSalePrice(index)),
                       IconButton(tooltip: 'Remove item', icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
                         setState(() => cart.removeAt(index));
 
