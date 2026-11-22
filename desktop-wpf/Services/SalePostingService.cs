@@ -339,17 +339,18 @@ public sealed class SalePostingService
                     throw new InvalidOperationException("Khata receipt/payment history mojood hai. Sirf Save as New Bill karein.");
             }
 
-            var oldItems = new List<(int ProductId, int Quantity)>();
+            var oldItems = new List<(int ProductId, int Quantity, string? SyncId)>();
             await using (var items = connection.CreateCommand())
             {
                 items.Transaction = transaction;
-                items.CommandText = "SELECT product_id, quantity FROM sale_items WHERE sale_id=$id;";
+                items.CommandText = "SELECT product_id, quantity, sync_id FROM sale_items WHERE sale_id=$id;";
                 items.Parameters.AddWithValue("$id", saleId);
                 await using var reader = await items.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
                     if (reader.IsDBNull(0)) throw new InvalidOperationException("Purane bill ka product link missing hai.");
-                    oldItems.Add((reader.GetInt32(0), reader.GetInt32(1)));
+                    oldItems.Add((reader.GetInt32(0), reader.GetInt32(1),
+                        reader.IsDBNull(2) ? null : reader.GetString(2)));
                 }
             }
             foreach (var old in oldItems)
@@ -416,6 +417,27 @@ public sealed class SalePostingService
                 if (await stock.ExecuteNonQueryAsync(cancellationToken) != 1)
                     throw new InvalidOperationException("Stock update fail hua: " + line.Name);
             }
+            var saleRevision = await NextSaleRevisionAsync(connection, transaction, oldSaleSync, cancellationToken);
+            foreach (var oldItem in oldItems)
+                if (!string.IsNullOrWhiteSpace(oldItem.SyncId))
+                    await RecordSaleSyncMarkerAsync(connection, transaction, "sale_item", oldItem.SyncId!, cancellationToken);
+
+            var oldLedgerSyncIds = new List<string>();
+            if (oldCustomerId is not null)
+            {
+                await using var oldLedger = connection.CreateCommand();
+                oldLedger.Transaction = transaction;
+                oldLedger.CommandText = "SELECT sync_id FROM khata_transactions WHERE party_id=$party AND (note=$sale OR note=$receipt) AND sync_id IS NOT NULL;";
+                oldLedger.Parameters.AddWithValue("$party", oldCustomerId.Value);
+                oldLedger.Parameters.AddWithValue("$sale", $"Sale #{saleId}");
+                oldLedger.Parameters.AddWithValue("$receipt", $"Cash received at sale #{saleId}");
+                await using var ledgerReader = await oldLedger.ExecuteReaderAsync(cancellationToken);
+                while (await ledgerReader.ReadAsync(cancellationToken))
+                    if (!ledgerReader.IsDBNull(0)) oldLedgerSyncIds.Add(ledgerReader.GetString(0));
+            }
+            foreach (var syncId in oldLedgerSyncIds)
+                await RecordSaleSyncMarkerAsync(connection, transaction, "khata_transaction", syncId, cancellationToken);
+
             await using (var update = connection.CreateCommand())
             {
                 update.Transaction = transaction;
@@ -430,6 +452,8 @@ public sealed class SalePostingService
                 update.Parameters.AddWithValue("$sync", oldSaleSync);
                 if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Original bill update nahi hua.");
             }
+            await RecordSaleSyncMarkerAsync(connection, transaction, "sale_revision",
+                $"{oldSaleSync}|{saleRevision}", cancellationToken);
             await using (var delete = connection.CreateCommand())
             {
                 delete.Transaction = transaction;
@@ -481,6 +505,42 @@ public sealed class SalePostingService
             return new SalePostingResult(saleId, subtotal, discount, finalAmount, received, due, paymentType, oldDate);
         }
         catch { transaction.Rollback(); throw; }
+    }
+
+    private static async Task<long> NextSaleRevisionAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string saleSyncId,
+        CancellationToken cancellationToken)
+    {
+        var prefix = saleSyncId + "|";
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type='sale_revision' AND substr(entity_key,1,length($prefix))=$prefix;";
+        command.Parameters.AddWithValue("$prefix", prefix);
+        var current = 0L;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var key = reader.GetString(0);
+            if (long.TryParse(key[prefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var revision))
+                current = Math.Max(current, revision);
+        }
+        return checked(current + 1);
+    }
+
+    private static async Task RecordSaleSyncMarkerAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string type, string key,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT OR REPLACE INTO drive_sync_tombstones(entity_type,entity_key,deleted_at,source_device_id)
+            VALUES($type,$key,$at,'windows-master');
+            """;
+        command.Parameters.AddWithValue("$type", type);
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task InsertKhataEntryAsync(
