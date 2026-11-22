@@ -1588,13 +1588,18 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] GitHub Actions run #471 passed on commit `474a5a79a5d5148f05b2e01d64b158df9198798d`: WPF Release build 0 warnings/0 errors; 105 tests passed, 0 failed, 0 skipped. Run: https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801.
 - [ ] These are predicate/acceptance tests, not a substitute for a real Drive import retry test with disposable schema-v18 databases and an out-of-order parent.
 
-### Critical outstanding finding — recalled sale edits are not reconciled by Drive snapshots
+### Recalled-sale revision protocol — implemented; automated validation in progress
 
-- [ ] **High — existing sales and sale items are currently treated as append-only by the WPF Drive merge, but the POS allows recalled bills to be edited.** Android `DBHelper.updateSaleFromRecall` keeps the sale's existing `sync_id`, updates the sale totals, deletes the old `sale_items`, queues their `_deleted` events for Firestore, and inserts replacement sale items with new sync IDs. Windows `SalePostingService.UpdateSaleFromRecallAsync` follows the same general update/delete/reinsert pattern.
-- [ ] The Drive snapshot exporter currently exports only the current `sales` and `sale_items` rows plus product/party tombstones. It does not export the pending Firestore `sync_queue` deletion events as Drive tombstones. The WPF importer skips a sale when its `sync_id` already exists and skips sale items whose `sync_id` already exists; it does not update the existing sale or remove the old sale items.
-- [ ] Consequence: after an Android recalled-sale edit, the Windows master can retain the old sale totals and old sale-item rows while adding replacement sale items. This can create stale totals and duplicate item history across devices. The reverse direction also cannot reliably reconcile independently edited existing bills.
-- [ ] Before production Drive use, design and test a versioned sale-revision/deletion protocol with explicit Windows-master conflict policy. Do not assume append-only behavior is sufficient for recalled bills. Include edits that change quantity, price, discount, payment/received amount, removed/replaced items, repeated snapshot delivery, returns, rollback and conflict resolution.
-- [ ] Until this is resolved and validated, Google Drive sync remains a development/acceptance feature, not production-accepted accounting synchronization. The owner-approved source flag is currently enabled; do not silently change the sync policy in this review without a separate decision.
+- [x] Android and Windows recalled-sale edit paths now create monotonic per-sale revision markers in the existing `drive_sync_tombstones` table. Revision keys use `sale_sync_id|revision`; no base schema version change is required.
+- [x] Both edit paths emit sale-scoped deletion markers for replaced `sale_items` and sale-generated `khata_transactions`. Keys use `sale_sync_id|record_sync_id`, so an old marker cannot delete another bill's records.
+- [x] Android snapshot export already includes the tombstone collection; Windows snapshot export includes the same table. The Windows master importer now applies only a newer sale revision, updates the existing sale, reconciles item quantities against master stock, adjusts the customer's balance by the sale-due delta, replaces old sale items, and applies the associated ledger deletions.
+- [x] Windows-master snapshots now reconcile existing sales on Android. Android replaces sale details and item rows only when applying the authoritative master snapshot; local sales with returns or changed customer links are protected.
+- [x] Windows keeps a per-sale revision high-water mark. Older snapshots cannot roll a sale back or reintroduce replaced sale items/ledger entries. Same-revision divergent edits create a conflict that follows the Windows-master keep-local policy.
+- [x] Added an integration test for recalled-sale edit, item replacement, stock delta, Khata balance delta, ledger deletion, repeated snapshot delivery, stale snapshot replay and same-revision concurrent edit policy.
+- [ ] Physical Android/Windows paired-device testing is still required for online/offline edits, real Drive upload/download, and a return created between snapshots.
+- [ ] Test the complete business cases with quantity increases/decreases, product substitutions, discounts, cash/partial/credit, later receipts, returns, rollback, duplicate deliveries and simultaneous edits on actual disposable databases/devices.
+- [ ] Until physical-device acceptance and the remaining business-case matrix pass, Drive sync remains a development/acceptance feature rather than production-accepted accounting synchronization. The owner-approved source flag remains unchanged.
+
 
 
 ## Validation update — Drive dependency deferral fix (2026-11-22)
@@ -1604,3 +1609,13 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] GitHub Actions run #471 validated commit `474a5a79a5d5148f05b2e01d64b158df9198798d`: https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801
 - [ ] Real Drive retry tests for unresolved supplier/customer references and missing stable IDs remain pending; current tests cover the predicates and acceptance decision only.
 - [ ] The separate recalled-sale update/deletion protocol blocker remains unresolved and must be addressed before production Drive sync acceptance.
+
+
+## Recalled-sale revision protocol — implementation and validation (2026-11-22)
+
+- [x] No SQLite schema-version bump was required; the protocol uses the existing `drive_sync_tombstones` table and keeps schema-v18 compatibility.
+- [x] Windows WPF Release build succeeded with 0 warnings and 0 errors on Actions run #472 (commit `aec503cc8fff6bd20865af9c28f3692fff73bf25`).
+- [x] WPF test suite passed: 106 passed, 0 failed, 0 skipped. The new recalled-sale integration test passed for first import and repeated delivery.
+- [x] Flutter sync/invoice workflow passed on commit `21c6f24bb6cafb305fb8291ee4aeaabe1b04a8cb`; both Ubuntu and Windows jobs succeeded.
+- [ ] A final WPF validation run for the subsequent ledger-tombstone suffix-match correction is running on commit `70d3352a77736672c101c6e4c223d9c62b014f96`; record its result after completion.
+- [ ] Add/run a focused Flutter test for the Android master-state sale-replacement path; current Flutter CI covers existing sync tests but does not yet directly exercise this new sale-revision behavior.
