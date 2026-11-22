@@ -312,10 +312,16 @@ public sealed class DriveSnapshotMergeService
 
                 var remoteRevision = remoteSaleRevisions.GetValueOrDefault(syncId);
                 var localRevision = await GetSaleRevisionAsync(db, tx, syncId, cancellationToken);
-                if (remoteRevision <= 0 || remoteRevision < localRevision) continue;
+                if (remoteRevision < localRevision) continue;
 
                 var localSale = await ReadOneAsync(db, tx, "sales", "id", existingSaleId.Value, cancellationToken);
                 if (localSale is null) { skipped++; deferredRecords++; continue; }
+                if (remoteRevision == 0 && localRevision == 0)
+                {
+                    allowedSaleItemImports.Add(syncId); // legacy append-only sale without revision markers
+                    continue;
+                }
+                if (remoteRevision <= 0) continue;
                 if (remoteRevision == localRevision)
                 {
                     var comparableLocal = new Dictionary<string, object?>(localSale, StringComparer.Ordinal);
@@ -326,8 +332,6 @@ public sealed class DriveSnapshotMergeService
                         allowedSaleItemImports.Add(syncId); // permits retry of a deferred item in this accepted revision
                     continue;
                 }
-                if (remoteRevision == 0 && localRevision == 0)
-                    allowedSaleItemImports.Add(syncId); // legacy append-only sale without revision markers
                 var localCustomerId = localSale.TryGetValue("customer_id", out var localCustomerValue) &&
                     localCustomerValue is not null ? Convert.ToInt64(localCustomerValue, CultureInfo.InvariantCulture) : (long?)null;
                 if (localCustomerId != partyId)
