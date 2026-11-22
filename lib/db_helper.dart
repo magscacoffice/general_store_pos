@@ -1354,11 +1354,15 @@ class DBHelper {
         return rows.isEmpty ? null : (rows.first['id'] as num).toInt();
       }
 
-      // Append-only business records are imported by stable sync ID and never
-      // replace an existing sale, purchase, receipt, or return.
+      // Windows master snapshots are authoritative for sale revisions. Rebuild
+      // the edited bill's item set atomically; ordinary device snapshots remain
+      // append-only and cannot overwrite an existing bill.
+      final masterUpdatedSales = <String>{};
+      final blockedMasterSales = <String>{};
       for (final remote in collection('sales')) {
         final syncId = remote['sync_id']?.toString() ?? '';
-        if (syncId.isEmpty || await localBySync('sales', syncId) != null) continue;
+        if (syncId.isEmpty) continue;
+        final existingSaleId = await localBySync('sales', syncId);
         final customerSyncId = remote['customer_sync_id']?.toString();
         final customerId = await partyIdFor(customerSyncId);
         if (customerSyncId != null && customerId == null) continue;
@@ -1369,13 +1373,47 @@ class DBHelper {
           ..['sync_id'] = syncId
           ..['customer_sync_id'] = canonicalCustomerSyncId
           ..['customer_id'] = customerId;
-        await txn.insert('sales', values);
+
+        if (existingSaleId == null) {
+          await txn.insert('sales', values);
+          continue;
+        }
+        if (!applyMasterState) continue;
+
+        final localReturns = await txn.query(
+          'sale_returns',
+          columns: ['id'],
+          where: 'sale_id = ?',
+          whereArgs: [existingSaleId],
+          limit: 1,
+        );
+        if (localReturns.isNotEmpty) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        final localSales = await txn.query(
+          'sales',
+          where: 'id = ?',
+          whereArgs: [existingSaleId],
+          limit: 1,
+        );
+        if (localSales.isEmpty) continue;
+        final localCustomerId = (localSales.first['customer_id'] as num?)?.toInt();
+        if (localCustomerId != customerId) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        await txn.update('sales', values, where: 'id = ?', whereArgs: [existingSaleId]);
+        await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [existingSaleId]);
+        masterUpdatedSales.add(syncId);
       }
 
       for (final remote in collection('sale_items')) {
         final syncId = remote['sync_id']?.toString() ?? '';
+        final parentSaleSyncId = remote['sale_sync_id']?.toString() ?? '';
+        if (blockedMasterSales.contains(parentSaleSyncId)) continue;
         if (syncId.isEmpty || await localBySync('sale_items', syncId) != null) continue;
-        final saleId = await localBySync('sales', remote['sale_sync_id']?.toString());
+        final saleId = await localBySync('sales', parentSaleSyncId);
         if (saleId == null) continue;
         final productId = await productIdFor(remote['barcode']?.toString());
         final values = Map<String, dynamic>.from(remote)
@@ -1470,12 +1508,51 @@ class DBHelper {
         await txn.insert('sale_return_items', values);
       }
 
-      // Apply explicit deletion markers only when the other device has no
-      // local stock/history that would be lost. Otherwise require a decision.
+      // Preserve master sale revisions and apply their scoped child deletions
+      // only after the corresponding bill revision has been reconciled.
       for (final tombstone in collection('tombstones')) {
         final type = tombstone['entity_type']?.toString() ?? '';
         final key = tombstone['entity_key']?.toString() ?? '';
-        if (key.isEmpty || !['product', 'party'].contains(type)) continue;
+        if (key.isEmpty) continue;
+        if (type == 'sale_revision') {
+          final split = key.lastIndexOf('|');
+          if (split > 0 && int.tryParse(key.substring(split + 1)) != null) {
+            await txn.insert('drive_sync_tombstones', {
+              'entity_type': type,
+              'entity_key': key,
+              'deleted_at': tombstone['deleted_at']?.toString() ?? DateTime.now().toUtc().toIso8601String(),
+              'source_device_id': sourceDeviceId,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+          continue;
+        }
+        if (type == 'sale_item' || type == 'khata_transaction') {
+          final split = key.lastIndexOf('|');
+          if (split <= 0) continue;
+          final saleSyncId = key.substring(0, split);
+          final recordSyncId = key.substring(split + 1);
+          if (!masterUpdatedSales.contains(saleSyncId)) continue;
+          if (type == 'sale_item') {
+            final oldItem = await txn.query('sale_items', columns: ['id'],
+              where: 'sync_id = ?', whereArgs: [recordSyncId], limit: 1);
+            if (oldItem.isNotEmpty) {
+              final referenced = await txn.query('sale_return_items', columns: ['id'],
+                where: 'sale_item_id = ?', whereArgs: [oldItem.first['id']], limit: 1);
+              if (referenced.isNotEmpty) continue;
+            }
+            await txn.delete('sale_items', where: 'sync_id = ?', whereArgs: [recordSyncId]);
+          } else {
+            await txn.delete('khata_transactions', where: 'sync_id = ?', whereArgs: [recordSyncId]);
+          }
+          await txn.insert('drive_sync_tombstones', {
+            'entity_type': type,
+            'entity_key': key,
+            'deleted_at': tombstone['deleted_at']?.toString() ?? DateTime.now().toUtc().toIso8601String(),
+            'source_device_id': sourceDeviceId,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          continue;
+        }
+        if (!['product', 'party'].contains(type)) continue;
         if (type == 'product' &&
             collection('products').any((product) => product['barcode']?.toString() == key)) {
           continue;
