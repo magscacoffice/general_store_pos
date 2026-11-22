@@ -58,6 +58,7 @@ public sealed class DriveSnapshotMergeService
             var updated = 0;
             var conflicts = 0;
             var skipped = 0;
+            var deferredRecords = 0;
 
             async Task AddConflictAsync(string type, string key, Dictionary<string, object?> local, Dictionary<string, object?> remote)
             {
@@ -121,7 +122,7 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["products"])
             {
                 var barcode = Text(remote, "barcode").Trim();
-                if (barcode.Length == 0) { skipped++; continue; }
+                if (barcode.Length == 0) { skipped++; deferredRecords++; continue; }
                 var local = await ReadOneAsync(db, tx, "products", "barcode", barcode, cancellationToken);
                 var deleted = await ExistsAsync(db, tx, "drive_sync_tombstones", "entity_type='product' AND entity_key=$key", cancellationToken, ("$key", barcode));
                 if (deleted && !applyMasterState)
@@ -165,7 +166,7 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["parties"])
             {
                 var syncId = Text(remote, "sync_id").Trim();
-                if (syncId.Length == 0) { skipped++; continue; }
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
                 var aliasLocal = await ScalarStringAsync(db, tx,
                     "SELECT local_sync_id FROM drive_sync_aliases WHERE source_device_id=$device AND remote_sync_id=$remote LIMIT 1;",
                     cancellationToken, ("$device", sourceDeviceId), ("$remote", syncId));
@@ -264,10 +265,11 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["sales"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "sales", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "sales", "sync_id", syncId, cancellationToken) is not null) continue;
                 var remoteParty = NullableText(remote, "customer_sync_id");
                 var partyId = await PartyIdForAsync(remoteParty);
-                if (remoteParty is not null && partyId is null) { skipped++; continue; }
+                if (remoteParty is not null && partyId is null) { skipped++; deferredRecords++; continue; }
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("customer_id");
                 values["sync_id"] = syncId;
@@ -279,9 +281,10 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["sale_items"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "sale_items", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "sale_items", "sync_id", syncId, cancellationToken) is not null) continue;
                 var saleId = await FindIdAsync(db, tx, "sales", "sync_id", Text(remote, "sale_sync_id"), cancellationToken);
-                if (saleId is null) { skipped++; continue; }
+                if (saleId is null) { skipped++; deferredRecords++; continue; }
                 var productId = await FindIdAsync(db, tx, "products", "barcode", Text(remote, "barcode"), cancellationToken);
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("sale_id"); values.Remove("product_id");
@@ -292,9 +295,10 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["purchases"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "purchases", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "purchases", "sync_id", syncId, cancellationToken) is not null) continue;
                 var productId = await FindIdAsync(db, tx, "products", "barcode", Text(remote, "barcode"), cancellationToken);
-                if (productId is null) { skipped++; continue; }
+                if (productId is null) { skipped++; deferredRecords++; continue; }
                 var remoteSupplier = NullableText(remote, "supplier_sync_id");
                 var supplierId = await PartyIdForAsync(remoteSupplier);
                 var values = Copy(remote);
@@ -307,10 +311,11 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["khata_transactions"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "khata_transactions", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "khata_transactions", "sync_id", syncId, cancellationToken) is not null) continue;
                 var remoteParty = Text(remote, "party_sync_id");
                 var partyId = await PartyIdForAsync(remoteParty);
-                if (partyId is null) { skipped++; continue; }
+                if (partyId is null) { skipped++; deferredRecords++; continue; }
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("party_id");
                 values["sync_id"] = syncId; values["party_id"] = partyId;
@@ -330,7 +335,8 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["sale_returns"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "sale_returns", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "sale_returns", "sync_id", syncId, cancellationToken) is not null) continue;
                 var saleId = await FindIdAsync(db, tx, "sales", "sync_id", Text(remote, "sale_sync_id"), cancellationToken);
                 if (saleId is null) { skipped++; continue; }
                 var remoteParty = NullableText(remote, "party_sync_id");
@@ -345,10 +351,11 @@ public sealed class DriveSnapshotMergeService
             foreach (var remote in collections["sale_return_items"])
             {
                 var syncId = Text(remote, "sync_id");
-                if (syncId.Length == 0 || await FindIdAsync(db, tx, "sale_return_items", "sync_id", syncId, cancellationToken) is not null) continue;
+                if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                if (await FindIdAsync(db, tx, "sale_return_items", "sync_id", syncId, cancellationToken) is not null) continue;
                 var returnId = await FindIdAsync(db, tx, "sale_returns", "sync_id", Text(remote, "return_sync_id"), cancellationToken);
                 var saleItemId = await FindIdAsync(db, tx, "sale_items", "sync_id", Text(remote, "sale_item_sync_id"), cancellationToken);
-                if (returnId is null || saleItemId is null) { skipped++; continue; }
+                if (returnId is null || saleItemId is null) { skipped++; deferredRecords++; continue; }
                 var productId = await FindIdAsync(db, tx, "products", "barcode", Text(remote, "barcode"), cancellationToken);
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("return_id"); values.Remove("sale_item_id"); values.Remove("product_id");
@@ -417,7 +424,7 @@ public sealed class DriveSnapshotMergeService
 
             await tx.CommitAsync(cancellationToken);
             var pending = await CountPendingConflictsAsync(db, sourceDeviceId, snapshot.SnapshotHash, cancellationToken);
-            return new DriveMergeResult(created, updated, conflicts, skipped, pending, pending == 0);
+            return new DriveMergeResult(created, updated, conflicts, skipped, pending, pending == 0 && deferredRecords == 0);
         }
         catch
         {
