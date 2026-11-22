@@ -6,7 +6,7 @@ This is the native Windows desktop client migration. Windows UI and Windows hard
 
 - Dashboard-hosted cashier workspace with scanner-ready focus, exact barcode lookup (including the wholesale-price column), product suggestions, keyboard navigation, repeat-scan quantity increment, editable cart quantities, pending-bill switching and autosave.
 - Printer & Invoice can be opened directly from the main navigation before a sale to select the saved workstation printer, configure 80mm receipt margins/header/total sizing and run a test print.
-- Separate Walk-in, Khata and Wholesale customer types; Wholesale accounts support Cash/Credit/Partial payments, saved wholesale-rate defaults and editable per-item rates with purchase-cost validation.
+- Walk-in and Khata customer types; Khata payment method remains separate and supports Cash/Credit/Partial. Legacy Wholesale customer records are preserved and treated as Khata.
 - Transactional sale posting, inventory CRUD/search (including wholesale price), purchase entry, stock movements and protected product deletion.
 - Customer/supplier list, customer Khata ledger and receipt posting, sales history and invoice details.
 - Sale returns/refunds, sales reports, expenses, reminders and profit/loss views.
