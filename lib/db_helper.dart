@@ -2872,10 +2872,12 @@ class DBHelper {
         final credit = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'credit', 'amount': finalAmount, 'note': 'Sale #' + saleId.toString(), 'date': old['date'].toString()};
         await txn.insert('khata_transactions', credit);
         await _queueRow(txn, 'khata_transactions', credit, remove: ['party_id']);
+        await _recordDriveTombstone(txn, 'sale_ledger', '$saleSync|${credit['sync_id']}');
         if (received > 0) {
           final receipt = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'receipt', 'amount': received, 'note': 'Cash received at sale #' + saleId.toString(), 'date': old['date'].toString()};
           await txn.insert('khata_transactions', receipt);
           await _queueRow(txn, 'khata_transactions', receipt, remove: ['party_id']);
+          await _recordDriveTombstone(txn, 'sale_ledger', '$saleSync|${receipt['sync_id']}');
         }
         await txn.rawUpdate('UPDATE parties SET balance = COALESCE(balance,0) - ? + ? WHERE id = ?', [oldDue, due, partyId]);
         final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
