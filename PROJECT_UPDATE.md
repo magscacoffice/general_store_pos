@@ -282,3 +282,12 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Dispatch the manual unsigned Windows installer validation workflow only for this explicitly authorized test release; production signing is not included.
 - [ ] Verify both platform workflows on `main` after merge. This is an unsigned acceptance release only; it is not production approval.
 - [ ] Physical Android/Windows and Google Drive acceptance remains pending.
+
+
+### Test release workflow follow-up (2026-11-22)
+
+- [x] Windows main-branch CI now compiles and uploads both the unsigned self-contained x64 ZIP and unsigned Inno Setup installer for version 1.0.1.0 after Release build/tests pass.
+- [x] Android main-branch CI builds and uploads the unsigned APK for version 1.0.1+2 after Flutter tests pass.
+- [ ] Verify the two GitHub Actions runs and download/inspect the resulting artifacts before calling the test release delivered.
+- [ ] Old branch deletion remains pending; the available GitHub repository connection in this session does not expose a branch/ref deletion operation. Do not claim old branches were deleted.
+- [ ] Production signing and physical device/Google Drive acceptance remain pending.
