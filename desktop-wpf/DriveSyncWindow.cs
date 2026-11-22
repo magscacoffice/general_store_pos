@@ -189,9 +189,11 @@ public sealed class DriveSyncWindow : Window
     private async Task RefreshAccountAsync()
     {
         var email = await _sync.GetConnectedAccountEmailAsync();
-        _account.Text = string.IsNullOrWhiteSpace(email)
-            ? "Google account: not connected"
-            : $"Connected Gmail account: {email}";
+        _account.Text = !string.IsNullOrWhiteSpace(email)
+            ? $"Connected Gmail account: {email}"
+            : _sync.HasSavedCredentials
+                ? "Google Drive credentials are saved; Gmail address is unavailable offline or until email permission is granted. Reconnect if needed."
+                : "Google account: not connected";
     }
 
     private void ShowSelectedPayloads()
