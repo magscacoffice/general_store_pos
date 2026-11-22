@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - integration/wpf-mainline
+      - feature/complete-project-pendings
     paths:
       - 'desktop-wpf/**'
       - 'desktop-wpf.Tests/**'
@@ -31,6 +32,7 @@ jobs:
       - run: dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj --configuration Release
 
       - name: Publish self-contained Windows x64 test app
+        if: github.ref != 'refs/heads/feature/complete-project-pendings'
         shell: pwsh
         run: |
           dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
@@ -46,6 +48,7 @@ jobs:
           Compress-Archive -Path artifacts/publish/win-x64/*,artifacts/publish/TEST-INSTRUCTIONS.txt -DestinationPath artifacts/KhanBabaPOS-Windows-x64.zip -Force
 
       - name: Upload Windows x64 test artifact
+        if: github.ref != 'refs/heads/feature/complete-project-pendings'
         uses: actions/upload-artifact@v4
         with:
           name: KhanBabaPOS-Windows-x64-${{ github.run_number }}
