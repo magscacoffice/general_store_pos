@@ -1468,3 +1468,15 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - [ ] Android analyzer and full Flutter test suite are still running after the duplicate invalid tail in `lib/printer_screen.dart` was removed. No APK was built.
 
 - [x] Windows Desktop OAuth no longer requires `GOOGLE_WINDOWS_CLIENT_SECRET`; the installed-app PKCE token exchange uses the product-owned Desktop Client ID as a public client.
+
+
+## Active gates after the 2026-11-22 implementation pass
+
+The source work that can be completed safely without owner hardware, Google test accounts or a production signing certificate has been implemented on `feature/complete-project-pendings`. The following are the remaining release/acceptance gates; do not mark them complete based on source inspection alone:
+
+- [ ] Finish the latest Android matrix run #45003053357. Ubuntu analyzer and full Flutter suite passed (22/22); Windows runner is still in progress. Previous run #45002811257 passed 22/22 on both Windows and Ubuntu.
+- [ ] Owner-side Windows laptop acceptance: New Sale Khata dropdown shows saved customers; zero-balance customer archive/delete and non-zero guard; F2/F4/F5/F6/F7/F8/F9/F10; scanner focus/repeated scans; display scaling/resizing; saved printer; Black Copper BC-86AC 80mm receipt/cutter; PDF; backup/restore.
+- [ ] Real Google Drive acceptance with two separate Gmail test accounts: same-account Android/Windows round-trip, account switch with backup, no cross-account visibility, token refresh/revocation, revoked consent and offline recovery.
+- [ ] Full schema-v18 cross-platform parity audit using the same disposable database and fixtures for sale/discount/Khata, stock, returns, update/delete, aliases and tombstones. Automated WPF tests and Android sync tests do not replace this end-to-end acceptance.
+- [ ] Production updater/installer remains blocked until the owner provides the production code-signing certificate and trusted publisher thumbprint, followed by signed installer/data-preservation testing.
+- [ ] Review and approve the feature branch before merging to `main`. Do not generate an APK, Windows ZIP, installer or release artifact without separate explicit authorization.
