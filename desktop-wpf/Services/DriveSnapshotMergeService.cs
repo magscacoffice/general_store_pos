@@ -427,7 +427,8 @@ public sealed class DriveSnapshotMergeService
 
             await tx.CommitAsync(cancellationToken);
             var pending = await CountPendingConflictsAsync(db, sourceDeviceId, snapshot.SnapshotHash, cancellationToken);
-            return new DriveMergeResult(created, updated, conflicts, skipped, pending, pending == 0 && deferredRecords == 0);
+            return new DriveMergeResult(created, updated, conflicts, skipped, pending,
+                IsSnapshotFullyAccepted(pending, deferredRecords));
         }
         catch
         {
