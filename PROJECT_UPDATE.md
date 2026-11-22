@@ -1500,3 +1500,10 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Moved Windows auto-sync startup until after the initial account-binding check and first sync succeed, so a rejected Gmail does not leave a retrying background sync timer running.
 - [x] Updated Android Cloud Sync disconnect confirmation to explain that the account binding remains in place after disconnect and that each business requires a separate database and Gmail.
 - [ ] The repository does not yet expose a verified end-user workflow for creating/selecting a second independent store database. Until that workflow is implemented and tested, do not attempt to repurpose an existing database for another business; use a separately isolated installation/data profile.
+
+## Follow-up hardening — Windows Drive disconnect concurrency (2026-11-22)
+
+- [x] Fixed a race in Windows Google Drive disconnect: stop the periodic timer, wait for any in-progress sync/merge to finish, create and verify the local safety backup, and only then revoke/delete OAuth credentials.
+- [x] If backup creation/verification or disconnect is cancelled/fails while credentials remain, restart auto-sync rather than leaving a connected account silently paused.
+- [ ] Run the WPF Release build and full test suite for this follow-up commit. Earlier validation (93/93 WPF tests and 0 build warnings/errors) applies to the preceding source revision, not this concurrency fix.
+- [ ] Real Windows laptop and two-Gmail cross-device acceptance remains owner-side; no APK, ZIP, installer or release artifact is authorized.
