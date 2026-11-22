@@ -1,0 +1,55 @@
+name: Build Android APK test release
+
+on:
+  push:
+    branches:
+      - main
+      - feature/complete-project-pendings
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-android-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-test-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+      - name: Build unsigned release APK
+        run: flutter build apk --release --no-pub
+      - name: Verify APK version metadata
+        shell: bash
+        run: |
+          grep -q '^version: 1.0.1+2$' pubspec.yaml
+          test -s build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload Android APK test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KhanBabaPOS-Android-v1.0.1-build2-test
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
