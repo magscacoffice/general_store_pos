@@ -47,6 +47,34 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
     }
   }
 
+  Future<void> _disconnect() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disconnect Google account?'),
+        content: const Text('POS data local device par rahega. Account disconnect karne se pehle verified local database backup banega. Dobara Connect karke doosra Gmail account select kar sakte hain.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Backup & Disconnect')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await DriveSyncService.disconnect();
+      await _refresh();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Account disconnect nahi hua: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _sync() async {
     setState(() => _busy = true);
     try {
@@ -103,6 +131,8 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
                             Text('Google Drive store sync', style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 4),
                             Text(DriveSyncService.status, style: Theme.of(context).textTheme.bodyMedium),
+                            if (DriveSyncService.connectedAccountEmail != null)
+                              Text('Connected Gmail: ${DriveSyncService.connectedAccountEmail}', style: Theme.of(context).textTheme.bodySmall),
                           ],
                         ),
                       ),
@@ -132,6 +162,11 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
                         onPressed: _busy ? null : _sync,
                         icon: const Icon(Icons.sync),
                         label: const Text('Sync Now'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _disconnect,
+                        icon: const Icon(Icons.link_off),
+                        label: const Text('Disconnect / Switch Gmail'),
                       ),
                     ],
                   ),
