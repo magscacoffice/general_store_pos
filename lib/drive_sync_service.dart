@@ -464,11 +464,53 @@ class DriveSyncService {
   static String _snapshotHash(Map<String, dynamic> data) =>
       sha256.convert(utf8.encode(jsonEncode(data))).toString();
 
+
+  static Future<void> _enforceStoreAccountBinding(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isEmpty || !normalizedEmail.contains('@')) {
+      throw StateError('Google account email could not be verified. Sync was blocked.');
+    }
+    final databasePath = await DBHelper.getDatabaseFilePath();
+    final key = 'drive_store_account_${sha256.convert(utf8.encode(p.normalize(p.absolute(databasePath)))).toString()}';
+    final boundEmail = await _secureStorage.read(key: key);
+    if (boundEmail != null && boundEmail.trim().toLowerCase() != normalizedEmail) {
+      throw StateError(
+        'This POS database is already paired with $boundEmail. '
+        'A different Google account cannot be connected to this store database. '
+        'Use a separate clean database and a separate Gmail account for another business.',
+      );
+    }
+    if (boundEmail == null) {
+      // Bind only after OAuth identity has been verified; keep the binding on disconnect.
+      await _secureStorage.write(key: key, value: normalizedEmail);
+    }
+    connectedAccountEmail = normalizedEmail;
+  }
+
+  static Future<String> _verifiedGoogleEmail(String token) async {
+    if (Platform.isAndroid) {
+      final email = _androidAccount?.email;
+      if (email == null || email.trim().isEmpty) {
+        throw StateError('Google sign-in did not provide a verified account email.');
+      }
+      return email;
+    }
+    final result = await _api(token, 'GET',
+        Uri.https('openidconnect.googleapis.com', '/v1/userinfo'));
+    final email = result['email']?.toString();
+    if (email == null || email.trim().isEmpty) {
+      throw StateError('Google userinfo did not return an account email.');
+    }
+    return email;
+  }
+
   static Future<void> connectAndSync() async {
     status = 'Connecting to Google Drive...';
     lastError = null;
     try {
       final token = await _accessToken(prompt: true);
+      final accountEmail = await _verifiedGoogleEmail(token);
+      await _enforceStoreAccountBinding(accountEmail);
       if (Platform.isAndroid && !DBHelper.drivePrimaryMode) {
         // Migrate any pending Firebase business data before making Drive primary.
         // Stop its background listener during the Drive cutover, but keep local
@@ -515,6 +557,8 @@ class DriveSyncService {
     if (_syncing) return;
     try {
       final token = await _accessToken(prompt: false);
+      final accountEmail = await _verifiedGoogleEmail(token);
+      await _enforceStoreAccountBinding(accountEmail);
       await _runSync(token);
     } catch (error) {
       lastError = error.toString();
@@ -803,12 +847,11 @@ class DriveSyncService {
   static Future<void> _createVerifiedLocalBackup() async {
     final databasePath = await DBHelper.getDatabaseFilePath();
     final database = await DBHelper.database;
-    await database.rawQuery('PRAGMA wal_checkpoint(FULL)');
     final backupDirectory = Directory(p.join(await DBHelper.getDatabaseDirectory(), 'Backups'));
     await backupDirectory.create(recursive: true);
     final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
     final backupPath = p.join(backupDirectory.path, 'before_drive_account_switch_$stamp.db');
-    await File(databasePath).copy(backupPath);
+    await DBHelper.createConsistentBackup(backupPath);
     final validation = await openDatabase(backupPath, readOnly: true);
     try {
       final integrity = await validation.rawQuery('PRAGMA integrity_check');
