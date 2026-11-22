@@ -469,7 +469,7 @@ public sealed class DriveSnapshotMergeService
                 var syncId = Text(remote, "sync_id");
                 if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
                 var wasDeletedBySaleRevision = await ExistsAsync(db, tx, "drive_sync_tombstones",
-                    "entity_type='khata_transaction' AND substr(entity_key,-length($key))=$key AND substr(entity_key,-length($key)-1,1)='|'",
+                    "entity_type='khata_transaction' AND instr(entity_key,'|')>0 AND substr(entity_key,instr(entity_key,'|')+1)=$key",
                     cancellationToken, ("$key", syncId));
                 if (wasDeletedBySaleRevision) continue;
                 if (await FindIdAsync(db, tx, "khata_transactions", "sync_id", syncId, cancellationToken) is not null) continue;
