@@ -2,7 +2,7 @@ name: khan_baba_general_store
 description: "A professional offline-first POS application with Windows-master Google Drive sync."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.13.5
