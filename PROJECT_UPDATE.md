@@ -507,7 +507,7 @@ Future improvements: add new ideas here when the owner requests them.
 ### Historical completed updates before the native WPF migration
 
 - [x] **Flutter backup restore database-lock fix** — historical Flutter client fix using an alternate restored database file and the active-database marker. Native WPF now has its own separately tested backup/restore implementation. Commit: ad235ff873cd620a775f8a3fe3a51e8359b61878.
-- [x] **Flutter Windows OAuth client-secret handling** — historical code added GOOGLE_WINDOWS_CLIENT_SECRET support to the retired Flutter Windows auth flow. This is not a native WPF Drive OAuth implementation; WPF sync/auth remains pending. Commit: 1c9fe93cb66e7367666227db63545721901cf4e2.
+- [x] **Flutter Windows OAuth client-secret handling** — historical code added `GOOGLE_WINDOWS_CLIENT_SECRET` support to the retired Flutter Windows auth flow. Native WPF now uses the owner-created Desktop OAuth client with PKCE, no client secret, and a client-specific DPAPI token cache. Commit: 1c9fe93cb66e7367666227db63545721901cf4e2.
 - [x] **Android Build #150 APK compilation/release** — historical APK published as v1.0.0-build150 (commit 16187c3). Its final FCM notification step failed. No new APK/EXE/release artifacts are being created while current pending tasks remain.
 - [x] **PROJECT_UPDATE.md tracking file created** — original tracker created on main (commit 2c2409275da6a2518a1ca6b676605867e130a25d).
 
@@ -1466,3 +1466,5 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - [x] WPF project exposes internals to its test assembly for OAuth unit tests. The WPF validation workflow runs restore/build/tests only and has no publish, ZIP or artifact-upload steps.
 - [x] Actions run #45002502830: WPF Release build succeeded with 0 warnings/0 errors; 93/93 tests passed; artifact list was empty.
 - [ ] Android analyzer and full Flutter test suite are still running after the duplicate invalid tail in `lib/printer_screen.dart` was removed. No APK was built.
+
+- [x] Windows Desktop OAuth no longer requires `GOOGLE_WINDOWS_CLIENT_SECRET`; the installed-app PKCE token exchange uses the product-owned Desktop Client ID as a public client.
