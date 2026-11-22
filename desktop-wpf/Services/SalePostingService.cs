@@ -100,10 +100,10 @@ public sealed class SalePostingService
             var finalAmount = Math.Max(0d, subtotal - discount);
             var customerId = request.CustomerId;
             var customerType = request.CustomerType;
-            if (customerType is not ("Walk-in" or "Khata" or "Wholesale"))
-                throw new InvalidOperationException("Customer type must be Walk-in, Khata or Wholesale.");
+            if (customerType is not ("Walk-in" or "Khata"))
+                throw new InvalidOperationException("Customer type must be Walk-in or Khata.");
             if ((customerType == "Walk-in") != (customerId is null))
-                throw new InvalidOperationException("Walk-in sale must not have a customer account; Khata/Wholesale sales require a selected customer.");
+                throw new InvalidOperationException("Walk-in sale must not have a customer account; Khata sale requires a selected customer.");
             var paymentMode = customerType == "Walk-in" ? "Cash" : request.PaymentMode;
             double receivedAmount;
             string paymentType;
