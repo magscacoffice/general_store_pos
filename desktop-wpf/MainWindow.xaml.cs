@@ -69,7 +69,6 @@ public partial class MainWindow : Window
 
         SaleTypeBox.Items.Add("Walk-in");
         SaleTypeBox.Items.Add("Khata");
-        SaleTypeBox.Items.Add("Wholesale");
         SaleTypeBox.SelectedItem = "Walk-in";
 
         PaymentModeBox.Items.Add("Cash");
@@ -503,9 +502,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var isWholesale = SaleTypeBox.SelectedItem?.ToString() == "Wholesale";
-        var chosenPrice = isWholesale && product.WholesalePrice > 0 ? product.WholesalePrice : product.Price;
-        var safePrice = Math.Max(chosenPrice, product.PurchasePrice);
+        var safePrice = Math.Max(product.Price, product.PurchasePrice);
         if (existing is null)
             CartLines.Add(new CartLine(product.Name, product.Barcode, safePrice, 1,
                 product.PurchasePrice, product.StockUnit, product.Quantity));
@@ -548,7 +545,7 @@ public partial class MainWindow : Window
         var saleType = SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in";
         var walkIn = saleType == "Walk-in";
         if (CartGrid.Columns.Count > 3)
-            CartGrid.Columns[3].IsReadOnly = saleType != "Wholesale";
+            CartGrid.Columns[3].IsReadOnly = true;
         PaymentModeBox.IsEnabled = !walkIn;
         if (walkIn && PaymentModeBox.SelectedItem?.ToString() != "Cash")
             PaymentModeBox.SelectedItem = "Cash";
@@ -652,7 +649,7 @@ public partial class MainWindow : Window
         foreach (var line in bill.Cart)
             CartLines.Add(new CartLine(line.Name, line.Barcode, line.SalePrice, line.Quantity,
                 line.PurchasePrice, line.StockUnit, int.MaxValue));
-        SaleTypeBox.SelectedItem = bill.SelectedSaleType;
+        SaleTypeBox.SelectedItem = bill.SelectedSaleType == "Wholesale" ? "Khata" : bill.SelectedSaleType;
         ApplyCustomerTypeFilter();
         CustomerBox.SelectedValue = bill.SelectedCustomerId ?? 0;
         PaymentModeBox.SelectedItem = bill.CustomerPaymentMode;
@@ -840,7 +837,7 @@ public partial class MainWindow : Window
             foreach (var item in items)
                 CartLines.Add(new CartLine(item.ProductName, item.Barcode, item.SalePrice, item.Quantity,
                     item.PurchasePrice, item.StockUnit, int.MaxValue));
-            SaleTypeBox.SelectedItem = selected.CustomerType;
+            SaleTypeBox.SelectedItem = selected.CustomerType == "Wholesale" ? "Khata" : selected.CustomerType;
             ApplyCustomerTypeFilter();
             CustomerBox.SelectedValue = selected.CustomerId ?? 0;
             PaymentModeBox.SelectedItem = selected.PaymentType == "Khata" ? "Credit" :
