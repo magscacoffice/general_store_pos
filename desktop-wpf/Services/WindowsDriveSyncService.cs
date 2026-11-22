@@ -264,12 +264,11 @@ public sealed class WindowsDriveSyncService
         var normalizedEmail = accountEmail.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(normalizedEmail) || !normalizedEmail.Contains('@'))
             throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
-        var fullDatabasePath = Path.GetFullPath(databasePath);
-        var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fullDatabasePath.ToUpperInvariant())))
-            .ToLowerInvariant();
+        // One store per Windows user profile. Binding is independent of the
+        // active database filename so restore/rename cannot bypass this guard.
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KhanBabaPOS");
         Directory.CreateDirectory(directory);
-        var bindingPath = Path.Combine(directory, $"drive_store_account_{pathHash}.dat");
+        var bindingPath = Path.Combine(directory, "drive_store_account_binding.dat");
         if (File.Exists(bindingPath))
         {
             var protectedBytes = await File.ReadAllBytesAsync(bindingPath, cancellationToken);
