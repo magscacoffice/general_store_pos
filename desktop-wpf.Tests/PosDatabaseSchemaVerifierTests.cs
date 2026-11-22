@@ -2288,9 +2288,40 @@ public sealed class PosDatabaseSchemaVerifierTests
             { DataSource = sourcePath, Pooling = false }.ToString()))
             {
                 await source.OpenAsync();
-                await using var edit = source.CreateCommand();
-                edit.CommandText = "UPDATE sales SET total_amount=65,final_amount=65,balance_due=55 WHERE sync_id='revision-sale-sync';";
-                await edit.ExecuteNonQueryAsync();
+                await using (var edit = source.CreateCommand())
+                {
+                    edit.CommandText = "UPDATE sales SET total_amount=65,final_amount=65,balance_due=55 WHERE sync_id='revision-sale-sync';";
+                    await edit.ExecuteNonQueryAsync();
+                }
+                await using (var replaceItem = source.CreateCommand())
+                {
+                    replaceItem.CommandText = "DELETE FROM sale_items WHERE sale_sync_id='revision-sale-sync';";
+                    await replaceItem.ExecuteNonQueryAsync();
+                }
+                await using (var addConcurrentItem = source.CreateCommand())
+                {
+                    addConcurrentItem.CommandText = """
+                        INSERT INTO sale_items(sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit)
+                        VALUES($sale,$product,'REV-TEA-1','Revision Tea',4,20,10,80,40,'revision-item-v3','revision-sale-sync','pcs');
+                        """;
+                    addConcurrentItem.Parameters.AddWithValue("$sale", sourceSaleId);
+                    addConcurrentItem.Parameters.AddWithValue("$product", sourceProductId);
+                    await addConcurrentItem.ExecuteNonQueryAsync();
+                }
+                await using (var replaceLedger = source.CreateCommand())
+                {
+                    replaceLedger.CommandText = "DELETE FROM khata_transactions WHERE sync_id='revision-ledger-v2';";
+                    await replaceLedger.ExecuteNonQueryAsync();
+                }
+                await using (var addConcurrentLedger = source.CreateCommand())
+                {
+                    addConcurrentLedger.CommandText = """
+                        INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
+                        VALUES($party,'credit',65,'Sale #1','2026-11-22 10:00:00','revision-ledger-v3','revision-customer-sync');
+                        """;
+                    addConcurrentLedger.Parameters.AddWithValue("$party", sourceCustomerId);
+                    await addConcurrentLedger.ExecuteNonQueryAsync();
+                }
             }
             var concurrentPayload = await exporter.ExportAsync(sourcePath);
             var concurrentSnapshot = new ValidatedDriveSnapshot(
