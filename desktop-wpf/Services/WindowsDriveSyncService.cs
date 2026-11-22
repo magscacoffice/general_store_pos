@@ -199,10 +199,19 @@ public sealed class WindowsDriveSyncService
     {
         _access.RequireAdmin();
         EnsureDriveSyncEnabled();
-        await _merge.ResolveConflictAsync(conflictId, useRemote,
-            databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
-        var count = (await GetPendingConflictsAsync(databasePath, cancellationToken)).Count;
-        SetStatus(count == 0 ? "All Drive conflicts resolved." : $"{count} Drive conflict(s) still need review.");
+        await _syncGate.WaitAsync(cancellationToken);
+        try
+        {
+            await _merge.ResolveConflictAsync(conflictId, useRemote,
+                databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+            var count = (await _merge.GetPendingConflictsAsync(
+                databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken)).Count;
+            SetStatus(count == 0 ? "All Drive conflicts resolved." : $"{count} Drive conflict(s) still need review.");
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
