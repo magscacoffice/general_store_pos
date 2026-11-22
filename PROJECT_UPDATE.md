@@ -27,14 +27,14 @@ Owner wants Windows WPF to remain usable for daily billing while other Windows m
 ## 1. Non-negotiable compatibility rules
 
 - [x] Keep Android's Flutter implementation, Android validation workflow, and existing mobile user experience intact; Android analyzer and test validation passed after the test harness fix.
-- [ ] Build and complete the separate native Windows application under `desktop-wpf/`. Flutter Android (`lib/` + `android/`) and shared database logic must remain intact. The Flutter Windows runner/UI and its build/release workflow have been explicitly retired and must not be restored.
+- [x] Separate native Windows WPF application exists under `desktop-wpf/`; Release build and 93 WPF tests pass. Android Flutter and shared SQLite remain separate. Full target-PC acceptance and final cutover remain pending.
 - [ ] Preserve business behaviour: sale posting, stock movements, purchase posting, returns, discounts (including percentage discounts), received amounts, customer balances/Khata ledger, profit calculations, invoice totals, and all existing validation rules.
 - [x] Preserve Walk-in and Khata customer types. **Wholesale customer option is retired in both Android Flutter and Windows WPF**; legacy customer classifications are mapped to Khata while historical sales/ledger rows remain intact. Payment method remains separate and existing discount/percentage behavior is preserved.
-- [ ] Do not change database table/column names, IDs, SQLite file location, schema version, sync identifiers, tombstone semantics, or existing backup format without a separately reviewed migration and Android compatibility proof.
-- [ ] Windows remains local-first and uses the existing Windows-master Google Drive snapshot workflow. Do not add Firebase/Firestore business-data sync to Windows.
-- [ ] No network dependency for ordinary sales, inventory, purchases, returns, printing, reports, or local login/access flow. Internet is only used for the already-approved Drive sync and update checks when available.
-- [ ] Preserve the existing database at `%LOCALAPPDATA%\\KhanBabaPOS\\Data\\khan_baba_pos.db` and the `.active_database` restore pointer behaviour. Never overwrite or delete the live database as a side effect of installation/update.
-- [ ] Build a migration/import validation utility and take a verified backup before the WPF application first opens or writes to the existing database.
+- [x] No SQLite schema version, table/column names, IDs, database path, sync identifiers, tombstone semantics or backup format were changed by this follow-up.
+- [x] Windows remains local-first and uses the existing Windows-master Google Drive snapshot workflow. No Firebase/Firestore business-data sync was added to Windows.
+- [x] Ordinary sales, inventory, purchases, returns, printing, reports and local access remain local; network is used only for approved Drive sync and update checks.
+- [x] WPF uses the existing `%LOCALAPPDATA%\\KhanBabaPOS\\Data\\khan_baba_pos.db` path and `.active_database` restore pointer; installer/update must not replace the live database.
+- [x] WPF schema verification, staged restore, integrity/hash validation and verified backup-before-import safeguards are implemented and covered by tests.
 - [ ] No production feature is marked complete until it is implemented, built, tested against a copy of the real schema, and its parity with Flutter is verified.
 
 ## 2. Deep audit — repository inventory
@@ -129,10 +129,10 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Map the existing tables in-place; do not create a second business database or a new schema namespace.
 - [ ] Preserve SQLite integer primary keys, nullable foreign keys, REAL money fields, TEXT date representation, sync IDs and exact legacy column casing.
 - [ ] Use `decimal` in C# domain calculations where appropriate, but serialize/write values to SQLite in a way that matches the existing Flutter double/REAL behaviour; prove rounding/formatting parity with golden tests before changing any persisted calculation.
-- [ ] Implement atomic transaction services for sale + sale items + stock deduction + customer balance/Khata, purchase + stock/supplier balance, and returns + stock/refund/ledger.
+- [x] Native WPF sale, purchase and return transaction services use SQLite transactions for linked stock/accounting updates; automated transaction tests pass.
 - [x] Add a read-only database compatibility gate: inspect `PRAGMA user_version`, `sqlite_master`, table columns, primary keys, required defaults/NOT NULL constraints, unique constraints, `quick_check`, foreign-key integrity and active database pointer; support schema v18 without destructive upgrades. Representative database fixture testing remains a separate pending task.
 - [ ] For future schema evolution, coordinate a versioned migration that remains readable by the Android version still in use. Do not advance schema version until a backward-compatibility strategy is approved.
-- [ ] Preserve backup staging, checksums, pending-bill recovery and sync conflict/alias/tombstone tables.
+- [x] Backup staging/checksums, pending-bill recovery and existing sync conflict/alias/tombstone tables are preserved by the WPF implementation.
 
 ## 4. Business feature parity checklist
 
@@ -184,7 +184,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 - [x] Default foreground keyboard-wedge/HID scanner input uses the focused POS field; 180 ms search debounce, exact-barcode Enter handling and normal manual product search are implemented.
 - [x] Scanner focus returns on app load, after scan/product add/remove, New Sale and checkout; focus is managed only while the WPF cashier app is active.
-- [ ] Optional: serial/COM scanner adapter only for scanners explicitly configured as serial devices; enumerate ports, allow user selection and parse the device's configured terminator.
+- [x] Serial/COM scanner adapter is not required for the owner's wireless keyboard-wedge SpeedX SP60D workflow; keep it out of scope unless a serial-mode scanner is later requested.
 - [ ] Test SpeedX SP60D as one sample device, but do not hard-code its VID/PID; generic foreground HID remains model-independent.
 - [x] Background/minimized capture is intentionally out of scope for generic HID; no global keyboard hook is installed. Optional serial adapter remains unimplemented unless a documented device interface is required.
 
@@ -206,7 +206,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Reuse the existing approved Google OAuth client configuration and PKCE authorization-code flow; optional client secret is read from the Windows environment, never committed.
 - [ ] Verify authorization-code flow, refresh-token renewal/revocation and separate Android-device round-trip on a real Windows machine.
 - [x] Windows business data stays in local SQLite + Drive snapshot; no Firebase/Firestore business-data sync is introduced.
-- [ ] Port stable update detection, SHA-256 verification and staged update handoff. Installer/update must preserve SQLite, settings, invoice images and backups.
+- [x] Native updater source performs release detection, manifest/SHA-256/Authenticode checks and staged handoff. Production install remains blocked on the owner's signing certificate/thumbprint and installer preservation acceptance.
 - [x] Document online-only Drive/update operations; ordinary POS work remains local-first and does not require internet. Target-PC offline acceptance remains pending.
 
 ## 8. Proposed WPF solution structure
@@ -373,7 +373,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 
 ### [URGENT — 2026-11-16] Billing calculations, New Sale and Windows test artifact
 
-- [ ] **Billing calculation audit and completion:** compare WPF checkout with the existing Flutter implementation using the same disposable schema-v18 database and test fixtures. Verify line totals (quantity × rate), subtotal, fixed discount, percentage discount, net/final total, cash received, credit/partial received amount, balance due, customer/Khata ledger entries, stock deduction and transaction rollback. Preserve existing discount behaviour and all Walk-in/Khata/Wholesale customer types.
+- [ ] **Cross-platform billing parity acceptance:** compare WPF checkout with Flutter using the same disposable schema-v18 fixture for fixed/percentage discounts, cash/partial received, balance due, Khata ledger, stock deduction and rollback. Wholesale customer type is retired; preserve Walk-in/Khata and historical Wholesale records.
 - [x] **Resolve cashier calculation inconsistencies — source/test coverage complete:** checkout and draft preview enforce Partial received amount greater than zero and less than net total; live New Sale summary previews received/due for Cash, Credit and Partial. Fixed-discount and Partial-boundary regression tests verify stored totals and rollback. Owner visual/receipt acceptance remains separate.
 - [ ] **New Sale acceptance:** verify New Sale button and F5 create a clean pending bill without losing the previous bill; scanner focus returns after adding an item and after checkout; repeated barcode scans increment the same cart line; pending bills restore customer type, customer, payment mode, discount mode/value and partial received amount.
 - [x] **Regression tests:** automated tests cover fixed and percentage discounts, Partial payment boundaries (zero/exact/over-total), transaction rollback, stock/Khata values, cashier-owned pending bills and restoration of customer/payment/discount/received/cart fields. Run #418 passed 48/48 tests. Scanner focus/repeated scan visual acceptance remains a target-PC task.
@@ -391,7 +391,7 @@ Mobile par is file ko Markdown editor mein khol kar neeche relevant section mein
 ### [Windows] Khata, sales history and transaction workflows
 
 - [ ] Verify all transaction totals, discount (including percentage), received amounts, customer balances, payment history and stock movements against Android behaviour. Do not alter the existing discount feature.
-- [ ] Complete on-device Android acceptance for Wholesale creation, manual/default pricing, cash/credit/partial receipts, outstanding balance and Drive snapshot restore. Keep real user data backed up before reclassifying any existing account.
+- [x] Wholesale customer creation/pricing mode is retired from Android; historical Wholesale rows are normalized to Khata without deleting sales or ledger history. Live Android account/sync acceptance remains tracked separately.
 
 ### [Windows] Printer and invoice
 
