@@ -277,6 +277,7 @@ public sealed class DriveSnapshotMergeService
             // sale ID; equal/older revisions never replace Windows-master state.
             var remoteSaleRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
             var appliedSaleRevisions = new HashSet<string>(StringComparer.Ordinal);
+            var allowedSaleItemImports = new HashSet<string>(StringComparer.Ordinal);
             foreach (var marker in collections["tombstones"].Where(x => Text(x, "entity_type") == "sale_revision"))
             {
                 var key = Text(marker, "entity_key");
@@ -305,6 +306,7 @@ public sealed class DriveSnapshotMergeService
                 if (existingSaleId is null)
                 {
                     await InsertRowAsync(db, tx, "sales", values, cancellationToken); created++;
+                    allowedSaleItemImports.Add(syncId);
                     continue;
                 }
 
@@ -320,8 +322,12 @@ public sealed class DriveSnapshotMergeService
                     comparableLocal.Remove("id");
                     if (Different(comparableLocal, values, SaleFields))
                         await AddConflictAsync("sale_revision", syncId, comparableLocal, values);
+                    else
+                        allowedSaleItemImports.Add(syncId); // permits retry of a deferred item in this accepted revision
                     continue;
                 }
+                if (remoteRevision == 0 && localRevision == 0)
+                    allowedSaleItemImports.Add(syncId); // legacy append-only sale without revision markers
                 var localCustomerId = localSale.TryGetValue("customer_id", out var localCustomerValue) &&
                     localCustomerValue is not null ? Convert.ToInt64(localCustomerValue, CultureInfo.InvariantCulture) : (long?)null;
                 if (localCustomerId != partyId)
@@ -412,6 +418,7 @@ public sealed class DriveSnapshotMergeService
                 await RecordTombstoneAsync(db, tx, "sale_revision", $"{syncId}|{remoteRevision}",
                     sourceDeviceId, cancellationToken);
                 appliedSaleRevisions.Add(syncId);
+                allowedSaleItemImports.Add(syncId);
                 updated++;
             }
 
@@ -419,8 +426,10 @@ public sealed class DriveSnapshotMergeService
             {
                 var syncId = Text(remote, "sync_id");
                 if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
+                var parentSaleSyncId = Text(remote, "sale_sync_id");
+                if (!allowedSaleItemImports.Contains(parentSaleSyncId)) continue;
                 if (await FindIdAsync(db, tx, "sale_items", "sync_id", syncId, cancellationToken) is not null) continue;
-                var saleId = await FindIdAsync(db, tx, "sales", "sync_id", Text(remote, "sale_sync_id"), cancellationToken);
+                var saleId = await FindIdAsync(db, tx, "sales", "sync_id", parentSaleSyncId, cancellationToken);
                 if (saleId is null) { skipped++; deferredRecords++; continue; }
                 var productId = await FindIdAsync(db, tx, "products", "barcode", Text(remote, "barcode"), cancellationToken);
                 if (productId is null) { skipped++; deferredRecords++; continue; }
