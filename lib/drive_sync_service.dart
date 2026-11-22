@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,6 +29,8 @@ class DriveSyncService {
   static const String _windowsClientSecret =
       String.fromEnvironment('GOOGLE_WINDOWS_CLIENT_SECRET');
   static const List<String> _scopes = [
+    'openid',
+    'email',
     'https://www.googleapis.com/auth/drive.file',
   ];
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
@@ -42,6 +45,7 @@ class DriveSyncService {
   static String? lastSyncAt;
   static String? lastError;
   static String status = 'Cloud sync not connected';
+  static String? connectedAccountEmail;
 
   static Future<void> initialize() {
     return _initialization ??= _initialize();
@@ -109,6 +113,7 @@ class DriveSyncService {
     }
     if (account == null) return null;
     _androidAccount = account;
+    connectedAccountEmail = account.email;
 
     var authorization =
         await account.authorizationClient.authorizationForScopes(_scopes);
@@ -216,7 +221,7 @@ class DriveSyncService {
         'code_challenge_method': 'S256',
         'state': state,
         'access_type': 'offline',
-        'prompt': 'consent',
+        'prompt': 'select_account consent',
       },
     );
 
@@ -761,7 +766,9 @@ class DriveSyncService {
   }
 
   static Future<void> restoreStatus() async {
+    await initialize();
     lastSyncAt = await _secureStorage.read(key: 'drive_last_sync_at');
+    if (Platform.isAndroid) connectedAccountEmail = _androidAccount?.email;
     if (!kIsWeb && Platform.isWindows) {
       // Windows remains usable as a local POS even when cloud sync is unavailable.
       try {
@@ -793,7 +800,38 @@ class DriveSyncService {
     if (lastSyncAt != null) status = 'Last successful sync: $lastSyncAt';
   }
 
+  static Future<void> _createVerifiedLocalBackup() async {
+    final databasePath = await DBHelper.getDatabaseFilePath();
+    final database = await DBHelper.database;
+    await database.rawQuery('PRAGMA wal_checkpoint(FULL)');
+    final backupDirectory = Directory(p.join(await DBHelper.getDatabaseDirectory(), 'Backups'));
+    await backupDirectory.create(recursive: true);
+    final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
+    final backupPath = p.join(backupDirectory.path, 'before_drive_account_switch_$stamp.db');
+    await File(databasePath).copy(backupPath);
+    final validation = await openDatabase(backupPath, readOnly: true);
+    try {
+      final integrity = await validation.rawQuery('PRAGMA integrity_check');
+      if (integrity.isEmpty || integrity.first.values.first.toString().toLowerCase() != 'ok') {
+        throw StateError('Local backup integrity verification failed; Google account was not disconnected.');
+      }
+      final tables = await validation.rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
+      final names = tables.map((row) => row['name'].toString()).toSet();
+      const required = {'products', 'sales', 'parties', 'sale_items', 'khata_transactions'};
+      if (!names.containsAll(required)) {
+        throw StateError('Local backup is missing required POS tables; Google account was not disconnected.');
+      }
+    } finally {
+      await validation.close();
+    }
+    final hash = sha256.convert(await File(backupPath).readAsBytes()).toString();
+    await File('$backupPath.sha256').writeAsString(hash, flush: true);
+  }
+
   static Future<void> disconnect() async {
+    if (Platform.isAndroid && connectedAccountEmail != null) {
+      await _createVerifiedLocalBackup();
+    }
     await stopAutoSync();
     await _secureStorage.delete(key: 'drive_access_token');
     await _secureStorage.delete(key: 'drive_access_expires_at');
@@ -805,6 +843,7 @@ class DriveSyncService {
       await GoogleSignIn.instance.signOut();
       _androidAccount = null;
     }
+    connectedAccountEmail = null;
     status = 'Cloud sync disconnected';
   }
 }
