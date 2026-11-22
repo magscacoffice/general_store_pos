@@ -1533,3 +1533,12 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Run current WPF Release build and unit tests after these changes; earlier workflow runs do not validate this latest revision.
 - [ ] Run Flutter analyze/tests and physical Android + Windows paired-device scenarios, including connect/disconnect during active sync, repeated polling, out-of-order parent/child delivery and simultaneous conflict resolution.
 - [ ] Confirm real-device retries complete deferred records and that duplicate deliveries remain idempotent. No APK, ZIP, installer or other build artifact generated.
+
+## Validation results — sync lifecycle hardening (2026-11-22)
+
+- [x] Windows WPF Release build passed with 0 warnings and 0 errors on commit c778aaf26c6f125fd488a717f69eb58468432bad.
+- [x] WPF unit tests passed: 97 passed, 0 failed, 0 skipped on the same commit.
+- [x] Flutter analyze passed for the changed sync/invoice files on commit 1e42e9150f71004b10a4f94f9d3fc6aa4f85be85.
+- [x] Flutter tests passed on both Ubuntu and Windows: 22 passed on each runner, including the Android/Windows Drive reconciliation integration test.
+- [ ] Physical-device validation is still required for actual Google OAuth, simultaneous Android/Windows network timing, disconnect during a real upload, and deferred-record retries against live Drive data.
+- [ ] No APK, Windows ZIP, installer or other build artifact was generated. Changes remain on feature/complete-project-pendings; main was not merged.
