@@ -1330,3 +1330,15 @@ Future improvements: add new ideas here when the owner requests them.
 - [ ] **Allow deletion of a zero-balance Khata customer.** When a Khata customer's outstanding balance is exactly zero, provide a deliberate delete action with confirmation. Before deletion, check linked sales, returns and ledger history. Preserve accounting/history integrity: use a safe archive/deactivate or guarded deletion strategy where hard deletion would orphan historical records or violate foreign-key/sync rules. Never allow deletion when the balance is non-zero; explain why and show the current balance.
 - [ ] **Remove unnecessary decimal zeroes from bills in both apps.** Monetary and quantity values that are whole numbers must display without trailing .0 / .00 (for example, 125.0 should display as 125). Retain meaningful fractional values when they exist, use consistent locale-safe formatting, and do not alter stored numeric values or calculations. Apply consistently to bill preview, thermal print and PDF/export output on both platforms.
 - [ ] Audit existing Android and WPF formatting/queries before implementation; add regression tests for Khata customer listing/selection, zero-balance versus non-zero deletion safeguards, historical-record integrity, and whole/fractional bill values. Do not generate build artifacts unless separately authorized. Group related code and tracker changes into a consolidated commit.
+
+
+## Work log — 2026-11-22 (Customer type removal, Khata selection/deletion safety and bill formatting)
+
+- [x] Created consolidated implementation branch `feature/complete-project-pendings` from the current `main` baseline. No changes were made to `main`.
+- [x] Fixed Windows New Sale customer ComboBox by binding it to the observable `Customers` collection; legacy Wholesale customer classifications are normalized to Khata in the customer lookup and pending/recalled bills.
+- [x] Removed Wholesale customer selection/reclassification from Android and Windows UI, removed the Android wholesale-only per-item rate editor and scanner pricing branch, and restricted new sale/customer-type validation to Walk-in/Khata. Historical sales are not rewritten.
+- [x] New Android and WPF customer creation defaults to Khata. Legacy recalled/pending Wholesale bills are mapped to Khata when resumed.
+- [x] Zero-balance customers with linked sales/returns/Khata history are archived as `archived_customer` instead of hard-deleted, preserving party IDs and historical joins. Non-zero balances block deletion; suppliers with purchase history remain protected.
+- [x] Android and WPF receipt/PDF money formatters suppress insignificant trailing decimal zeroes while preserving meaningful fractional values.
+- [ ] Run Android analyzer/tests and WPF Release build/tests after these edits; source changes are not yet runtime-validated. Do not publish APK, ZIP, installer or other artifact without separate authorization.
+- [ ] Physical Windows display/scanner/printer/PDF/backup acceptance and real Google account sync acceptance remain owner-side gates.
