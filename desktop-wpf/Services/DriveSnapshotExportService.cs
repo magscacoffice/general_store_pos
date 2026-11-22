@@ -183,16 +183,7 @@ public sealed class DriveSnapshotExportService
         await using var command = connection.CreateCommand();
         command.CommandText = table == "drive_sync_tombstones"
             ? "SELECT * FROM drive_sync_tombstones ORDER BY id ASC;"
-            : table == "khata_transactions"
-                ? """
-                    SELECT kt.*, s.sync_id AS sale_sync_id
-                    FROM khata_transactions kt
-                    LEFT JOIN sales s
-                      ON kt.note = 'Sale #' || s.id
-                      OR kt.note = 'Cash received at sale #' || s.id
-                    ORDER BY kt.id ASC;
-                    """
-                : $"SELECT * FROM \"{table}\" ORDER BY id ASC;";
+            : $"SELECT * FROM \"{table}\" ORDER BY id ASC;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
