@@ -1595,7 +1595,7 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Android snapshot export already includes the tombstone collection; Windows snapshot export includes the same table. Replacement sale-generated Khata rows are linked to their bill by `sale_ledger` tombstone keys (`sale_sync_id|ledger_sync_id`); no new snapshot fields or SQLite columns are introduced. The Windows master importer applies only an accepted sale revision, reconciles stock and due-balance deltas, replaces sale items, and applies linked ledger deletions.
 - [x] Windows-master snapshots now reconcile existing sales on Android. Android replaces sale details and item rows only when applying the authoritative master snapshot; local sales with returns or changed customer links are protected.
 - [x] Windows keeps a per-sale revision high-water mark. Older snapshots cannot roll a sale back or reintroduce replaced sale items/ledger entries. Ledger rows from a stale or rejected sale revision are not imported. Same-revision divergent edits create a conflict that follows the Windows-master keep-local policy.
-- [x] Added WPF and Flutter integration coverage for recalled-sale edit, item replacement, stock delta, Khata balance delta, ledger deletion, repeated snapshot delivery, stale snapshot replay, and same-revision concurrent edits. Flutter run #128 passed 23/23 tests on Ubuntu and Windows; a further run validates the latest stale-revision ledger guard.
+- [x] Added WPF and Flutter integration coverage for recalled-sale edit, item replacement, stock delta, Khata balance delta, ledger deletion, repeated snapshot delivery, stale snapshot replay, and same-revision concurrent edits. Latest Flutter run #134 passed 23/23 tests on Ubuntu and Windows; latest WPF run #492 passed 106/106 tests.
 - [ ] Physical Android/Windows paired-device testing is still required for online/offline edits, real Drive upload/download, and a return created between snapshots.
 - [ ] Test the complete business cases with quantity increases/decreases, product substitutions, discounts, cash/partial/credit, later receipts, returns, rollback, duplicate deliveries and simultaneous edits on actual disposable databases/devices.
 - [ ] Until physical-device acceptance and the remaining business-case matrix pass, Drive sync remains a development/acceptance feature rather than production-accepted accounting synchronization. The owner-approved source flag remains unchanged.
@@ -1626,4 +1626,14 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Android and Windows recalled-sale edit paths emit `sale_ledger` tombstone links for each replacement credit/receipt row. Importers use these links to gate ledger entries against the accepted sale revision. The schema-v2 snapshot shape and SQLite schema v18 remain unchanged.
 - [x] WPF and Android importers use the tombstone links to prevent ledger rows from a rejected/stale sale revision from being imported; no unknown columns are passed to SQLite.
 - [x] Android master-state import now compares incoming and local sale revision high-water marks. A stale master revision or same-revision divergent bill is not allowed to replace local sale items; customer-linked returns and customer changes remain protected.
-- [ ] Latest validation runs for the sale-ledger tombstone association and WPF local marker assertions are in progress; record exact run results after completion.
+- [x] Validation complete for sale-ledger tombstone association and WPF local marker assertions. Flutter run #134: 23/23 tests passed on Ubuntu and Windows; analyzer step succeeded with 10 info-level lint suggestions. WPF run #492: Release build 0 warnings/0 errors and 106/106 tests passed.
+
+
+## Final validation — recalled-sale sync protocol (2026-11-22)
+
+- [x] WPF Release build: 0 warnings, 0 errors.
+- [x] WPF tests: 106 passed, 0 failed, 0 skipped. Actions run #492: https://github.com/magscacoffice/general_store_pos/actions/runs/45010853799
+- [x] Flutter tests: 23 passed on Ubuntu and 23 passed on Windows. Actions run #134: https://github.com/magscacoffice/general_store_pos/actions/runs/45010828018
+- [x] Flutter analyzer workflow step succeeded. It reported 10 info-level lint suggestions (not analyzer errors); these include existing formatting/deprecation suggestions outside the sale-revision logic.
+- [x] Schema-v2 Drive envelope and SQLite schema-v18 remain unchanged; no new columns or build artifacts.
+- [ ] Physical Android/Windows device tests and real Google Drive account round-trip remain pending. Do not mark Drive sync production-accepted until those tests and the business-case matrix are completed.
