@@ -1515,3 +1515,11 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Removed the raw live `.db` file copy from this restore safety path; a failed snapshot/integrity check cancels restore before changing the active database.
 - [ ] Re-run Android tests on Android/Linux and Windows runners, plus WPF Release build/tests, against the updated source. Earlier test counts apply to their recorded revisions only.
 - [ ] Verify restore with a deliberately WAL-pending write and then test rollback/reopen on physical Android and Windows devices. No build artifacts generated.
+
+## Follow-up hardening — deferred sync records are not marked processed (2026-11-22)
+
+- [x] Windows-master merge now distinguishes intentional skips (for example, a tombstone/re-add conflict retained for Windows review) from records deferred because a required stable ID or parent record is missing.
+- [x] A device snapshot is marked fully accepted only when it has **zero pending conflicts and zero deferred records**. This prevents missing-parent sales, sale items, purchases, Khata transactions, returns or return items from being silently abandoned as an already-processed snapshot.
+- [x] Added focused WPF unit tests for the snapshot acceptance rule: fully complete snapshots are accepted; any pending conflict or deferred record keeps the snapshot pending.
+- [ ] Run WPF Release build and all tests after these sync changes. Previous 93/93 result is from an earlier revision and is not evidence for this new code.
+- [ ] Validate on real Android + Windows devices with out-of-order parent/child records, repeated polling, duplicate delivery and conflict resolution. No APK, ZIP, installer or other build artifact generated.
