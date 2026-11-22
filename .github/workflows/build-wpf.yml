@@ -45,10 +45,34 @@ jobs:
           updater and full feature parity require separate owner acceptance.
           '@ | Set-Content artifacts/publish/TEST-INSTRUCTIONS.txt
           Compress-Archive -Path artifacts/publish/win-x64/*,artifacts/publish/TEST-INSTRUCTIONS.txt -DestinationPath artifacts/KhanBabaPOS-Windows-x64-v1.0.1-test.zip -Force
-      - name: Upload Windows x64 test package
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Compile unsigned Windows installer test build
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\\Inno Setup 6\\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc "/DAppVersion=1.0.1.0" "installer/KhanBabaPOS.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          $installer = "artifacts/installer/KhanBabaPOS-Setup-x64.exe"
+          if (-not (Test-Path $installer)) { throw "Installer output was not created." }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          Write-Host "Unsigned test installer Authenticode status: $($signature.Status)"
+          @'
+          KHAN BABA POS — WINDOWS INSTALLER TEST BUILD
+          ============================================
+          Unsigned TEST installer for Windows 10/11 x64.
+          Take a full backup before testing and use a disposable database copy.
+          This is not a signed production release. Drive sync, hardware and full feature parity require owner acceptance.
+          '@ | Set-Content artifacts/installer/TEST-INSTRUCTIONS.txt
+      - name: Upload Windows test packages
         uses: actions/upload-artifact@v4
         with:
-          name: KhanBabaPOS-Windows-x64-v1.0.1-test
-          path: artifacts/KhanBabaPOS-Windows-x64-v1.0.1-test.zip
+          name: KhanBabaPOS-Windows-v1.0.1-test
+          path: |
+            artifacts/KhanBabaPOS-Windows-x64-v1.0.1-test.zip
+            artifacts/installer/KhanBabaPOS-Setup-x64.exe
+            artifacts/installer/TEST-INSTRUCTIONS.txt
           if-no-files-found: error
           retention-days: 30
