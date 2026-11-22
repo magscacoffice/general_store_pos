@@ -2278,8 +2278,34 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal(afterFirst, await ReadStateAsync());
 
             // A stale pre-edit snapshot cannot roll the master back.
-            await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath);
+            await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
             Assert.Equal(afterFirst, await ReadStateAsync());
+
+            // Two offline edits from the same base can produce the same
+            // revision number. The Windows master must retain its own value.
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = sourcePath, Pooling = false }.ToString()))
+            {
+                await source.OpenAsync();
+                await using var edit = source.CreateCommand();
+                edit.CommandText = "UPDATE sales SET total_amount=65,final_amount=65,balance_due=55 WHERE sync_id='revision-sale-sync';";
+                await edit.ExecuteNonQueryAsync();
+            }
+            var concurrentPayload = await exporter.ExportAsync(sourcePath);
+            var concurrentSnapshot = new ValidatedDriveSnapshot(
+                "android-revision-device", concurrentPayload.Sha256, concurrentPayload.Data, concurrentPayload.Json);
+            var concurrentResult = await merge.MergeAsync(concurrentSnapshot, concurrentSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.True(concurrentResult.SnapshotFullyAccepted);
+            Assert.Equal(afterFirst, await ReadStateAsync());
+
+            await using var conflictCheck = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = targetPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            await conflictCheck.OpenAsync();
+            await using var conflictQuery = conflictCheck.CreateCommand();
+            conflictQuery.CommandText = "SELECT COUNT(*) FROM drive_sync_conflicts WHERE entity_type='sale_revision' AND entity_key='revision-sale-sync' AND status='resolved' AND resolution='keep_local';";
+            Assert.Equal(1L, Convert.ToInt64(await conflictQuery.ExecuteScalarAsync()));
         }
         finally
         {
