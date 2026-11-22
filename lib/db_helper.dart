@@ -2699,7 +2699,7 @@ class DBHelper {
         final id = row['sync_id']?.toString();
         if (id != null && id.isNotEmpty) {
           await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
-          await _recordDriveTombstone(txn, 'sale_item', id);
+          await _recordDriveTombstone(txn, 'sale_item', '$saleSync|$id');
         }
       }
       final saleRevision = await _nextDriveSaleRevision(txn, saleSync);
@@ -2717,7 +2717,7 @@ class DBHelper {
           final id = row['sync_id']?.toString();
           if (id != null && id.isNotEmpty) {
             await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
-            await _recordDriveTombstone(txn, 'khata_transaction', id);
+            await _recordDriveTombstone(txn, 'khata_transaction', '$saleSync|$id');
           }
         }
         await txn.delete('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
