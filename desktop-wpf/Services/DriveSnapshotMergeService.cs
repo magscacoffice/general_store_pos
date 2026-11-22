@@ -15,6 +15,12 @@ public sealed class DriveSnapshotMergeService
     public static bool IsSnapshotFullyAccepted(int pendingConflicts, int deferredRecords) =>
         pendingConflicts == 0 && deferredRecords == 0;
 
+    public static bool IsMissingStableId(string? syncId) =>
+        string.IsNullOrWhiteSpace(syncId);
+
+    public static bool IsMissingRequiredPartyReference(string? remotePartySyncId, long? localPartyId) =>
+        !string.IsNullOrWhiteSpace(remotePartySyncId) && localPartyId is null;
+
     private static readonly string[] ProductFields =
         ["name", "price", "purchasePrice", "wholesalePrice", "damaged_quantity", "quantity", "is_active", "stock_unit"];
     private static readonly string[] PartyFields = ["name", "phone", "type", "customer_type", "balance"];
@@ -305,6 +311,11 @@ public sealed class DriveSnapshotMergeService
                 if (productId is null) { skipped++; deferredRecords++; continue; }
                 var remoteSupplier = NullableText(remote, "supplier_sync_id");
                 var supplierId = await PartyIdForAsync(remoteSupplier);
+                if (IsMissingRequiredPartyReference(remoteSupplier, supplierId))
+                {
+                    skipped++; deferredRecords++;
+                    continue;
+                }
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("product_id"); values.Remove("supplier_id");
                 values["sync_id"] = syncId; values["product_id"] = productId; values["supplier_id"] = supplierId;
@@ -331,7 +342,8 @@ public sealed class DriveSnapshotMergeService
                 foreach (var remote in collections[table])
                 {
                     var syncId = Text(remote, "sync_id");
-                    if (syncId.Length == 0 || await FindIdAsync(db, tx, table, "sync_id", syncId, cancellationToken) is not null) continue;
+                    if (IsMissingStableId(syncId)) { skipped++; deferredRecords++; continue; }
+                    if (await FindIdAsync(db, tx, table, "sync_id", syncId, cancellationToken) is not null) continue;
                     var values = Copy(remote); values.Remove("id"); values["sync_id"] = syncId;
                     await InsertRowAsync(db, tx, table, values, cancellationToken); created++;
                 }
@@ -345,6 +357,11 @@ public sealed class DriveSnapshotMergeService
                 if (saleId is null) { skipped++; deferredRecords++; continue; }
                 var remoteParty = NullableText(remote, "party_sync_id");
                 var customerId = await PartyIdForAsync(remoteParty);
+                if (IsMissingRequiredPartyReference(remoteParty, customerId))
+                {
+                    skipped++; deferredRecords++;
+                    continue;
+                }
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("sale_id"); values.Remove("customer_id");
                 values["sync_id"] = syncId; values["sale_id"] = saleId; values["customer_id"] = customerId;
