@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Branch status (2026-11-22):** WPF migration PR #5 has been merged into `main`. The latest follow-up changes are grouped on `feature/complete-project-pendings` and are not merged yet; keep `main` stable until Android/WPF validation and owner acceptance are complete.
-> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive, and Wholesale customer removal. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android full analyzer/tests are still being validated. Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
+> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive, and Wholesale customer removal. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android analyzer and full Flutter tests passed on both Windows and Ubuntu (Actions run #45003053357; 22/22 each). Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
 
 ## Immediate owner priority — Windows cashier-first operation (2026-11-16)
 
@@ -1465,7 +1465,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - [x] Windows Drive disconnect now verifies a local database backup before removing credentials; snapshot import still requires verified pre-merge backup.
 - [x] WPF project exposes internals to its test assembly for OAuth unit tests. The WPF validation workflow runs restore/build/tests only and has no publish, ZIP or artifact-upload steps.
 - [x] Actions run #45002502830: WPF Release build succeeded with 0 warnings/0 errors; 93/93 tests passed; artifact list was empty.
-- [ ] Android analyzer and full Flutter test suite are still running after the duplicate invalid tail in `lib/printer_screen.dart` was removed. No APK was built.
+- [x] Android analyzer and full Flutter test suite passed on both Windows and Ubuntu after removing the duplicated invalid tail in `lib/printer_screen.dart`. No APK was built.
 
 - [x] Windows Desktop OAuth no longer requires `GOOGLE_WINDOWS_CLIENT_SECRET`; the installed-app PKCE token exchange uses the product-owned Desktop Client ID as a public client.
 
@@ -1474,7 +1474,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 The source work that can be completed safely without owner hardware, Google test accounts or a production signing certificate has been implemented on `feature/complete-project-pendings`. The following are the remaining release/acceptance gates; do not mark them complete based on source inspection alone:
 
-- [ ] Finish the latest Android matrix run #45003053357. Ubuntu analyzer and full Flutter suite passed (22/22); Windows runner is still in progress. Previous run #45002811257 passed 22/22 on both Windows and Ubuntu.
+- [x] Android matrix run #45003053357 passed on Windows and Ubuntu: analyzer succeeded and full Flutter suite passed 22/22 on each runner.
 - [ ] Owner-side Windows laptop acceptance: New Sale Khata dropdown shows saved customers; zero-balance customer archive/delete and non-zero guard; F2/F4/F5/F6/F7/F8/F9/F10; scanner focus/repeated scans; display scaling/resizing; saved printer; Black Copper BC-86AC 80mm receipt/cutter; PDF; backup/restore.
 - [ ] Real Google Drive acceptance with two separate Gmail test accounts: same-account Android/Windows round-trip, account switch with backup, no cross-account visibility, token refresh/revocation, revoked consent and offline recovery.
 - [ ] Full schema-v18 cross-platform parity audit using the same disposable database and fixtures for sale/discount/Khata, stock, returns, update/delete, aliases and tombstones. Automated WPF tests and Android sync tests do not replace this end-to-end acceptance.
@@ -1482,4 +1482,4 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Review and approve the feature branch before merging to `main`. Do not generate an APK, Windows ZIP, installer or release artifact without separate explicit authorization.
 
 - [x] Fixed malformed trailing non-YAML content in `.github/workflows/validate-windows-installer.yml`. The installer workflow is valid again and remains `workflow_dispatch`-only; it will not build or upload an installer on ordinary pushes.
-- [x] Latest Android run #45003053357: Ubuntu analyzer and full 22-test suite passed. Windows matrix runner has passed analyzer and is still completing the full test step.
+- [x] Latest Android run #45003053357: analyzer and full 22-test suite passed on both Windows and Ubuntu.
