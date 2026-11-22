@@ -135,7 +135,7 @@ public sealed class DriveSyncWindow : Window
     private async void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdmin()) return;
-        if (MessageBox.Show("Google account disconnect/switch karna hai? Pehle current database ka verified local backup banega. Us ke baad Connect & Sync se doosra Gmail account select kar sakte hain.",
+        if (MessageBox.Show("Google account disconnect/switch karna hai? Pehle current database ka verified local backup banega. Naya Gmail connect karne par isi local store ka data us account se sync hoga; sirf isi business ke liye account badlein. Kisi doosray business ke liye pehle fresh/clean database use karein.",
                 Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         await RunAsync(async () => { await _sync.DisconnectAsync(); return new DriveSyncSummary(0, 0, 0, DateTimeOffset.UtcNow); });
         await RefreshAccountAsync();
