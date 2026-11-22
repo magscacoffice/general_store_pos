@@ -17,7 +17,7 @@ namespace KhanBabaPos.Wpf.Services;
 public sealed class GoogleDriveAuthService
 {
     private const string ClientId = "707319476515-vtdi3s5vn0tudh3ihnppco14kkrgtk78.apps.googleusercontent.com";
-    private const string Scope = "https://www.googleapis.com/auth/drive.file";
+    private const string Scope = "openid email https://www.googleapis.com/auth/drive.file";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(25) };
     private readonly string _tokenPath;
 
@@ -67,6 +67,19 @@ public sealed class GoogleDriveAuthService
         return connected.AccessToken;
     }
 
+    public async Task<string?> GetConnectedAccountEmailAsync(CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(promptForLogin: false, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://openidconnect.googleapis.com/v1/userinfo");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var response = await Http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        return document.RootElement.TryGetProperty("email", out var email)
+            ? email.GetString()
+            : null;
+    }
+
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         if (File.Exists(_tokenPath))
@@ -114,7 +127,7 @@ public sealed class GoogleDriveAuthService
             ["code_challenge_method"] = "S256",
             ["state"] = state,
             ["access_type"] = "offline",
-            ["prompt"] = "consent"
+            ["prompt"] = "select_account consent"
         };
         var authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
             string.Join("&", query.Select(x =>
