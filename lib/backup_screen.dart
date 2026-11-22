@@ -152,15 +152,24 @@ class _BackupScreenState extends State<BackupScreen> {
         await validationDb?.close();
       }
 
+      // Create the rollback copy while SQLite is still open so committed WAL
+      // transactions are included. A raw .db file copy can omit WAL-only data.
+      if (await currentDb.exists()) {
+        await DBHelper.createConsistentBackup(safetyPath);
+        final safetyDb = await openDatabase(safetyPath, readOnly: true);
+        try {
+          final safetyIntegrity = await safetyDb.rawQuery('PRAGMA integrity_check');
+          if (safetyIntegrity.isEmpty ||
+              safetyIntegrity.first.values.first.toString().toLowerCase() != 'ok') {
+            throw Exception('Current database safety backup integrity check failed. Restore was cancelled.');
+          }
+        } finally {
+          await safetyDb.close();
+        }
+      }
+
       await DBHelper.closeDatabase();
       databaseClosed = true;
-
-      // Keep a uniquely named safety copy before replacing the live database.
-      if (await currentDb.exists()) {
-        final safetyFile = File(safetyPath);
-        if (await safetyFile.exists()) await safetyFile.delete();
-        await currentDb.copy(safetyPath);
-      }
 
       // Never delete or rename the live database on Windows. Even after
       // closing our own SQLite handle, another process can retain a file lock.
