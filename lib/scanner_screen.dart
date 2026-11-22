@@ -35,9 +35,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
     final cost = purchasePriceOverride ?? (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
     final retail = (product['price'] as num?)?.toDouble() ?? cost;
-    final wholesale = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-    final configured = widget.customerType == 'Wholesale' && wholesale > 0 ? wholesale : retail;
-    return configured < cost ? cost : configured;
+    return retail < cost ? cost : retail;
   }
 
   @override

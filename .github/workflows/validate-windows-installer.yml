@@ -82,37 +82,3 @@ jobs:
             artifacts/installer/TEST-INSTRUCTIONS.txt
           if-no-files-found: error
           retention-days: 30
-) {
-            throw "Invalid installer version: $version"
-          }
-          & $iscc "/DAppVersion=$version" "installer/KhanBabaPOS.iss"
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
-          $installer = "artifacts/installer/KhanBabaPOS-Setup-x64.exe"
-          if (-not (Test-Path $installer)) { throw "Installer output was not created." }
-          Write-Host "Unsigned test installer compiled. This is not a production release."
-          $signature = Get-AuthenticodeSignature -LiteralPath $installer
-          Write-Host "Authenticode status: $($signature.Status). Production signing is a separate required gate."
-
-      - name: Add test installer instructions
-        shell: pwsh
-        run: |
-          @'
-          KHAN BABA POS — WINDOWS INSTALLER TEST BUILD
-          ============================================
-          This is an unsigned TEST installer for owner acceptance only.
-          Install only on a Windows 10/11 x64 test PC, preferably after taking a full backup.
-          It installs per-user and does not require administrator privileges.
-          Existing business database and backup folders are configured to survive uninstall.
-          The installer does not migrate, replace, or delete the live SQLite database.
-          Google Drive sync, updater installation, hardware and full feature parity are not production-accepted until separately verified.
-          '@ | Set-Content artifacts/installer/TEST-INSTRUCTIONS.txt
-
-      - name: Upload installable Windows test artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: KhanBabaPOS-Windows-Installer-Test
-          path: |
-            artifacts/installer/KhanBabaPOS-Setup-x64.exe
-            artifacts/installer/TEST-INSTRUCTIONS.txt
-          if-no-files-found: error
-          retention-days: 30

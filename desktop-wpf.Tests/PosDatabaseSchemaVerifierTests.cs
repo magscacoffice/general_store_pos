@@ -254,7 +254,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var service = new SalePostingService(TestAccess);
             var partial = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
@@ -264,7 +264,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     10,
                     10,
                     true,
-                    "Wholesale",
+                    "Khata",
                     "Local Windows User"),
                 path);
             Assert.Equal(36, partial.Subtotal, 2);
@@ -281,7 +281,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale",
+                    "Khata",
                     "Local Windows User"),
                 path);
             Assert.Equal(18, cash.ReceivedAmount, 2);
@@ -295,7 +295,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             await connection.OpenAsync();
             await using (var sales = connection.CreateCommand())
             {
-                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Wholesale' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
+                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Khata' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
                 await using var reader = await sales.ExecuteReaderAsync();
                 Assert.True(await reader.ReadAsync());
                 Assert.Equal(2, reader.GetInt32(0));
@@ -415,7 +415,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task WpfWholesaleSaleRejectsKhataAccountBeforeChangingStock()
+    public async Task WpfRetiredWholesaleSaleTypeIsRejectedBeforeChangingStock()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
@@ -460,7 +460,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
             await connection.OpenAsync();
             await using var find = connection.CreateCommand();
@@ -504,7 +504,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            await SeedSaleAccountAsync(path, "Khata", 3);
             var supplierId = await SeedSupplierAsync(path);
             int productId;
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
@@ -587,7 +587,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            await SeedSaleAccountAsync(path, "Khata", 3);
             var supplierId = await SeedSupplierAsync(path);
             int productId;
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
@@ -681,7 +681,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -690,7 +690,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -750,7 +750,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -759,7 +759,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -821,7 +821,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -830,7 +830,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     10,
                     true,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -1280,7 +1280,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             var snapshot = BuildTestSnapshot(products:
             [
                 new Dictionary<string, object?>
@@ -1325,7 +1325,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             var snapshot = BuildTestSnapshot(tombstones:
             [
                 new Dictionary<string, object?>
@@ -1396,6 +1396,16 @@ public sealed class PosDatabaseSchemaVerifierTests
                     customerId, "Partial", 10, 0, false, "Khata", TestAccess.CurrentSession!.DisplayName, TestAccess.CurrentSession.UserId),
                 path);
             Assert.Equal(26, original.BalanceDue, 2);
+            string saleSyncId;
+            await using (var beforeEdit = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = path, Pooling = false }.ToString()))
+            {
+                await beforeEdit.OpenAsync();
+                await using var findSync = beforeEdit.CreateCommand();
+                findSync.CommandText = "SELECT sync_id FROM sales WHERE id=$id;";
+                findSync.Parameters.AddWithValue("$id", original.SaleId);
+                saleSyncId = Convert.ToString(await findSync.ExecuteScalarAsync())!;
+            }
 
             var updated = await service.UpdateSaleFromRecallAsync(
                 original.SaleId,
@@ -1444,6 +1454,28 @@ public sealed class PosDatabaseSchemaVerifierTests
                 Assert.Equal(2, reader.GetInt32(0));
                 Assert.Equal(48.6, reader.GetDouble(1), 2);
                 Assert.Equal(20, reader.GetDouble(2), 2);
+            }
+            await using (var markers = db.CreateCommand())
+            {
+                markers.CommandText = """
+                    SELECT
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_revision' AND entity_key=$revision),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_item' AND substr(entity_key,1,length($prefix))=$prefix),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='khata_transaction' AND substr(entity_key,1,length($prefix))=$prefix),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_ledger' AND substr(entity_key,1,length($prefix))=$prefix);
+                    """;
+                markers.Parameters.AddWithValue("$revision", $"{saleSyncId}|1");
+                markers.Parameters.AddWithValue("$prefix", saleSyncId + "|");
+                await using var markerReader = await markers.ExecuteReaderAsync();
+                Assert.True(await markerReader.ReadAsync());
+                Assert.Equal(1, markerReader.GetInt32(0));
+                Assert.Equal(1, markerReader.GetInt32(1));
+                Assert.Equal(2, markerReader.GetInt32(2));
+                Assert.Equal(2, markerReader.GetInt32(3));
             }
         }
         finally
@@ -1565,7 +1597,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task PartyDeleteBlocksCustomerLedgerHistoryAndSupplierPurchaseHistory()
+    public async Task PartyDeleteArchivesZeroBalanceCustomerHistoryAndProtectsOtherAccounts()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
@@ -1597,7 +1629,15 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await setBalance.ExecuteNonQueryAsync();
             }
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(balanceOnlyId, "customer", path));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(customerId, "customer", path));
+            Assert.Equal(1, await service.DeleteAsync(customerId, "customer", path));
+            await using (var archivedDb = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                await archivedDb.OpenAsync();
+                await using var archivedType = archivedDb.CreateCommand();
+                archivedType.CommandText = "SELECT type FROM parties WHERE id=$id;";
+                archivedType.Parameters.AddWithValue("$id", customerId);
+                Assert.Equal("archived_customer", await archivedType.ExecuteScalarAsync());
+            }
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(supplierId, "supplier", path));
         }
         finally
@@ -1728,7 +1768,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             var salesmanDraft = new PendingBillSnapshot(
                 "salesman-draft", "Salesman Draft", DateTime.Now.ToString("s"),
                 [new PendingBillLine("WPF-WH-1", "Saved item", 18, 2, 10, "pcs")],
-                23, "Wholesale", "Partial", 12.5, true, "7.50");
+                23, "Khata", "Partial", 12.5, true, "7.50");
             await service.SaveAsync(salesmanDraft);
 
             var visibleToSalesman = await service.GetAllAsync();
@@ -1736,7 +1776,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal("salesman-draft", visibleToSalesman[0].BillId);
             Assert.Equal(salesmanSession.UserId, visibleToSalesman[0].CashierUid);
             Assert.Equal(23, visibleToSalesman[0].SelectedCustomerId);
-            Assert.Equal("Wholesale", visibleToSalesman[0].SelectedSaleType);
+            Assert.Equal("Khata", visibleToSalesman[0].SelectedSaleType);
             Assert.Equal("Partial", visibleToSalesman[0].CustomerPaymentMode);
             Assert.Equal(12.5, visibleToSalesman[0].OverallDiscount, 2);
             Assert.True(visibleToSalesman[0].IsPercentageDiscount);
@@ -2091,6 +2131,253 @@ public sealed class PosDatabaseSchemaVerifierTests
                 Assert.True(reader.GetInt64(2) > 0);
                 Assert.Equal(reader.GetInt64(4), reader.GetInt64(3));
             }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+
+    [Fact]
+    public async Task DriveSnapshotReconcilesRecalledSaleRevisionAndIsIdempotent()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "khan-baba-sale-revision-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var sourceFixture = await CreateFixtureAsync();
+        var targetFixture = await CreateFixtureAsync();
+        var sourcePath = Path.Combine(directory, "source.db");
+        var targetPath = Path.Combine(directory, "target.db");
+        File.Copy(sourceFixture, sourcePath);
+        File.Copy(targetFixture, targetPath);
+        File.Delete(sourceFixture);
+        File.Delete(targetFixture);
+
+        try
+        {
+            long sourceProductId;
+            long sourceCustomerId;
+            long sourceSaleId;
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = sourcePath, Pooling = false }.ToString()))
+            {
+                await source.OpenAsync();
+                await using var command = source.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO products(name,barcode,price,purchasePrice,wholesalePrice,damaged_quantity,quantity,is_active,stock_unit)
+                    VALUES('Revision Tea','REV-TEA-1',20,10,18,0,8,1,'pcs');
+                    SELECT last_insert_rowid();
+                    """;
+                sourceProductId = Convert.ToInt64(await command.ExecuteScalarAsync());
+                command.CommandText = """
+                    INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+                    VALUES('Revision Customer','03000000001','customer','Khata','revision-customer-sync',30);
+                    SELECT last_insert_rowid();
+                    """;
+                sourceCustomerId = Convert.ToInt64(await command.ExecuteScalarAsync());
+                command.CommandText = """
+                    INSERT INTO sales(total_amount,discount,final_amount,payment_type,customer_id,customer_type,received_amount,balance_due,sync_id,customer_sync_id,date)
+                    VALUES(40,0,40,'Partial',$customer,'Khata',10,30,'revision-sale-sync','revision-customer-sync','2026-11-22 10:00:00');
+                    SELECT last_insert_rowid();
+                    """;
+                command.Parameters.AddWithValue("$customer", sourceCustomerId);
+                sourceSaleId = Convert.ToInt64(await command.ExecuteScalarAsync());
+                command.Parameters.Clear();
+                command.CommandText = """
+                    INSERT INTO sale_items(sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit)
+                    VALUES($sale,$product,'REV-TEA-1','Revision Tea',2,20,10,40,20,'revision-item-v1','revision-sale-sync','pcs');
+                    """;
+                command.Parameters.AddWithValue("$sale", sourceSaleId);
+                command.Parameters.AddWithValue("$product", sourceProductId);
+                await command.ExecuteNonQueryAsync();
+                command.Parameters.Clear();
+                command.CommandText = """
+                    INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
+                    VALUES($party,'credit',40,'Sale #1','2026-11-22 10:00:00','revision-ledger-v1','revision-customer-sync');
+                    """;
+                command.Parameters.AddWithValue("$party", sourceCustomerId);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var exporter = new DriveSnapshotExportService();
+            var merge = new DriveSnapshotMergeService();
+            var initialPayload = await exporter.ExportAsync(sourcePath);
+            var initialSnapshot = new ValidatedDriveSnapshot(
+                "android-revision-device", initialPayload.Sha256, initialPayload.Data, initialPayload.Json);
+            var initialResult = await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.True(initialResult.SnapshotFullyAccepted);
+
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = sourcePath, Pooling = false }.ToString()))
+            {
+                await source.OpenAsync();
+                using var transaction = source.BeginTransaction();
+                await using var updateSale = source.CreateCommand();
+                updateSale.Transaction = transaction;
+                updateSale.CommandText = "UPDATE sales SET total_amount=60,final_amount=60,received_amount=10,balance_due=50 WHERE sync_id='revision-sale-sync';";
+                await updateSale.ExecuteNonQueryAsync();
+                await using var updateStock = source.CreateCommand();
+                updateStock.Transaction = transaction;
+                updateStock.CommandText = "UPDATE products SET quantity=7 WHERE barcode='REV-TEA-1';";
+                await updateStock.ExecuteNonQueryAsync();
+                await using var deleteItem = source.CreateCommand();
+                deleteItem.Transaction = transaction;
+                deleteItem.CommandText = "DELETE FROM sale_items WHERE sync_id='revision-item-v1';";
+                await deleteItem.ExecuteNonQueryAsync();
+                await using var insertItem = source.CreateCommand();
+                insertItem.Transaction = transaction;
+                insertItem.CommandText = """
+                    INSERT INTO sale_items(sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit)
+                    VALUES($sale,$product,'REV-TEA-1','Revision Tea',3,20,10,60,30,'revision-item-v2','revision-sale-sync','pcs');
+                    """;
+                insertItem.Parameters.AddWithValue("$sale", sourceSaleId);
+                insertItem.Parameters.AddWithValue("$product", sourceProductId);
+                await insertItem.ExecuteNonQueryAsync();
+                await using var deleteLedger = source.CreateCommand();
+                deleteLedger.Transaction = transaction;
+                deleteLedger.CommandText = "DELETE FROM khata_transactions WHERE sync_id='revision-ledger-v1';";
+                await deleteLedger.ExecuteNonQueryAsync();
+                await using var insertLedger = source.CreateCommand();
+                insertLedger.Transaction = transaction;
+                insertLedger.CommandText = """
+                    INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
+                    VALUES($party,'credit',60,'Sale #1','2026-11-22 10:00:00','revision-ledger-v2','revision-customer-sync');
+                    """;
+                insertLedger.Parameters.AddWithValue("$party", sourceCustomerId);
+                await insertLedger.ExecuteNonQueryAsync();
+                foreach (var (type, key) in new[]
+                {
+                    ("sale_item", "revision-sale-sync|revision-item-v1"),
+                    ("khata_transaction", "revision-sale-sync|revision-ledger-v1"),
+                    ("sale_ledger", "revision-sale-sync|revision-ledger-v2"),
+                    ("sale_revision", "revision-sale-sync|1")
+                })
+                {
+                    await using var marker = source.CreateCommand();
+                    marker.Transaction = transaction;
+                    marker.CommandText = """
+                        INSERT OR REPLACE INTO drive_sync_tombstones(entity_type,entity_key,deleted_at,source_device_id)
+                        VALUES($type,$key,'2026-11-22T10:01:00Z','local');
+                        """;
+                    marker.Parameters.AddWithValue("$type", type);
+                    marker.Parameters.AddWithValue("$key", key);
+                    await marker.ExecuteNonQueryAsync();
+                }
+                await transaction.CommitAsync();
+            }
+
+            var revisedPayload = await exporter.ExportAsync(sourcePath);
+            var revisedSnapshot = new ValidatedDriveSnapshot(
+                "android-revision-device", revisedPayload.Sha256, revisedPayload.Data, revisedPayload.Json);
+            var firstRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.True(firstRevision.SnapshotFullyAccepted);
+
+            async Task<(long SaleTotal, long ItemCount, string ItemSync, long LedgerCount, string LedgerSync, long Stock, long PartyBalance)> ReadStateAsync()
+            {
+                await using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+                { DataSource = targetPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+                await db.OpenAsync();
+                await using var query = db.CreateCommand();
+                query.CommandText = """
+                    SELECT
+                      (SELECT CAST(final_amount AS INTEGER) FROM sales WHERE sync_id='revision-sale-sync'),
+                      (SELECT COUNT(*) FROM sale_items WHERE sale_sync_id='revision-sale-sync'),
+                      (SELECT sync_id FROM sale_items WHERE sale_sync_id='revision-sale-sync' LIMIT 1),
+                      (SELECT COUNT(*) FROM khata_transactions WHERE party_sync_id='revision-customer-sync'),
+                      (SELECT sync_id FROM khata_transactions WHERE party_sync_id='revision-customer-sync' LIMIT 1),
+                      (SELECT quantity FROM products WHERE barcode='REV-TEA-1'),
+                      (SELECT CAST(balance AS INTEGER) FROM parties WHERE sync_id='revision-customer-sync');
+                    """;
+                await using var reader = await query.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                return (reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),
+                    reader.GetInt64(3), reader.GetString(4), reader.GetInt64(5), reader.GetInt64(6));
+            }
+
+            var afterFirst = await ReadStateAsync();
+            Assert.Equal(60, afterFirst.SaleTotal);
+            Assert.Equal(1, afterFirst.ItemCount);
+            Assert.Equal("revision-item-v2", afterFirst.ItemSync);
+            Assert.Equal(1, afterFirst.LedgerCount);
+            Assert.Equal("revision-ledger-v2", afterFirst.LedgerSync);
+            Assert.Equal(7, afterFirst.Stock);
+            Assert.Equal(50, afterFirst.PartyBalance);
+
+            var secondRevision = await merge.MergeAsync(revisedSnapshot, revisedSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.True(secondRevision.SnapshotFullyAccepted);
+            Assert.Equal(afterFirst, await ReadStateAsync());
+
+            // A stale pre-edit snapshot cannot roll the master back.
+            await merge.MergeAsync(initialSnapshot, initialSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.Equal(afterFirst, await ReadStateAsync());
+
+            // Two offline edits from the same base can produce the same
+            // revision number. The Windows master must retain its own value.
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = sourcePath, Pooling = false }.ToString()))
+            {
+                await source.OpenAsync();
+                await using (var edit = source.CreateCommand())
+                {
+                    edit.CommandText = "UPDATE sales SET total_amount=65,final_amount=65,balance_due=55 WHERE sync_id='revision-sale-sync';";
+                    await edit.ExecuteNonQueryAsync();
+                }
+                await using (var replaceItem = source.CreateCommand())
+                {
+                    replaceItem.CommandText = "DELETE FROM sale_items WHERE sale_sync_id='revision-sale-sync';";
+                    await replaceItem.ExecuteNonQueryAsync();
+                }
+                await using (var addConcurrentItem = source.CreateCommand())
+                {
+                    addConcurrentItem.CommandText = """
+                        INSERT INTO sale_items(sale_id,product_id,barcode,product_name,quantity,sale_price,purchase_price,line_total,cost_total,sync_id,sale_sync_id,stock_unit)
+                        VALUES($sale,$product,'REV-TEA-1','Revision Tea',4,20,10,80,40,'revision-item-v3','revision-sale-sync','pcs');
+                        """;
+                    addConcurrentItem.Parameters.AddWithValue("$sale", sourceSaleId);
+                    addConcurrentItem.Parameters.AddWithValue("$product", sourceProductId);
+                    await addConcurrentItem.ExecuteNonQueryAsync();
+                }
+                await using (var replaceLedger = source.CreateCommand())
+                {
+                    replaceLedger.CommandText = "DELETE FROM khata_transactions WHERE sync_id='revision-ledger-v2';";
+                    await replaceLedger.ExecuteNonQueryAsync();
+                }
+                await using (var addConcurrentLedger = source.CreateCommand())
+                {
+                    addConcurrentLedger.CommandText = """
+                        INSERT INTO khata_transactions(party_id,type,amount,note,date,sync_id,party_sync_id)
+                        VALUES($party,'credit',65,'Sale #1','2026-11-22 10:00:00','revision-ledger-v3','revision-customer-sync');
+                        """;
+                    addConcurrentLedger.Parameters.AddWithValue("$party", sourceCustomerId);
+                    await addConcurrentLedger.ExecuteNonQueryAsync();
+                }
+                await using (var concurrentLedgerMarker = source.CreateCommand())
+                {
+                    concurrentLedgerMarker.CommandText = """
+                        INSERT OR REPLACE INTO drive_sync_tombstones(entity_type,entity_key,deleted_at,source_device_id)
+                        VALUES('sale_ledger','revision-sale-sync|revision-ledger-v3','2026-11-22T10:02:00Z','local');
+                        """;
+                    await concurrentLedgerMarker.ExecuteNonQueryAsync();
+                }
+            }
+            var concurrentPayload = await exporter.ExportAsync(sourcePath);
+            var concurrentSnapshot = new ValidatedDriveSnapshot(
+                "android-revision-device", concurrentPayload.Sha256, concurrentPayload.Data, concurrentPayload.Json);
+            var concurrentResult = await merge.MergeAsync(concurrentSnapshot, concurrentSnapshot.DeviceId, targetPath,
+                autoResolveConflictsKeepWindows: true);
+            Assert.True(concurrentResult.SnapshotFullyAccepted);
+            Assert.Equal(afterFirst, await ReadStateAsync());
+
+            await using var conflictCheck = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = targetPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            await conflictCheck.OpenAsync();
+            await using var conflictQuery = conflictCheck.CreateCommand();
+            conflictQuery.CommandText = "SELECT COUNT(*) FROM drive_sync_conflicts WHERE entity_type='sale_revision' AND entity_key='revision-sale-sync' AND status='resolved' AND resolution='keep_local';";
+            Assert.Equal(1L, Convert.ToInt64(await conflictQuery.ExecuteScalarAsync()));
         }
         finally
         {

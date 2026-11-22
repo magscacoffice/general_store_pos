@@ -210,8 +210,9 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <DockPanel Margin="0,0,0,10">
-                            <Button Content="Print Bill (F9)" DockPanel.Dock="Right" Click="PrintCurrentBill_Click"
-                                    Margin="8,0,0,0" Padding="10,6" ToolTip="Open current bill print preview"/>
+                            <Button Content="Draft Preview" DockPanel.Dock="Right" Click="PreviewDraft_Click"
+                                    Margin="8,0,0,0" Padding="10,6"
+                                    ToolTip="Preview the pending bill only. It does not post or auto-print a sale."/>
                             <Button Content="Recall Bills" DockPanel.Dock="Right" Click="RecallBill_Click"
                                     Margin="8,0,0,0" Padding="10,6" ToolTip="Recall or edit a previously saved bill"/>
                             <TextBlock x:Name="CartCountText" DockPanel.Dock="Right" Text="0 items"
@@ -261,7 +262,7 @@
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="1" Margin="5,0,2,5">
                                 <TextBlock Text="Customer • F4" Foreground="#65736C" FontSize="10" Margin="0,0,0,2"/>
-                                <ComboBox x:Name="CustomerBox" MinHeight="30" DisplayMemberPath="Name" SelectedValuePath="Id"
+                                <ComboBox x:Name="CustomerBox" MinHeight="30" ItemsSource="{Binding Customers}" DisplayMemberPath="Name" SelectedValuePath="Id"
                                           SelectionChanged="CustomerBox_SelectionChanged"/>
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="2,0,5,0">
@@ -302,12 +303,12 @@
                         </Border>
                         <Grid Grid.Row="5">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Button x:Name="PrintBillButton" Content="Print Bill • F9" Click="PrintCurrentBill_Click"
+                            <Button x:Name="SaveAndPrintButton" Content="Save &amp; Print • F9" Click="SaveAndPrint_Click"
                                     IsEnabled="False" HorizontalContentAlignment="Center" Margin="0,0,4,0" Padding="7,6"
-                                    Background="#EAF2EE" Foreground="#173B32" FontWeight="SemiBold"/>
-                            <Button x:Name="CheckoutButton" Grid.Column="1" Content="Complete Sale • F10" Click="Checkout_Click"
+                                    Background="#173B32" Foreground="White" FontWeight="Bold"/>
+                            <Button x:Name="CheckoutButton" Grid.Column="1" Content="Save Only • F10" Click="Checkout_Click"
                                     IsEnabled="False" HorizontalContentAlignment="Center" Margin="4,0,0,0" Padding="7,6"
-                                    Background="#DCE9E2" Foreground="#173B32" FontWeight="Bold"/>
+                                    Background="#EAF2EE" Foreground="#173B32" FontWeight="SemiBold"/>
                         </Grid>
                     </Grid>
                 </Border>

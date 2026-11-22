@@ -8,14 +8,14 @@ public sealed class PartyService
  {
   if(type is not ("customer" or "supplier"))throw new ArgumentOutOfRangeException(nameof(type));
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);
-  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="SELECT id,name,COALESCE(phone,''),COALESCE(balance,0),type,COALESCE(customer_type,'Khata') FROM parties WHERE type=$type ORDER BY name COLLATE NOCASE;";cmd.Parameters.AddWithValue("$type",type);
+  await using var db=await Open(path,true,ct);await using var cmd=db.CreateCommand();cmd.CommandText="SELECT id,name,COALESCE(phone,''),COALESCE(balance,0),type,CASE WHEN COALESCE(customer_type,'Khata')='Wholesale' THEN 'Khata' ELSE COALESCE(customer_type,'Khata') END FROM parties WHERE type=$type ORDER BY name COLLATE NOCASE;";cmd.Parameters.AddWithValue("$type",type);
   await using var rd=await cmd.ExecuteReaderAsync(ct);var rows=new List<PartyRow>();while(await rd.ReadAsync(ct))rows.Add(new(rd.GetInt32(0),rd.GetString(1),rd.GetString(2),rd.GetDouble(3),rd.GetString(4),rd.IsDBNull(5)?"Khata":rd.GetString(5)));return rows;
  }
  public async Task AddAsync(string name,string phone,string type,string customerType="Khata",CancellationToken ct=default)
  {
         AccessService.RequireCurrentAdmin();
   name=name.Trim();phone=phone.Trim();if(name.Length==0)throw new InvalidOperationException("Party name zaroori hai.");if(type is not ("customer" or "supplier"))throw new ArgumentOutOfRangeException(nameof(type));
-  if(type=="customer" && customerType is not ("Khata" or "Wholesale"))throw new InvalidOperationException("Customer type must be Khata or Wholesale.");
+  if(type=="customer" && customerType != "Khata")throw new InvalidOperationException("Customer type must be Khata.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var tx=await db.BeginTransactionAsync(ct);await using var cmd=db.CreateCommand();cmd.Transaction=(SqliteTransaction)tx;
   cmd.CommandText="INSERT INTO parties(name,phone,type,customer_type,balance,sync_id) VALUES($name,$phone,$type,$customerType,0,$sync);";
@@ -25,7 +25,7 @@ public sealed class PartyService
  public async Task UpdateCustomerTypeAsync(int id,string customerType,CancellationToken ct=default)
  {
         AccessService.RequireCurrentAdmin();
-  if(customerType is not ("Khata" or "Wholesale"))throw new InvalidOperationException("Customer type must be Khata or Wholesale.");
+  if(customerType != "Khata")throw new InvalidOperationException("Only Khata customer accounts are supported.");
   var path=PosDatabasePath.Resolve(requireExisting:true);await PosDatabaseSchemaVerifier.VerifyAsync(path,ct);await DatabaseSafetyService.EnsureVerifiedBackupAsync(path,ct);
   await using var db=await Open(path,false,ct);await using var cmd=db.CreateCommand();
   cmd.CommandText="UPDATE parties SET customer_type=$type WHERE id=$id AND type='customer';";
@@ -62,13 +62,22 @@ public sealed class PartyService
   {
    count.Transaction=(SqliteTransaction)tx;
    count.CommandText=type=="customer"
-    ? "SELECT (SELECT COUNT(*) FROM sales WHERE customer_id=$id)+(SELECT COUNT(*) FROM khata_transactions WHERE party_id=$id);"
+    ? "SELECT (SELECT COUNT(*) FROM sales WHERE customer_id=$id)+(SELECT COUNT(*) FROM khata_transactions WHERE party_id=$id)+(SELECT COUNT(*) FROM sale_returns WHERE customer_id=$id);"
     : "SELECT COUNT(*) FROM purchases WHERE supplier_id=$id;";
    count.Parameters.AddWithValue("$id",id);
    references=Convert.ToInt32(await count.ExecuteScalarAsync(ct),CultureInfo.InvariantCulture);
   }
-  if(references>0||Math.Abs(balance)>0.000001)
-   throw new InvalidOperationException("Is account ki transaction history ya outstanding balance mojood hai. Ledger aur purane records mehfooz rakhne ke liye delete nahi kar sakte.");
+  if(Math.Abs(balance)>0.000001)
+   throw new InvalidOperationException($"Is account ka balance abhi Rs. {balance.ToString("N2",CultureInfo.InvariantCulture)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.");
+  if(references>0 && type=="customer")
+  {
+   await using var archive=db.CreateCommand();archive.Transaction=(SqliteTransaction)tx;
+   archive.CommandText="UPDATE parties SET type='archived_customer',customer_type='Khata' WHERE id=$id AND type='customer';";
+   archive.Parameters.AddWithValue("$id",id);
+   var archived=await archive.ExecuteNonQueryAsync(ct);await tx.CommitAsync(ct);return archived;
+  }
+  if(references>0)
+   throw new InvalidOperationException("Is supplier ki purchase history mojood hai; history mehfooz rakhne ke liye delete nahi kar sakte.");
   if(!string.IsNullOrWhiteSpace(syncId))
   {
    await using var tombstone=db.CreateCommand();

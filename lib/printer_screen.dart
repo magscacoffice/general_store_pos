@@ -11,6 +11,13 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:unified_esc_pos_printer/unified_esc_pos_printer.dart' as usb_print;
 
+String formatReceiptMoney(double amount) {
+  final fixed = amount.toStringAsFixed(2);
+  if (fixed.endsWith('.00')) return fixed.substring(0, fixed.length - 3);
+  if (fixed.endsWith('0')) return fixed.substring(0, fixed.length - 1);
+  return fixed;
+}
+
 class PrinterScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
   final double totalAmount;
@@ -89,7 +96,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   double _itemQuantity(Map<String, dynamic> item) =>
       _number(item['quantity'] ?? item['qty']);
 
-  String _money(double amount) => amount.toStringAsFixed(2);
+  String _money(double amount) => formatReceiptMoney(amount);
 
   int get _receiptLineWidth => ((576 - (_paperMarginMm * 16)) ~/ 12).clamp(40, 48).toInt();
 

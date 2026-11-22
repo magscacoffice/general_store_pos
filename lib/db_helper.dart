@@ -762,6 +762,21 @@ class DBHelper {
     );
   }
 
+  static Future<int> _nextDriveSaleRevision(DatabaseExecutor txn, String saleSyncId) async {
+    final prefix = '$saleSyncId|';
+    final rows = await txn.rawQuery(
+      "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type = 'sale_revision' AND substr(entity_key, 1, ?) = ?",
+      [prefix.length, prefix],
+    );
+    var current = 0;
+    for (final row in rows) {
+      final key = row['entity_key']?.toString() ?? '';
+      final revision = int.tryParse(key.substring(prefix.length));
+      if (revision != null && revision > current) current = revision;
+    }
+    return current + 1;
+  }
+
   /// Export relational data without SQLite row IDs. Cloud references use stable sync IDs.
   static Future<Map<String, dynamic>> exportDriveSnapshot() async {
     await _ensureLegacySyncIds();
@@ -1339,14 +1354,55 @@ class DBHelper {
         return rows.isEmpty ? null : (rows.first['id'] as num).toInt();
       }
 
-      // Append-only business records are imported by stable sync ID and never
-      // replace an existing sale, purchase, receipt, or return.
+      Future<int> saleRevisionFor(String saleSyncId) async {
+        final prefix = '$saleSyncId|';
+        final markers = await txn.rawQuery(
+          "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type = 'sale_revision' AND substr(entity_key, 1, ?) = ?",
+          [prefix.length, prefix],
+        );
+        var current = 0;
+        for (final marker in markers) {
+          final key = marker['entity_key']?.toString() ?? '';
+          final revision = int.tryParse(key.substring(prefix.length));
+          if (revision != null && revision > current) current = revision;
+        }
+        return current;
+      }
+
+      final remoteSaleRevisions = <String, int>{};
+      final remoteSaleLedgerParents = <String, String>{};
+      for (final marker in collection('tombstones')) {
+        final type = marker['entity_type']?.toString() ?? '';
+        final key = marker['entity_key']?.toString() ?? '';
+        final split = key.lastIndexOf('|');
+        if (split <= 0) continue;
+        final saleSyncId = key.substring(0, split);
+        final recordKey = key.substring(split + 1);
+        if (type == 'sale_revision') {
+          final revision = int.tryParse(recordKey);
+          if (revision == null || revision <= 0) continue;
+          final previous = remoteSaleRevisions[saleSyncId] ?? 0;
+          if (revision > previous) remoteSaleRevisions[saleSyncId] = revision;
+        } else if (type == 'sale_ledger' && recordKey.isNotEmpty) {
+          remoteSaleLedgerParents[recordKey] = saleSyncId;
+        }
+      }
+
+      // Windows master snapshots are authoritative for sale revisions. Rebuild
+      // the edited bill's item set atomically; ordinary device snapshots remain
+      // append-only and cannot overwrite an existing bill.
+      final masterUpdatedSales = <String>{};
+      final blockedMasterSales = <String>{};
       for (final remote in collection('sales')) {
         final syncId = remote['sync_id']?.toString() ?? '';
-        if (syncId.isEmpty || await localBySync('sales', syncId) != null) continue;
+        if (syncId.isEmpty) continue;
+        final existingSaleId = await localBySync('sales', syncId);
         final customerSyncId = remote['customer_sync_id']?.toString();
         final customerId = await partyIdFor(customerSyncId);
-        if (customerSyncId != null && customerId == null) continue;
+        if (customerSyncId != null && customerId == null) {
+          if (applyMasterState && existingSaleId != null) blockedMasterSales.add(syncId);
+          continue;
+        }
         final canonicalCustomerSyncId = await canonicalPartySyncId(customerSyncId);
         final values = Map<String, dynamic>.from(remote)
           ..remove('id')
@@ -1354,13 +1410,75 @@ class DBHelper {
           ..['sync_id'] = syncId
           ..['customer_sync_id'] = canonicalCustomerSyncId
           ..['customer_id'] = customerId;
-        await txn.insert('sales', values);
+
+        if (existingSaleId == null) {
+          await txn.insert('sales', values);
+          continue;
+        }
+        if (!applyMasterState) continue;
+
+        final remoteRevision = remoteSaleRevisions[syncId] ?? 0;
+        final localRevision = await saleRevisionFor(syncId);
+        if (remoteRevision < localRevision) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        final localReturns = await txn.query(
+          'sale_returns',
+          columns: ['id'],
+          where: 'sale_id = ?',
+          whereArgs: [existingSaleId],
+          limit: 1,
+        );
+        if (localReturns.isNotEmpty) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        final localSales = await txn.query(
+          'sales',
+          where: 'id = ?',
+          whereArgs: [existingSaleId],
+          limit: 1,
+        );
+        if (localSales.isEmpty) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        final localSale = localSales.first;
+        final localCustomerId = (localSale['customer_id'] as num?)?.toInt();
+        if (localCustomerId != customerId) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
+        if (remoteRevision > 0 && remoteRevision == localRevision) {
+          const saleFields = [
+            'total_amount', 'discount', 'final_amount', 'payment_type',
+            'customer_type', 'received_amount', 'balance_due', 'date',
+            'salesman_uid', 'salesman_name', 'customer_sync_id',
+          ];
+          final differs = saleFields.any((field) {
+            final left = localSale[field];
+            final right = values[field];
+            if (left == null || right == null) return left != right;
+            if (left is num && right is num) return (left - right).abs() > 0.000001;
+            return left.toString() != right.toString();
+          });
+          if (differs) {
+            blockedMasterSales.add(syncId);
+            continue;
+          }
+        }
+        await txn.update('sales', values, where: 'id = ?', whereArgs: [existingSaleId]);
+        await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [existingSaleId]);
+        masterUpdatedSales.add(syncId);
       }
 
       for (final remote in collection('sale_items')) {
         final syncId = remote['sync_id']?.toString() ?? '';
+        final parentSaleSyncId = remote['sale_sync_id']?.toString() ?? '';
+        if (blockedMasterSales.contains(parentSaleSyncId)) continue;
         if (syncId.isEmpty || await localBySync('sale_items', syncId) != null) continue;
-        final saleId = await localBySync('sales', remote['sale_sync_id']?.toString());
+        final saleId = await localBySync('sales', parentSaleSyncId);
         if (saleId == null) continue;
         final productId = await productIdFor(remote['barcode']?.toString());
         final values = Map<String, dynamic>.from(remote)
@@ -1394,7 +1512,16 @@ class DBHelper {
 
       for (final remote in collection('khata_transactions')) {
         final syncId = remote['sync_id']?.toString() ?? '';
-        if (syncId.isEmpty || await localBySync('khata_transactions', syncId) != null) continue;
+        if (syncId.isEmpty) continue;
+        final wasDeletedBySaleRevision = await txn.rawQuery(
+          "SELECT id FROM drive_sync_tombstones WHERE entity_type = 'khata_transaction' AND instr(entity_key, '|') > 0 AND substr(entity_key, instr(entity_key, '|') + 1) = ? LIMIT 1",
+          [syncId],
+        );
+        if (wasDeletedBySaleRevision.isNotEmpty) continue;
+        final parentSaleSyncId = remoteSaleLedgerParents[syncId];
+        if (applyMasterState && parentSaleSyncId != null &&
+            blockedMasterSales.contains(parentSaleSyncId)) continue;
+        if (await localBySync('khata_transactions', syncId) != null) continue;
         final remotePartySyncId = remote['party_sync_id']?.toString();
         final partyId = await partyIdFor(remotePartySyncId);
         if (partyId == null) continue;
@@ -1402,6 +1529,7 @@ class DBHelper {
         final values = Map<String, dynamic>.from(remote)
           ..remove('id')
           ..remove('party_id')
+          ..remove('sale_sync_id')
           ..['party_id'] = partyId
           ..['party_sync_id'] = canonicalSyncId
           ..['sync_id'] = syncId;
@@ -1455,12 +1583,52 @@ class DBHelper {
         await txn.insert('sale_return_items', values);
       }
 
-      // Apply explicit deletion markers only when the other device has no
-      // local stock/history that would be lost. Otherwise require a decision.
+      // Preserve master sale revisions and apply their scoped child deletions
+      // only after the corresponding bill revision has been reconciled.
       for (final tombstone in collection('tombstones')) {
         final type = tombstone['entity_type']?.toString() ?? '';
         final key = tombstone['entity_key']?.toString() ?? '';
-        if (key.isEmpty || !['product', 'party'].contains(type)) continue;
+        if (key.isEmpty) continue;
+        if (type == 'sale_revision' || type == 'sale_ledger') {
+          final split = key.lastIndexOf('|');
+          if (split > 0 && key.substring(split + 1).isNotEmpty &&
+              (type == 'sale_ledger' || int.tryParse(key.substring(split + 1)) != null)) {
+            await txn.insert('drive_sync_tombstones', {
+              'entity_type': type,
+              'entity_key': key,
+              'deleted_at': tombstone['deleted_at']?.toString() ?? DateTime.now().toUtc().toIso8601String(),
+              'source_device_id': sourceDeviceId,
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+          continue;
+        }
+        if (type == 'sale_item' || type == 'khata_transaction') {
+          final split = key.lastIndexOf('|');
+          if (split <= 0) continue;
+          final saleSyncId = key.substring(0, split);
+          final recordSyncId = key.substring(split + 1);
+          if (!masterUpdatedSales.contains(saleSyncId)) continue;
+          if (type == 'sale_item') {
+            final oldItem = await txn.query('sale_items', columns: ['id'],
+              where: 'sync_id = ?', whereArgs: [recordSyncId], limit: 1);
+            if (oldItem.isNotEmpty) {
+              final referenced = await txn.query('sale_return_items', columns: ['id'],
+                where: 'sale_item_id = ?', whereArgs: [oldItem.first['id']], limit: 1);
+              if (referenced.isNotEmpty) continue;
+            }
+            await txn.delete('sale_items', where: 'sync_id = ?', whereArgs: [recordSyncId]);
+          } else {
+            await txn.delete('khata_transactions', where: 'sync_id = ?', whereArgs: [recordSyncId]);
+          }
+          await txn.insert('drive_sync_tombstones', {
+            'entity_type': type,
+            'entity_key': key,
+            'deleted_at': tombstone['deleted_at']?.toString() ?? DateTime.now().toUtc().toIso8601String(),
+            'source_device_id': sourceDeviceId,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          continue;
+        }
+        if (!['product', 'party'].contains(type)) continue;
         if (type == 'product' &&
             collection('products').any((product) => product['barcode']?.toString() == key)) {
           continue;
@@ -1565,6 +1733,28 @@ class DBHelper {
     if (_db != null) return _db!;
     _db = await initDB();
     return _db!;
+  }
+
+
+  // Creates a consistent SQLite snapshot including committed WAL transactions.
+  // VACUUM INTO requires SQLite 3.27+ and never copies the live main DB file.
+  static Future<void> createConsistentBackup(String destinationPath) async {
+    final database = await DBHelper.database;
+    final destination = File(destinationPath);
+    if (await destination.exists()) {
+      throw FileSystemException('Backup destination already exists.', destinationPath);
+    }
+    final rows = await database.rawQuery('SELECT sqlite_version() AS version');
+    final version = rows.first['version']?.toString() ?? '';
+    final parts = version.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+    if (parts.length < 2 || !(parts[0] > 3 || (parts[0] == 3 && parts[1] >= 27))) {
+      throw UnsupportedError('Safe live SQLite backup requires SQLite 3.27+. Detected: $version');
+    }
+    final escapedPath = destinationPath.replaceAll("'", "''");
+    await database.execute("VACUUM INTO '$escapedPath'");
+    if (!await destination.exists() || await destination.length() == 0) {
+      throw FileSystemException('SQLite backup file was not created.', destinationPath);
+    }
   }
 
   // Close the active SQLite handle before replacing the database during restore.
@@ -2347,11 +2537,11 @@ class DBHelper {
     final customerId = saleData['customer_id'];
     final customerType = saleData['customer_type']?.toString() ??
         (customerId == null ? 'Walk-in' : 'Khata');
-    if (!const {'Walk-in', 'Khata', 'Wholesale'}.contains(customerType)) {
-      throw Exception('Customer type must be Walk-in, Khata or Wholesale.');
+    if (!const {'Walk-in', 'Khata'}.contains(customerType)) {
+      throw Exception('Customer type must be Walk-in or Khata.');
     }
     if ((customerType == 'Walk-in') != (customerId == null)) {
-      throw Exception('Walk-in sale must not have a customer account; Khata/Wholesale sale requires a selected customer.');
+      throw Exception('Walk-in sale must not have a customer account; Khata sale requires a selected customer.');
     }
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -2660,8 +2850,13 @@ class DBHelper {
       await _queueRow(txn, 'sales', updated, remove: ['customer_id']);
       for (final row in oldItems) {
         final id = row['sync_id']?.toString();
-        if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
+        if (id != null && id.isNotEmpty) {
+          await _queueSync(txn, collection: 'sale_items', documentId: id, payload: {'sync_id': id, 'sale_sync_id': saleSync, '_deleted': true});
+          await _recordDriveTombstone(txn, 'sale_item', '$saleSync|$id');
+        }
       }
+      final saleRevision = await _nextDriveSaleRevision(txn, saleSync);
+      await _recordDriveTombstone(txn, 'sale_revision', '$saleSync|$saleRevision');
       await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
       for (final item in prepared) {
         final p = item['product'] as Map<String, dynamic>;
@@ -2673,7 +2868,10 @@ class DBHelper {
         final oldLedger = await txn.query('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
         for (final row in oldLedger) {
           final id = row['sync_id']?.toString();
-          if (id != null && id.isNotEmpty) await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
+          if (id != null && id.isNotEmpty) {
+            await _queueSync(txn, collection: 'khata_transactions', documentId: id, payload: {'sync_id': id, 'party_sync_id': row['party_sync_id'], '_deleted': true});
+            await _recordDriveTombstone(txn, 'khata_transaction', '$saleSync|$id');
+          }
         }
         await txn.delete('khata_transactions', where: 'party_id = ? AND (note = ? OR note = ?)', whereArgs: [partyId, 'Sale #' + saleId.toString(), 'Cash received at sale #' + saleId.toString()]);
         final partyRows = await txn.query('parties', columns: ['sync_id'], where: 'id = ?', whereArgs: [partyId], limit: 1);
@@ -2681,10 +2879,12 @@ class DBHelper {
         final credit = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'credit', 'amount': finalAmount, 'note': 'Sale #' + saleId.toString(), 'date': old['date'].toString()};
         await txn.insert('khata_transactions', credit);
         await _queueRow(txn, 'khata_transactions', credit, remove: ['party_id']);
+        await _recordDriveTombstone(txn, 'sale_ledger', '$saleSync|${credit['sync_id']}');
         if (received > 0) {
           final receipt = <String, dynamic>{'party_id': partyId, 'party_sync_id': partySync, 'sync_id': _newSyncId(), 'type': 'receipt', 'amount': received, 'note': 'Cash received at sale #' + saleId.toString(), 'date': old['date'].toString()};
           await txn.insert('khata_transactions', receipt);
           await _queueRow(txn, 'khata_transactions', receipt, remove: ['party_id']);
+          await _recordDriveTombstone(txn, 'sale_ledger', '$saleSync|${receipt['sync_id']}');
         }
         await txn.rawUpdate('UPDATE parties SET balance = COALESCE(balance,0) - ? + ? WHERE id = ?', [oldDue, due, partyId]);
         final updatedParty = await txn.query('parties', where: 'id = ?', whereArgs: [partyId], limit: 1);
@@ -2917,8 +3117,8 @@ class DBHelper {
   }
 
   static Future<void> updateCustomerType(int id, String customerType) async {
-    if (customerType != 'Khata' && customerType != 'Wholesale') {
-      throw Exception('Customer type must be Khata or Wholesale.');
+    if (customerType != 'Khata') {
+      throw Exception('Only Khata customer accounts are supported.');
     }
     final db = await database;
     await db.transaction((txn) async {
@@ -2944,7 +3144,28 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
-
+    if (type == 'customer') {
+      var normalizedLegacyRows = false;
+      await db.transaction((txn) async {
+        final legacy = await txn.query(
+          'parties',
+          columns: ['id'],
+          where: "type = 'customer' AND customer_type = 'Wholesale'",
+        );
+        normalizedLegacyRows = legacy.isNotEmpty;
+        for (final row in legacy) {
+          final id = (row['id'] as num).toInt();
+          await txn.update('parties', {'customer_type': 'Khata'},
+              where: 'id = ?', whereArgs: [id]);
+          final updated = await txn.query('parties',
+              where: 'id = ?', whereArgs: [id], limit: 1);
+          if (updated.isNotEmpty) {
+            await _queueRow(txn, 'parties', Map<String, dynamic>.from(updated.first));
+          }
+        }
+      });
+      if (normalizedLegacyRows) unawaited(syncPendingChanges());
+    }
     return await db.query(
       'parties',
       where: 'type = ?',
@@ -3118,13 +3339,23 @@ class DBHelper {
       final references = partyType == 'customer'
           ? await txn.rawQuery(
               '''SELECT (SELECT COUNT(*) FROM sales WHERE customer_id = ?) +
-                        (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) AS count''',
-              [id, id])
+                        (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) +
+                        (SELECT COUNT(*) FROM sale_returns WHERE customer_id = ?) AS count''',
+              [id, id, id])
           : await txn.rawQuery('SELECT COUNT(*) AS count FROM purchases WHERE supplier_id = ?', [id]);
       final referenceCount = (references.first['count'] as num).toInt();
       final balance = (row['balance'] as num?)?.toDouble() ?? 0.0;
-      if (referenceCount > 0 || balance.abs() > 0.000001) {
-        throw Exception('Is account ki transaction history ya outstanding balance mojood hai. Ledger aur purane records mehfooz rakhne ke liye delete nahi kar sakte.');
+      if (balance.abs() > 0.000001) {
+        throw Exception('Is account ka balance abhi Rs. ${balance.toStringAsFixed(2)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.');
+      }
+      if (referenceCount > 0 && partyType == 'customer') {
+        await txn.update('parties', {'type': 'archived_customer', 'customer_type': 'Khata'}, where: 'id = ? AND type = ?', whereArgs: [id, 'customer']);
+        final archivedRows = await txn.query('parties', where: 'id = ?', whereArgs: [id], limit: 1);
+        if (archivedRows.isNotEmpty) await _queueRow(txn, 'parties', Map<String, dynamic>.from(archivedRows.first));
+        return 1;
+      }
+      if (referenceCount > 0) {
+        throw Exception('Is supplier ki purchase history mojood hai; history mehfooz rakhne ke liye delete nahi kar sakte.');
       }
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {

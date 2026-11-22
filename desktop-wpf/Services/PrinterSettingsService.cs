@@ -17,8 +17,8 @@ public sealed class PrinterSettingsService
         await WritePreferencesAsync(value,ct);
     }
  public async Task SaveWorkstationAsync(PrinterPreferences value,CancellationToken ct=default){
-        // Selecting a local printer and tuning receipt output are workstation
-        // preferences, not business-data mutations. Both staff roles may use them.
+        // Selecting a local printer is a workstation preference, not a business-data mutation.
+        // Both staff roles may choose the local output queue.
         AccessService.RequireCurrentRole(AccessRole.Admin,AccessRole.Salesman);
         await WritePreferencesAsync(value,ct);
     }
@@ -32,7 +32,7 @@ public sealed class PrinterSettingsService
         AccessService.RequireCurrentRole(AccessRole.Admin, AccessRole.Salesman);if(string.IsNullOrWhiteSpace(printerName))throw new InvalidOperationException("Select a printer first.");await Task.Run(()=>RawPrinter.Send(printerName,bytes),ct);}
 }
 public sealed record PrinterQueueInfo(string Name,bool IsAvailable,string Status){public string DisplayStatus=>IsAvailable?"Available":"Unavailable";}
-public sealed record PrinterPreferences(string? PreferredPrinter=null,int PaperWidthMm=80,int TopMarginMm=2,int BottomMarginMm=2);
+public sealed record PrinterPreferences(string? PreferredPrinter=null);
 internal static class RawPrinter
 {
  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct DocInfo{[MarshalAs(UnmanagedType.LPWStr)]public string DocumentName;[MarshalAs(UnmanagedType.LPWStr)]public string OutputFile;[MarshalAs(UnmanagedType.LPWStr)]public string DataType;}
@@ -49,6 +49,7 @@ public static class EscPosReceiptBuilder
 {
     private const int PaperDots = 576;
     private const int HorizontalMarginDots = 16;
+    private const int FixedVerticalFeedDots = 16; // Fixed 2mm feed on an 80mm receipt head.
     private const int Columns = 45;
     private static readonly Encoding Ascii = Encoding.ASCII;
 
@@ -67,10 +68,11 @@ public static class EscPosReceiptBuilder
         b.AppendLine(Center("G.T ROAD SANAWAN"));
         b.AppendLine(Center("PH#03451444325"));
         b.AppendLine();
-        var invoiceLabel = sale.SaleId <= 0 ? "DRAFT PREVIEW" : $"Bill# {sale.SaleId:D6}";
-        b.AppendLine(Pair(invoiceLabel, $"Date: {date:dd/MM/yy} Time: {date:hh:mm tt}"));
-        // Keep cashier/type and customer in exactly two rows; date/time stay on the invoice row.
-        b.AppendLine(Pair($"Cashier: {sale.Cashier}", $"Type: {sale.CustomerType}"));
+        b.AppendLine(sale.SaleId <= 0
+            ? Pair("DRAFT PREVIEW", $"Date: {date:dd/MM/yy}")
+            : Pair($"Bill# {sale.SaleId:D6}", $"Date: {date:dd/MM/yy}"));
+        b.AppendLine(Pair($"Cashier: {sale.Cashier}", $"Time: {date:hh:mm:ss tt}"));
+        b.AppendLine(Pair($"Type: {sale.CustomerType}", string.Empty));
         b.AppendLine(Pair($"Customer: {sale.CustomerName}", string.Empty));
         b.AppendLine(separator);
         b.AppendLine(ItemHeader());
@@ -113,10 +115,7 @@ public static class EscPosReceiptBuilder
         B(0x1D, 0x4C, (byte)(left & 0xFF), (byte)((left >> 8) & 0xFF));
         B(0x1D, 0x57, (byte)(width & 0xFF), (byte)((width >> 8) & 0xFF));
 
-        var topDots = Math.Clamp(prefs.TopMarginMm, 0, 10) * 8;
-        var bottomDots = Math.Clamp(prefs.BottomMarginMm, 0, 10) * 8;
-        if (topDots > 0)
-            B(0x1B, 0x4A, (byte)topDots);
+        B(0x1B, 0x4A, (byte)FixedVerticalFeedDots);
 
         foreach (var line in (text ?? string.Empty).Replace("\r", string.Empty).Split('\n'))
         {
@@ -134,8 +133,7 @@ public static class EscPosReceiptBuilder
             else if (trimmed is "G.T ROAD SANAWAN" or "PH#03451444325" or "THANK YOU - VISIT AGAIN" or "KHAN BABA GENERAL STORE")
                 WriteStyledLine(B, trimmed, centered: true, bold: false, size: 0x00);
             else if (trimmed.StartsWith("NET AMOUNT:", StringComparison.Ordinal))
-                // Use bold standard-width text; some 80mm ESC/POS queues wrap the enlarged row.
-                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x00);
+                WriteStyledLine(B, trimmed, centered: true, bold: true, size: 0x10);
             else
             {
                 B(0x1B, 0x61, 0x00, 0x1B, 0x45, 0x00, 0x1D, 0x21, 0x00);
@@ -144,8 +142,7 @@ public static class EscPosReceiptBuilder
             }
         }
 
-        if (bottomDots > 0)
-            B(0x1B, 0x4A, (byte)bottomDots);
+        B(0x1B, 0x4A, (byte)FixedVerticalFeedDots);
         B(0x1D, 0x56, 0x00);
         return ms.ToArray();
     }
@@ -178,7 +175,7 @@ public static class EscPosReceiptBuilder
         return row.Length <= Columns ? row : row[^Columns..];
     }
 
-    private static string Money(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string Money(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static string SingleLine(string value, int maxWidth)
     {
@@ -213,10 +210,10 @@ public static class PdfReceiptBuilder
 
     public static byte[] Build(string text, PrinterPreferences? preferences = null)
     {
-        preferences ??= new PrinterPreferences();
+        // Keep PDF and thermal receipt whitespace fixed and consistent.
         var lines = (text ?? string.Empty).Replace("\r", string.Empty).Split('\n');
-        var top = Math.Clamp(preferences.TopMarginMm, 0, 10) * MmToPoints;
-        var bottom = Math.Clamp(preferences.BottomMarginMm, 0, 10) * MmToPoints;
+        var top = 2d * MmToPoints;
+        var bottom = 2d * MmToPoints;
         var side = 2d * MmToPoints;
         var pageHeight = top + bottom + 34d + Math.Max(1, lines.Length) * 10.5d;
         var body = new StringBuilder("BT\n");

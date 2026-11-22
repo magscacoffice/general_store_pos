@@ -36,6 +36,12 @@ public sealed class WindowsDriveSyncService
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSyncAtUtc { get; private set; }
     public bool HasSavedCredentials => _auth.HasSavedCredentials;
+    public async Task<string?> GetConnectedAccountEmailAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_auth.HasSavedCredentials) return null;
+        try { return await _auth.GetConnectedAccountEmailAsync(cancellationToken); }
+        catch { return null; }
+    }
     public event Action? StatusChanged;
 
     public WindowsDriveSyncService(AccessService access)
@@ -49,8 +55,9 @@ public sealed class WindowsDriveSyncService
         _access.RequireAdmin();
         EnsureDriveSyncEnabled();
         await _auth.GetAccessTokenAsync(promptForLogin: true, cancellationToken);
+        var summary = await SyncNowAsync(databasePath, cancellationToken);
         StartAutoSync();
-        return await SyncNowAsync(databasePath, cancellationToken);
+        return summary;
     }
 
     public async Task<DriveSyncSummary> SyncNowAsync(string? databasePath = null, CancellationToken cancellationToken = default)
@@ -64,6 +71,9 @@ public sealed class WindowsDriveSyncService
             SetStatus("Connecting to Google Drive...");
             LastError = null;
             await _auth.GetAccessTokenAsync(promptForLogin: false, cancellationToken);
+            var accountEmail = await _auth.GetConnectedAccountEmailAsync(cancellationToken)
+                ?? throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
+            await EnforceStoreAccountBindingAsync(accountEmail, cancellationToken);
             var folderId = await _drive.EnsureFolderAsync(cancellationToken);
             var deviceId = GetOrCreateDeviceId();
 
@@ -122,6 +132,9 @@ public sealed class WindowsDriveSyncService
                     {
                         SetStatus($"Creating verified safety backup before importing {validated.DeviceId}...");
                         var createdBackupPath = await _backups.CreateBackupAsync(path, backupDirectory, cancellationToken);
+                        if (!await _backups.IsVerifiedBackupAsync(createdBackupPath, cancellationToken))
+                            throw new InvalidDataException(
+                                $"The safety backup for {validated.DeviceId} did not pass SHA-256, schema and SQLite integrity verification. Device data was not imported.");
                         manifest.SetPreMergeBackup(validated.DeviceId,
                             Path.GetFileName(createdBackupPath), validated.SnapshotHash);
                     }
@@ -186,19 +199,56 @@ public sealed class WindowsDriveSyncService
     {
         _access.RequireAdmin();
         EnsureDriveSyncEnabled();
-        await _merge.ResolveConflictAsync(conflictId, useRemote,
-            databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
-        var count = (await GetPendingConflictsAsync(databasePath, cancellationToken)).Count;
-        SetStatus(count == 0 ? "All Drive conflicts resolved." : $"{count} Drive conflict(s) still need review.");
+        await _syncGate.WaitAsync(cancellationToken);
+        try
+        {
+            await _merge.ResolveConflictAsync(conflictId, useRemote,
+                databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken);
+            var count = (await _merge.GetPendingConflictsAsync(
+                databasePath ?? PosDatabasePath.Resolve(requireExisting: true), cancellationToken)).Count;
+            SetStatus(count == 0 ? "All Drive conflicts resolved." : $"{count} Drive conflict(s) still need review.");
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
+
+        // Stop new timer ticks, then wait for any active sync/merge to finish
+        // before taking the disconnect safety backup or deleting OAuth tokens.
         StopAutoSync();
-        await _auth.DisconnectAsync(cancellationToken);
-        LastError = null;
-        SetStatus("Google Drive disconnected. POS remains available offline.");
+        var gateAcquired = false;
+        try
+        {
+            await _syncGate.WaitAsync(cancellationToken);
+            gateAcquired = true;
+
+            var databasePath = PosDatabasePath.Resolve(requireExisting: true);
+            var backupDirectory = Path.Combine(Path.GetDirectoryName(databasePath)!, "Backups");
+            SetStatus("Creating verified local backup before disconnecting Google account...");
+            var backupPath = await _backups.CreateBackupAsync(databasePath, backupDirectory, cancellationToken);
+            if (!await _backups.IsVerifiedBackupAsync(backupPath, cancellationToken))
+                throw new InvalidDataException("Verified local backup could not be confirmed; Google account remains connected.");
+
+            await _auth.DisconnectAsync(cancellationToken);
+            LastError = null;
+            SetStatus("Google Drive disconnected. Verified local backup saved; POS remains available offline.");
+        }
+        catch
+        {
+            // A failed/cancelled backup must leave the account connected and
+            // restore background sync rather than silently pausing cloud sync.
+            if (_auth.HasSavedCredentials) StartAutoSync();
+            throw;
+        }
+        finally
+        {
+            if (gateAcquired) _syncGate.Release();
+        }
     }
 
     public void StartAutoSync()
@@ -237,6 +287,29 @@ public sealed class WindowsDriveSyncService
     {
         using var document = await _drive.DownloadJsonAsync(fileId, cancellationToken);
         return DriveMasterManifest.Parse(document.RootElement.GetRawText());
+    }
+
+
+    private static async Task EnforceStoreAccountBindingAsync(string accountEmail, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = accountEmail.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedEmail) || !normalizedEmail.Contains('@'))
+            throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
+        // One store per Windows user profile. Binding is independent of the
+        // active database filename so restore/rename cannot bypass this guard.
+        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KhanBabaPOS");
+        Directory.CreateDirectory(directory);
+        var bindingPath = Path.Combine(directory, "drive_store_account_binding.dat");
+        if (File.Exists(bindingPath))
+        {
+            var protectedBytes = await File.ReadAllBytesAsync(bindingPath, cancellationToken);
+            var saved = Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, DeviceEntropy, DataProtectionScope.CurrentUser)).Trim().ToLowerInvariant();
+            if (!string.Equals(saved, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"This POS database is already paired with {saved}. A different Google account cannot be connected to this store database. Use a separate clean database and a separate Gmail account for another business.");
+            return;
+        }
+        var encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(normalizedEmail), DeviceEntropy, DataProtectionScope.CurrentUser);
+        await File.WriteAllBytesAsync(bindingPath, encrypted, cancellationToken);
     }
 
     private static string GetOrCreateDeviceId()

@@ -19,6 +19,7 @@ class _BackupScreenState extends State<BackupScreen> {
   // 1. Backup file save karna (File Picker ke zariye user ki marzi ki jagah par)
   Future<void> _createBackup() async {
     setState(() => _isWorking = true);
+    String? temporaryBackupPath;
     try {
       final dbPath = await DBHelper.getDatabaseFilePath();
       final dbFile = File(dbPath);
@@ -36,9 +37,25 @@ class _BackupScreenState extends State<BackupScreen> {
       final fileName =
           'khan_baba_backup_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.db';
 
-      // User ko folder choose karne ki ijazat dena
-      // Android/iOS par saveFile ko bytes dena zaroori hota hai.
-      final backupBytes = await dbFile.readAsBytes();
+      // Never copy the live SQLite main file: committed rows may still be in WAL.
+      final databaseDirectory = await DBHelper.getDatabaseDirectory();
+      temporaryBackupPath = p.join(databaseDirectory,
+          'backup_export_${DateTime.now().microsecondsSinceEpoch}_$pid.db');
+      await DBHelper.createConsistentBackup(temporaryBackupPath!);
+      final validationDb = await openDatabase(temporaryBackupPath!, readOnly: true);
+      try {
+        final integrity = await validationDb.rawQuery('PRAGMA integrity_check');
+        if (integrity.isEmpty || integrity.first.values.first.toString().toLowerCase() != 'ok') {
+          throw StateError('SQLite backup integrity verification failed.');
+        }
+        final rows = await validationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table'");
+        final tables = rows.map((row) => row['name'].toString()).toSet();
+        const required = {'products', 'sales', 'parties', 'sale_items', 'khata_transactions'};
+        if (!tables.containsAll(required)) throw StateError('Backup is missing required POS tables.');
+      } finally {
+        await validationDb.close();
+      }
+      final backupBytes = await File(temporaryBackupPath!).readAsBytes();
       final outputFile = await FilePicker.saveFile(
         dialogTitle: 'Backup kahan save karna hai?',
         fileName: fileName,
@@ -61,6 +78,12 @@ class _BackupScreenState extends State<BackupScreen> {
             .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
+      if (temporaryBackupPath != null) {
+        try {
+          final temporary = File(temporaryBackupPath!);
+          if (await temporary.exists()) await temporary.delete();
+        } catch (_) {}
+      }
       if (mounted) setState(() => _isWorking = false);
     }
   }
@@ -129,15 +152,24 @@ class _BackupScreenState extends State<BackupScreen> {
         await validationDb?.close();
       }
 
+      // Create the rollback copy while SQLite is still open so committed WAL
+      // transactions are included. A raw .db file copy can omit WAL-only data.
+      if (await currentDb.exists()) {
+        await DBHelper.createConsistentBackup(safetyPath);
+        final safetyDb = await openDatabase(safetyPath, readOnly: true);
+        try {
+          final safetyIntegrity = await safetyDb.rawQuery('PRAGMA integrity_check');
+          if (safetyIntegrity.isEmpty ||
+              safetyIntegrity.first.values.first.toString().toLowerCase() != 'ok') {
+            throw Exception('Current database safety backup integrity check failed. Restore was cancelled.');
+          }
+        } finally {
+          await safetyDb.close();
+        }
+      }
+
       await DBHelper.closeDatabase();
       databaseClosed = true;
-
-      // Keep a uniquely named safety copy before replacing the live database.
-      if (await currentDb.exists()) {
-        final safetyFile = File(safetyPath);
-        if (await safetyFile.exists()) await safetyFile.delete();
-        await currentDb.copy(safetyPath);
-      }
 
       // Never delete or rename the live database on Windows. Even after
       // closing our own SQLite handle, another process can retain a file lock.

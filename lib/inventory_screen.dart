@@ -77,10 +77,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final salePriceController = TextEditingController(
       text: product != null ? product['price'].toString() : '0',
     );
-    final wholesalePriceController = TextEditingController(
-      text: product != null ? (product['wholesalePrice']?.toString() ?? '0') : '0',
-    );
-
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -203,14 +199,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Retail Sale Price *'),
                 ),
-                TextField(
-                  controller: wholesalePriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Wholesale Sale Price (optional)',
-                    helperText: '0 rakhein agar default wholesale rate set nahi karna.',
-                  ),
-                ),
               ],
             ),
           ),
@@ -229,20 +217,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     double.tryParse(purchasePriceController.text) ?? 0.0;
                 double salePrice =
                     double.tryParse(salePriceController.text) ?? 0.0;
-                double wholesalePrice =
-                    double.tryParse(wholesalePriceController.text) ?? 0.0;
-
                 if (name.length > DBHelper.maxReceiptProductNameLength) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Product name 80mm bill ke liye maximum 17 characters ka ho sakta hai.')),
-                  );
-                  return;
-                }
-
-                if (!wholesalePrice.isFinite || wholesalePrice < 0 ||
-                    (wholesalePrice > 0 && wholesalePrice < purchasePrice)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Wholesale price 0 ya purchase price (Rs. $purchasePrice) se kam nahi honi chahiye.')),
                   );
                   return;
                 }
@@ -274,7 +251,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   'name': name,
                   'price': salePrice,
                   'purchasePrice': purchasePrice,
-                  'wholesalePrice': wholesalePrice,
+                  // Preserve legacy data for compatibility; wholesale pricing is retired.
+                  'wholesalePrice': product?['wholesalePrice'] ?? 0,
                   'damaged_quantity': product?['damaged_quantity'] ?? 0,
                   'quantity': stock,
                   'stock_unit': stockUnit,
