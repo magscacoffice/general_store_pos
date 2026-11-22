@@ -254,7 +254,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var service = new SalePostingService(TestAccess);
             var partial = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
@@ -264,7 +264,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     10,
                     10,
                     true,
-                    "Wholesale",
+                    "Khata",
                     "Local Windows User"),
                 path);
             Assert.Equal(36, partial.Subtotal, 2);
@@ -281,7 +281,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale",
+                    "Khata",
                     "Local Windows User"),
                 path);
             Assert.Equal(18, cash.ReceivedAmount, 2);
@@ -295,7 +295,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             await connection.OpenAsync();
             await using (var sales = connection.CreateCommand())
             {
-                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Wholesale' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
+                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Khata' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
                 await using var reader = await sales.ExecuteReaderAsync();
                 Assert.True(await reader.ReadAsync());
                 Assert.Equal(2, reader.GetInt32(0));
@@ -415,7 +415,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task WpfWholesaleSaleRejectsKhataAccountBeforeChangingStock()
+    public async Task WpfRetiredWholesaleSaleTypeIsRejectedBeforeChangingStock()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
@@ -460,7 +460,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
             await connection.OpenAsync();
             await using var find = connection.CreateCommand();
@@ -681,7 +681,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -690,7 +690,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -750,7 +750,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -759,7 +759,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -821,7 +821,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
             var sale = await new SalePostingService(TestAccess).CompleteSaleAsync(
                 new SaleCheckoutRequest(
                     [new SaleLineInput("WPF-WH-1", 2, 18)],
@@ -830,7 +830,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     10,
                     true,
-                    "Wholesale"),
+                    "Khata"),
                 path);
 
             int saleItemId;
@@ -1280,7 +1280,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             var snapshot = BuildTestSnapshot(products:
             [
                 new Dictionary<string, object?>
@@ -1325,7 +1325,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 10);
+            await SeedSaleAccountAsync(path, "Khata", 10);
             var snapshot = BuildTestSnapshot(tombstones:
             [
                 new Dictionary<string, object?>
@@ -1728,7 +1728,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             var salesmanDraft = new PendingBillSnapshot(
                 "salesman-draft", "Salesman Draft", DateTime.Now.ToString("s"),
                 [new PendingBillLine("WPF-WH-1", "Saved item", 18, 2, 10, "pcs")],
-                23, "Wholesale", "Partial", 12.5, true, "7.50");
+                23, "Khata", "Partial", 12.5, true, "7.50");
             await service.SaveAsync(salesmanDraft);
 
             var visibleToSalesman = await service.GetAllAsync();
@@ -1736,7 +1736,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             Assert.Equal("salesman-draft", visibleToSalesman[0].BillId);
             Assert.Equal(salesmanSession.UserId, visibleToSalesman[0].CashierUid);
             Assert.Equal(23, visibleToSalesman[0].SelectedCustomerId);
-            Assert.Equal("Wholesale", visibleToSalesman[0].SelectedSaleType);
+            Assert.Equal("Khata", visibleToSalesman[0].SelectedSaleType);
             Assert.Equal("Partial", visibleToSalesman[0].CustomerPaymentMode);
             Assert.Equal(12.5, visibleToSalesman[0].OverallDiscount, 2);
             Assert.True(visibleToSalesman[0].IsPercentageDiscount);
