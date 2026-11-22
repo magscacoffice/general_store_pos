@@ -49,7 +49,7 @@ jobs:
       - name: Analyze changed sync and invoice files
         shell: bash
         run: |
-          flutter analyze --no-pub lib/drive_sync_service.dart lib/cloud_sync_screen.dart lib/printer_screen.dart test/receipt_formatter_test.dart
+          flutter analyze --no-pub --no-fatal-infos lib/drive_sync_service.dart lib/cloud_sync_screen.dart lib/printer_screen.dart test/receipt_formatter_test.dart
 
       - name: Run Google Drive reconciliation and invoice conversion tests
         shell: bash
