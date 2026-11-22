@@ -1365,7 +1365,10 @@ class DBHelper {
         final existingSaleId = await localBySync('sales', syncId);
         final customerSyncId = remote['customer_sync_id']?.toString();
         final customerId = await partyIdFor(customerSyncId);
-        if (customerSyncId != null && customerId == null) continue;
+        if (customerSyncId != null && customerId == null) {
+          if (applyMasterState && existingSaleId != null) blockedMasterSales.add(syncId);
+          continue;
+        }
         final canonicalCustomerSyncId = await canonicalPartySyncId(customerSyncId);
         final values = Map<String, dynamic>.from(remote)
           ..remove('id')
@@ -1397,7 +1400,10 @@ class DBHelper {
           whereArgs: [existingSaleId],
           limit: 1,
         );
-        if (localSales.isEmpty) continue;
+        if (localSales.isEmpty) {
+          blockedMasterSales.add(syncId);
+          continue;
+        }
         final localCustomerId = (localSales.first['customer_id'] as num?)?.toInt();
         if (localCustomerId != customerId) {
           blockedMasterSales.add(syncId);
