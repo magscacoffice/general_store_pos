@@ -493,6 +493,7 @@ public sealed class SalePostingService
                 }
                 await InsertKhataEntryAsync(connection, transaction, oldCustomerId.Value, oldCustomerSync, "credit", finalAmount, $"Sale #{saleId}", oldDate, cancellationToken);
                 if (received > 0) await InsertKhataEntryAsync(connection, transaction, oldCustomerId.Value, oldCustomerSync, "receipt", received, $"Cash received at sale #{saleId}", oldDate, cancellationToken);
+                var newLedgerSyncIds = new List<string>();
                 await using (var newLedgerRows = connection.CreateCommand())
                 {
                     newLedgerRows.Transaction = transaction;
@@ -502,10 +503,11 @@ public sealed class SalePostingService
                     newLedgerRows.Parameters.AddWithValue("$receipt", $"Cash received at sale #{saleId}");
                     await using var ledgerReader = await newLedgerRows.ExecuteReaderAsync(cancellationToken);
                     while (await ledgerReader.ReadAsync(cancellationToken))
-                        if (!ledgerReader.IsDBNull(0))
-                            await RecordSaleSyncMarkerAsync(connection, transaction, "sale_ledger",
-                                $"{oldSaleSync}|{ledgerReader.GetString(0)}", cancellationToken);
+                        if (!ledgerReader.IsDBNull(0)) newLedgerSyncIds.Add(ledgerReader.GetString(0));
                 }
+                foreach (var ledgerSyncId in newLedgerSyncIds)
+                    await RecordSaleSyncMarkerAsync(connection, transaction, "sale_ledger",
+                        $"{oldSaleSync}|{ledgerSyncId}", cancellationToken);
                 await using var balance = connection.CreateCommand();
                 balance.Transaction = transaction;
                 balance.CommandText = "UPDATE parties SET balance=COALESCE(balance,0)-$oldDue+$newDue WHERE id=$id;";
