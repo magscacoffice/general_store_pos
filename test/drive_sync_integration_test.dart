@@ -455,7 +455,7 @@ void main() {
     );
   });
 
-  test('Wholesale sale rejects a Khata account and leaves stock unchanged', () async {
+  test('Retired Wholesale sale type is rejected and leaves stock unchanged', () async {
     await DBHelper.insertProduct({
       'name': 'Rate Check Item',
       'barcode': 'KB-WH-101',
@@ -471,7 +471,7 @@ void main() {
       'name': 'Khata Only Account',
       'phone': '03000000002',
       'type': 'customer',
-      'customer_type': 'Khata',
+      'customer_type': 'Wholesale',
       'balance': 0.0,
     });
 
