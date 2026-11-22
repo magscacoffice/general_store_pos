@@ -1528,6 +1528,9 @@ class DBHelper {
           [syncId],
         );
         if (wasDeletedBySaleRevision.isNotEmpty) continue;
+        final parentSaleSyncId = remote['sale_sync_id']?.toString();
+        if (applyMasterState && parentSaleSyncId != null &&
+            blockedMasterSales.contains(parentSaleSyncId)) continue;
         if (await localBySync('khata_transactions', syncId) != null) continue;
         final remotePartySyncId = remote['party_sync_id']?.toString();
         final partyId = await partyIdFor(remotePartySyncId);
@@ -1536,6 +1539,7 @@ class DBHelper {
         final values = Map<String, dynamic>.from(remote)
           ..remove('id')
           ..remove('party_id')
+          ..remove('sale_sync_id')
           ..['party_id'] = partyId
           ..['party_sync_id'] = canonicalSyncId
           ..['sync_id'] = syncId;
