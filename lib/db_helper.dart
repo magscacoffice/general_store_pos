@@ -1567,6 +1567,28 @@ class DBHelper {
     return _db!;
   }
 
+
+  // Creates a consistent SQLite snapshot including committed WAL transactions.
+  // VACUUM INTO requires SQLite 3.27+ and never copies the live main DB file.
+  static Future<void> createConsistentBackup(String destinationPath) async {
+    final database = await DBHelper.database;
+    final destination = File(destinationPath);
+    if (await destination.exists()) {
+      throw FileSystemException('Backup destination already exists.', destinationPath);
+    }
+    final rows = await database.rawQuery('SELECT sqlite_version() AS version');
+    final version = rows.first['version']?.toString() ?? '';
+    final parts = version.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+    if (parts.length < 2 || !(parts[0] > 3 || (parts[0] == 3 && parts[1] >= 27))) {
+      throw UnsupportedError('Safe live SQLite backup requires SQLite 3.27+. Detected: $version');
+    }
+    final escapedPath = destinationPath.replaceAll("'", "''");
+    await database.execute("VACUUM INTO '$escapedPath'");
+    if (!await destination.exists() || await destination.length() == 0) {
+      throw FileSystemException('SQLite backup file was not created.', destinationPath);
+    }
+  }
+
   // Close the active SQLite handle before replacing the database during restore.
   static Future<void> closeDatabase() async {
     final current = _db;
