@@ -1493,3 +1493,10 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Cross-platform end-to-end account-binding tests, Android analyzer/tests and WPF build/tests still need execution. No build artifacts have been generated.
 
 **Safety note:** Account binding is per active database path and is retained on disconnect. Do not manually delete the binding marker to switch businesses; create/select a separate clean database and use a separate Gmail. Existing paired Android/Windows devices must sign in with the same Google account. These changes are source edits only until automated validation passes.
+
+### Follow-up hardening
+
+- [x] Replaced the Windows pre-merge snapshot helper's raw database-file copy with the same WAL-safe SQLite `VACUUM INTO` snapshot path before reopening the database.
+- [x] Moved Windows auto-sync startup until after the initial account-binding check and first sync succeed, so a rejected Gmail does not leave a retrying background sync timer running.
+- [x] Updated Android Cloud Sync disconnect confirmation to explain that the account binding remains in place after disconnect and that each business requires a separate database and Gmail.
+- [ ] The repository does not yet expose a verified end-user workflow for creating/selecting a second independent store database. Until that workflow is implemented and tested, do not attempt to repurpose an existing database for another business; use a separately isolated installation/data profile.
