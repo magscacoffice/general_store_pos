@@ -269,22 +269,129 @@ public sealed class DriveSnapshotMergeService
                 }
             }
 
-            // Append-only records: import once by sync_id and rebuild local
-            // foreign keys from stable references. Missing parents are deferred.
+            // Sales are append-only until a sale_revision marker explicitly
+            // announces a recalled-bill edit. Revisions are monotonic per stable
+            // sale ID; equal/older revisions never replace Windows-master state.
+            var remoteSaleRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var marker in collections["tombstones"].Where(x => Text(x, "entity_type") == "sale_revision"))
+            {
+                var key = Text(marker, "entity_key");
+                var split = key.LastIndexOf('|');
+                if (split <= 0 || !long.TryParse(key[(split + 1)..], NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var revision) || revision <= 0) continue;
+                var saleKey = key[..split];
+                remoteSaleRevisions[saleKey] = Math.Max(remoteSaleRevisions.GetValueOrDefault(saleKey), revision);
+            }
+
             foreach (var remote in collections["sales"])
             {
                 var syncId = Text(remote, "sync_id");
                 if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
-                if (await FindIdAsync(db, tx, "sales", "sync_id", syncId, cancellationToken) is not null) continue;
+                var existingSaleId = await FindIdAsync(db, tx, "sales", "sync_id", syncId, cancellationToken);
                 var remoteParty = NullableText(remote, "customer_sync_id");
                 var partyId = await PartyIdForAsync(remoteParty);
                 if (remoteParty is not null && partyId is null) { skipped++; deferredRecords++; continue; }
+                var canonicalParty = await CanonicalPartySyncIdAsync(remoteParty);
                 var values = Copy(remote);
                 values.Remove("id"); values.Remove("customer_id");
                 values["sync_id"] = syncId;
-                values["customer_sync_id"] = await CanonicalPartySyncIdAsync(remoteParty);
+                values["customer_sync_id"] = canonicalParty;
                 values["customer_id"] = partyId;
-                await InsertRowAsync(db, tx, "sales", values, cancellationToken); created++;
+
+                if (existingSaleId is null)
+                {
+                    await InsertRowAsync(db, tx, "sales", values, cancellationToken); created++;
+                    continue;
+                }
+
+                var remoteRevision = remoteSaleRevisions.GetValueOrDefault(syncId);
+                if (remoteRevision <= 0 || remoteRevision <= await GetSaleRevisionAsync(db, tx, syncId, cancellationToken))
+                    continue;
+
+                var localSale = await ReadOneAsync(db, tx, "sales", "id", existingSaleId.Value, cancellationToken);
+                if (localSale is null) { skipped++; deferredRecords++; continue; }
+                var localCustomerId = localSale.TryGetValue("customer_id", out var localCustomerValue) &&
+                    localCustomerValue is not null ? Convert.ToInt64(localCustomerValue, CultureInfo.InvariantCulture) : (long?)null;
+                if (localCustomerId != partyId)
+                {
+                    await AddConflictAsync("sale_revision", syncId, localSale, values);
+                    skipped++;
+                    continue;
+                }
+
+                var hasReturns = await ExistsAsync(db, tx, "sale_returns", "sale_id=$sale",
+                    cancellationToken, ("$sale", existingSaleId.Value));
+                if (hasReturns)
+                {
+                    await AddConflictAsync("sale_revision", syncId, localSale, values);
+                    skipped++;
+                    continue;
+                }
+
+                var remoteItems = collections["sale_items"]
+                    .Where(x => Text(x, "sale_sync_id") == syncId).ToList();
+                if (remoteItems.Count == 0) { skipped++; deferredRecords++; continue; }
+
+                var preparedRemoteItems = new List<(Dictionary<string, object?> Row, long ProductId, long Quantity)>();
+                var stockDeltas = new Dictionary<long, long>();
+                await using (var oldItems = db.CreateCommand())
+                {
+                    oldItems.Transaction = tx;
+                    oldItems.CommandText = "SELECT product_id,quantity FROM sale_items WHERE sale_id=$sale;";
+                    oldItems.Parameters.AddWithValue("$sale", existingSaleId.Value);
+                    await using var reader = await oldItems.ExecuteReaderAsync(cancellationToken);
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        if (reader.IsDBNull(0)) { deferredRecords++; break; }
+                        var productId = reader.GetInt64(0);
+                        stockDeltas[productId] = stockDeltas.GetValueOrDefault(productId) + reader.GetInt64(1);
+                    }
+                }
+                if (deferredRecords > 0) { skipped++; continue; }
+
+                var missingProduct = false;
+                foreach (var item in remoteItems)
+                {
+                    var barcode = Text(item, "barcode");
+                    var productId = await FindIdAsync(db, tx, "products", "barcode", barcode, cancellationToken);
+                    if (productId is null) { missingProduct = true; break; }
+                    var quantity = Number(item, "quantity");
+                    if (quantity <= 0 || quantity != Math.Truncate(quantity)) { missingProduct = true; break; }
+                    stockDeltas[productId.Value] = stockDeltas.GetValueOrDefault(productId.Value) - (long)quantity;
+                    preparedRemoteItems.Add((item, productId.Value, (long)quantity));
+                }
+                if (missingProduct) { skipped++; deferredRecords++; continue; }
+
+                foreach (var (productId, delta) in stockDeltas)
+                {
+                    await using var stock = db.CreateCommand();
+                    stock.Transaction = tx;
+                    stock.CommandText = "UPDATE products SET quantity=quantity+$delta WHERE id=$id AND quantity+$delta>=0;";
+                    Add(stock, ("$delta", delta), ("$id", productId));
+                    if (await stock.ExecuteNonQueryAsync(cancellationToken) != 1)
+                    {
+                        missingProduct = true;
+                        break;
+                    }
+                }
+                if (missingProduct) { skipped++; deferredRecords++; continue; }
+
+                if (localCustomerId is not null)
+                {
+                    var oldDue = Number(localSale, "balance_due");
+                    var newDue = Number(values, "balance_due");
+                    await ExecuteAsync(db, tx,
+                        "UPDATE parties SET balance=COALESCE(balance,0)-$oldDue+$newDue WHERE id=$id;",
+                        cancellationToken, ("$oldDue", oldDue), ("$newDue", newDue), ("$id", localCustomerId.Value));
+                }
+
+                await UpdateRowAsync(db, tx, "sales", values, "id=$id", cancellationToken,
+                    ("$id", existingSaleId.Value));
+                await DeleteAsync(db, tx, "sale_items", "sale_id=$sale", cancellationToken,
+                    ("$sale", existingSaleId.Value));
+                await RecordTombstoneAsync(db, tx, "sale_revision", $"{syncId}|{remoteRevision}",
+                    sourceDeviceId, cancellationToken);
+                updated++;
             }
 
             foreach (var remote in collections["sale_items"])
@@ -390,7 +497,49 @@ public sealed class DriveSnapshotMergeService
             {
                 var type = Text(tombstone, "entity_type");
                 var key = Text(tombstone, "entity_key");
-                if (key.Length == 0 || type is not ("product" or "party")) continue;
+                if (key.Length == 0) continue;
+                if (type == "sale_revision")
+                {
+                    // A revision is retained as the per-sale high-water mark.
+                    var split = key.LastIndexOf('|');
+                    if (split > 0 && long.TryParse(key[(split + 1)..], NumberStyles.None,
+                        CultureInfo.InvariantCulture, out var revision) && revision > 0)
+                    {
+                        var saleKey = key[..split];
+                        if (revision <= await GetSaleRevisionAsync(db, tx, saleKey, cancellationToken))
+                            continue;
+                        // If its sale was not in this snapshot, keep the snapshot pending.
+                        if (!collections["sales"].Any(x => Text(x, "sync_id") == saleKey))
+                        {
+                            deferredRecords++;
+                            continue;
+                        }
+                        await RecordTombstoneAsync(db, tx, type, key, sourceDeviceId, cancellationToken);
+                    }
+                    continue;
+                }
+                if (type is "sale_item" or "khata_transaction")
+                {
+                    if (type == "sale_item")
+                    {
+                        var referencedByReturn = await ExistsAsync(db, tx, "sale_return_items",
+                            "sale_item_id=(SELECT id FROM sale_items WHERE sync_id=$key LIMIT 1)",
+                            cancellationToken, ("$key", key));
+                        if (referencedByReturn)
+                        {
+                            var localItem = await ReadOneAsync(db, tx, "sale_items", "sync_id", key, cancellationToken);
+                            if (localItem is not null)
+                                await AddConflictAsync("sale_item_delete", key, localItem,
+                                    new Dictionary<string, object?> { ["_deleted"] = true, ["sync_id"] = key });
+                            continue;
+                        }
+                    }
+                    var table = type == "sale_item" ? "sale_items" : "khata_transactions";
+                    await DeleteAsync(db, tx, table, "sync_id=$key", cancellationToken, ("$key", key));
+                    await RecordTombstoneAsync(db, tx, type, key, sourceDeviceId, cancellationToken);
+                    continue;
+                }
+                if (type is not ("product" or "party")) continue;
                 if (type == "product" && collections["products"].Any(x => Text(x, "barcode") == key)) continue;
                 if (type == "party" && collections["parties"].Any(x => Text(x, "sync_id") == key)) continue;
                 if (await ExistsAsync(db, tx, "drive_sync_ignored_tombstones",
@@ -732,6 +881,25 @@ public sealed class DriveSnapshotMergeService
     private static async Task ExecuteAsync(SqliteConnection db, SqliteTransaction tx, string sql, CancellationToken ct, params (string Name, object? Value)[] args)
     {
         await using var cmd = db.CreateCommand(); cmd.Transaction = tx; cmd.CommandText = sql; Add(cmd, args); await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task<long> GetSaleRevisionAsync(
+        SqliteConnection db, SqliteTransaction tx, string saleSyncId, CancellationToken ct)
+    {
+        var prefix = saleSyncId + "|";
+        await using var command = db.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = "SELECT entity_key FROM drive_sync_tombstones WHERE entity_type='sale_revision' AND substr(entity_key,1,length($prefix))=$prefix;";
+        command.Parameters.AddWithValue("$prefix", prefix);
+        var current = 0L;
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var key = reader.GetString(0);
+            if (long.TryParse(key[prefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var revision))
+                current = Math.Max(current, revision);
+        }
+        return current;
     }
 
     private static async Task RecordTombstoneAsync(SqliteConnection db, SqliteTransaction tx, string type, string key, string source, CancellationToken ct)
