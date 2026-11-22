@@ -338,7 +338,7 @@ public sealed class DriveSnapshotMergeService
                 if (syncId.Length == 0) { skipped++; deferredRecords++; continue; }
                 if (await FindIdAsync(db, tx, "sale_returns", "sync_id", syncId, cancellationToken) is not null) continue;
                 var saleId = await FindIdAsync(db, tx, "sales", "sync_id", Text(remote, "sale_sync_id"), cancellationToken);
-                if (saleId is null) { skipped++; continue; }
+                if (saleId is null) { skipped++; deferredRecords++; continue; }
                 var remoteParty = NullableText(remote, "party_sync_id");
                 var customerId = await PartyIdForAsync(remoteParty);
                 var values = Copy(remote);
