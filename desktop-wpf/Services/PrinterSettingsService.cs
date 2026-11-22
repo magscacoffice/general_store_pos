@@ -178,7 +178,7 @@ public static class EscPosReceiptBuilder
         return row.Length <= Columns ? row : row[^Columns..];
     }
 
-    private static string Money(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string Money(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static string SingleLine(string value, int maxWidth)
     {
