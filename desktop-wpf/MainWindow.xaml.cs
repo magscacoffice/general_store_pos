@@ -219,13 +219,7 @@ public partial class MainWindow : Window
                 return;
             }
             var update = await updater.CheckForUpdateAsync();
-            if (update is null)
-            {
-                UpdateButton.Content = "No Windows update published";
-                UpdateStatusText.Text = $"GitHub release {latest} has no signed Windows installer package.";
-                UpdateStatusText.Foreground = Brushes.Gray;
-                return;
-            }
+            if (update is null) return;
             UpdateButton.Content = $"⬆ Update {update.Version} available";
             UpdateButton.Background = new SolidColorBrush(Color.FromRgb(220, 239, 226));
             UpdateButton.Foreground = new SolidColorBrush(Color.FromRgb(23, 75, 49));
@@ -307,86 +301,98 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Do not steal standard editing shortcuts from text-entry controls.
+        // WPF can expose system/Alt-modified keys as Key.System. Normalize the
+        // key before dispatch so the cashier shortcuts are not silently missed.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var modifiers = Keyboard.Modifiers;
         var textEntryFocused = Keyboard.FocusedElement is TextBox ||
                               Keyboard.FocusedElement is PasswordBox;
-        // Cashier shortcuts are handled at the window level so they work from
-        // the scanner, grid and payment controls without requiring mouse clicks.
-        if (e.Key == Key.F2)
+        var scannerFocused = ScannerBox.IsKeyboardFocusWithin;
+
+        // Ctrl+P must remain available in the always-ready scanner field, while
+        // ordinary editable fields keep their normal text-editing behaviour.
+        if (key == Key.P && modifiers == ModifierKeys.Control &&
+            (!textEntryFocused || scannerFocused))
         {
-            FocusScanner();
+            SaveAndPrint_Click(this, new RoutedEventArgs());
             e.Handled = true;
+            return;
         }
-        else if (e.Key == Key.F4)
+
+        if (modifiers == ModifierKeys.None)
         {
-            CustomerBox.Focus();
-            CustomerBox.IsDropDownOpen = true;
+            switch (key)
+            {
+                case Key.F1:
+                    MessageBox.Show(
+                        "CASHIER KEYBOARD SHORTCUTS\n\nF1  Keyboard help\nF2  Barcode scanner / product search\nF4  Customer selection\nF5  New bill\nF6  Discount\nF7  Cash received\nF8  Payment mode\nF9  Save & Print (final saved receipt)\nF10 Save Only (no print)\nF11 Increase selected item quantity\nF12 Decrease selected item quantity\nCtrl+Delete Remove selected item\nCtrl+Shift+Delete Clear current bill\nCtrl+P Save & Print\n\nDraft Preview is separate and does not post a sale.",
+                        "Khan Baba POS — Keyboard Shortcuts", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
+                case Key.F2:
+                    FocusScanner();
+                    break;
+                case Key.F4:
+                    CustomerBox.Focus();
+                    CustomerBox.IsDropDownOpen = true;
+                    break;
+                case Key.F5:
+                    if (!_checkoutInProgress) _ = CreateNewBillAsync();
+                    break;
+                case Key.F6:
+                    DiscountValueBox.Focus();
+                    DiscountValueBox.SelectAll();
+                    break;
+                case Key.F7:
+                    PartialAmountBox.Focus();
+                    PartialAmountBox.SelectAll();
+                    break;
+                case Key.F8:
+                    PaymentModeBox.Focus();
+                    PaymentModeBox.IsDropDownOpen = true;
+                    break;
+                case Key.F9:
+                    if (!_checkoutInProgress) SaveAndPrint_Click(this, new RoutedEventArgs());
+                    break;
+                case Key.F10:
+                    if (!_checkoutInProgress) Checkout_Click(this, new RoutedEventArgs());
+                    break;
+                case Key.F11:
+                case Key.F12:
+                    if (CartGrid.SelectedItem is CartLine selectedLine)
+                    {
+                        selectedLine.Quantity = Math.Clamp(
+                            selectedLine.Quantity + (key == Key.F11 ? 1 : -1),
+                            1, Math.Max(1, selectedLine.AvailableStock));
+                    }
+                    else
+                    {
+                        SearchStatusText.Text = "Quantity change ke liye pehle cart mein item select karein.";
+                    }
+                    break;
+                case Key.Escape:
+                    if (!SuggestionsList.IsKeyboardFocusWithin) return;
+                    FocusScanner();
+                    break;
+                default:
+                    return;
+            }
+
             e.Handled = true;
+            return;
         }
-        else if (e.Key == Key.F5 && !_checkoutInProgress)
-        {
-            _ = CreateNewBillAsync();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F6)
-        {
-            DiscountValueBox.Focus();
-            DiscountValueBox.SelectAll();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F7)
-        {
-            PartialAmountBox.Focus();
-            PartialAmountBox.SelectAll();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F8)
-        {
-            PaymentModeBox.Focus();
-            PaymentModeBox.IsDropDownOpen = true;
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F9 || (!textEntryFocused && e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control))
-        {
-            PrintCurrentBill_Click(this, new RoutedEventArgs());
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F10 && !_checkoutInProgress)
-        {
-            Checkout_Click(this, new RoutedEventArgs());
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F1)
-        {
-            MessageBox.Show(
-                "CASHIER KEYBOARD SHORTCUTS\n\nF1  Keyboard help\nF2  Barcode scanner / product search\nF4  Customer selection\nF5  New bill\nF6  Discount\nF7  Cash received\nF8  Payment mode\nF9  Print current bill\nF10 Complete sale\nF11 Increase selected item quantity\nF12 Decrease selected item quantity\nCtrl+Delete Remove selected item\nCtrl+Shift+Delete Clear current bill\nCtrl+P Print current bill\n\nScanner focus returns after adding a product.",
-                "Khan Baba POS — Keyboard Shortcuts", MessageBoxButton.OK, MessageBoxImage.Information);
-            e.Handled = true;
-        }
-        else if ((e.Key == Key.F11 || e.Key == Key.F12) && CartGrid.SelectedItem is CartLine selectedLine)
-        {
-            selectedLine.Quantity = Math.Clamp(selectedLine.Quantity + (e.Key == Key.F11 ? 1 : -1), 1,
-                Math.Max(1, selectedLine.AvailableStock));
-            e.Handled = true;
-        }
-        else if (!textEntryFocused && e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            RemoveSelected_Click(this, new RoutedEventArgs());
-            e.Handled = true;
-        }
-        else if (!textEntryFocused && e.Key == Key.Delete &&
-                 Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+
+        // Delete shortcuts must not erase the cashier's search, discount or amount.
+        if (!textEntryFocused &&
+            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+            key == Key.Delete)
         {
             ClearBill_Click(this, new RoutedEventArgs());
             e.Handled = true;
         }
-        else if (e.Key == Key.Escape)
+        else if (!textEntryFocused && modifiers == ModifierKeys.Control && key == Key.Delete)
         {
-            if (SuggestionsList.IsKeyboardFocusWithin)
-            {
-                FocusScanner();
-                e.Handled = true;
-            }
+            RemoveSelected_Click(this, new RoutedEventArgs());
+            e.Handled = true;
         }
     }
 
@@ -541,7 +547,7 @@ public partial class MainWindow : Window
         ReceivedBalanceText.Text = $"Received Rs. {displayedReceived:N2}  •  Due Rs. {Math.Max(0d, FinalTotal - displayedReceived):N2}";
         CartCountText.Text = $"{CartLines.Sum(x => x.Quantity)} units • {CartLines.Count} lines";
         CheckoutButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
-        PrintBillButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
+        SaveAndPrintButton.IsEnabled = CartLines.Count > 0 && !_checkoutInProgress;
         var saleType = SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in";
         var walkIn = saleType == "Walk-in";
         if (CartGrid.Columns.Count > 3)
@@ -708,7 +714,7 @@ public partial class MainWindow : Window
         FocusScanner();
     }
 
-    private async void PrintCurrentBill_Click(object sender, RoutedEventArgs e)
+    private async void PreviewDraft_Click(object sender, RoutedEventArgs e)
     {
         if (CartLines.Count == 0)
         {
@@ -773,10 +779,9 @@ public partial class MainWindow : Window
             line.LineTotal,
             line.PurchasePrice * line.Quantity)).ToList();
 
-        // Persist the current draft before opening print preview. This is still a
-        // pending bill only; stock and the sales ledger change only on Complete Sale.
+        // Keep the pending bill recoverable, but do not post or auto-print this preview.
         await PersistActiveBillAsync();
-        new PrinterInvoiceWindow(sale, items, printImmediately: true) { Owner = this }.ShowDialog();
+        new PrinterInvoiceWindow(sale, items, printImmediately: false) { Owner = this }.ShowDialog();
         FocusScanner();
     }
 
@@ -858,11 +863,24 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Checkout_Click(object sender, RoutedEventArgs e)
+    private async void Checkout_Click(object sender, RoutedEventArgs e) =>
+        await CompleteSaleAsync(printAfterSave: false);
+
+    private async void SaveAndPrint_Click(object sender, RoutedEventArgs e) =>
+        await CompleteSaleAsync(printAfterSave: true);
+
+    private async Task CompleteSaleAsync(bool printAfterSave)
     {
         try { _access.RequireRole(AccessRole.Admin, AccessRole.Salesman); }
-        catch (UnauthorizedAccessException ex) { MessageBox.Show(ex.Message, "Login required", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        catch (UnauthorizedAccessException ex)
+        {
+            MessageBox.Show(ex.Message, "Login required", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (_checkoutInProgress || CartLines.Count == 0) return;
+
+        SalePostingResult? postedResult = null;
         try
         {
             var subtotal = Subtotal;
@@ -877,8 +895,11 @@ public partial class MainWindow : Window
             double? partial = null;
             if (PaymentModeBox.SelectedItem?.ToString() == "Partial")
             {
-                if (!double.TryParse(PartialAmountBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-                    throw new InvalidOperationException("Partial received amount enter karein.");
+                if (!double.TryParse(PartialAmountBox.Text, NumberStyles.Number,
+                        CultureInfo.InvariantCulture, out var parsed) ||
+                    !double.IsFinite(parsed) || parsed <= 0 || parsed >= FinalTotal)
+                    throw new InvalidOperationException(
+                        "Partial received amount zero se zyada aur net total se kam hona chahiye.");
                 partial = parsed;
             }
 
@@ -894,6 +915,7 @@ public partial class MainWindow : Window
                 SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
                 _session.DisplayName,
                 _session.UserId);
+
             SalePostingResult result;
             if (_recalledSaleId is not null)
             {
@@ -905,31 +927,84 @@ public partial class MainWindow : Window
                     ? await _sales.UpdateSaleFromRecallAsync(_recalledSaleId.Value, request)
                     : await _sales.CompleteSaleAsync(request);
             }
-            else result = await _sales.CompleteSaleAsync(request);
-            await _pendingBills.DeleteAsync(_activeBillId);
+            else
+            {
+                result = await _sales.CompleteSaleAsync(request);
+            }
 
+            // From this point the sale is committed. A later printer or draft-cleanup
+            // error must never make the cashier believe checkout failed and retry it.
+            postedResult = result;
+            var completedBillId = _activeBillId;
             _suppressPersistence = true;
-            CartLines.Clear();
-            _recalledSaleId = null;
-            _activeBillId = Guid.NewGuid().ToString("N");
-            SaleTypeBox.SelectedItem = "Walk-in";
-            ApplyCustomerTypeFilter();
-            CustomerBox.SelectedValue = 0;
-            PaymentModeBox.SelectedItem = "Cash";
-            DiscountModeBox.SelectedIndex = 0;
-            DiscountValueBox.Text = "0";
-            PartialAmountBox.Clear();
-            _suppressPersistence = false;
-            await RefreshPendingBillsAsync();
+            try
+            {
+                CartLines.Clear();
+                _recalledSaleId = null;
+                _activeBillId = Guid.NewGuid().ToString("N");
+                SaleTypeBox.SelectedItem = "Walk-in";
+                ApplyCustomerTypeFilter();
+                CustomerBox.SelectedValue = 0;
+                PaymentModeBox.SelectedItem = "Cash";
+                DiscountModeBox.SelectedIndex = 0;
+                DiscountValueBox.Text = "0";
+                PartialAmountBox.Clear();
+            }
+            finally
+            {
+                _suppressPersistence = false;
+            }
 
-            MessageBox.Show(
-                $"Sale #{result.SaleId} successfully saved.\nNet total: Rs. {result.FinalAmount:N2}\nReceived: Rs. {result.ReceivedAmount:N2}\nBalance: Rs. {result.BalanceDue:N2}",
-                "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
+            var postSaveWarning = string.Empty;
+            try { await _pendingBills.DeleteAsync(completedBillId); }
+            catch (Exception ex) { postSaveWarning = "Pending draft cleanup warning: " + ex.Message; }
+
+            try { await RefreshPendingBillsAsync(); }
+            catch (Exception ex)
+            {
+                postSaveWarning = string.IsNullOrWhiteSpace(postSaveWarning)
+                    ? "Pending bills could not refresh: " + ex.Message
+                    : postSaveWarning + "\nPending bills could not refresh: " + ex.Message;
+            }
+
+            var printStatus = string.Empty;
+            if (printAfterSave)
+            {
+                try
+                {
+                    var sentToPreferredPrinter = await PrintSavedSaleAsync(result.SaleId);
+                    printStatus = sentToPreferredPrinter
+                        ? "\nReceipt data sent to the saved preferred printer."
+                        : "\nPrinter window opened. Select/confirm a printer and print the saved invoice there.";
+                }
+                catch (Exception printError)
+                {
+                    printStatus = "\nSale save ho gayi, lekin printing nahi ho saki: " +
+                                  printError.Message +
+                                  "\nSaved invoice ko Sales History se dobara print kar sakte hain.";
+                }
+            }
+
             SearchStatusText.Text = $"Sale #{result.SaleId} saved successfully.";
+            var message = $"Sale #{result.SaleId} successfully saved.\nNet total: Rs. {result.FinalAmount:N2}\nReceived: Rs. {result.ReceivedAmount:N2}\nBalance: Rs. {result.BalanceDue:N2}";
+            if (!string.IsNullOrWhiteSpace(postSaveWarning)) message += "\n" + postSaveWarning;
+            message += printStatus;
+            MessageBox.Show(message, "Khan Baba POS", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Sale could not be completed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (postedResult is null)
+            {
+                MessageBox.Show(ex.Message, "Sale could not be completed",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                SearchStatusText.Text = $"Sale #{postedResult.SaleId} saved; post-save action needs attention.";
+                MessageBox.Show(
+                    $"Sale #{postedResult.SaleId} pehle hi save ho chuki hai. Dobara Save na karein.\n\n{ex.Message}\n\nSales History se invoice verify karein.",
+                    "Sale saved — follow-up required", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         finally
         {
@@ -937,6 +1012,40 @@ public partial class MainWindow : Window
             RefreshTotals();
             FocusScanner();
         }
+    }
+
+    private async Task<bool> PrintSavedSaleAsync(int saleId)
+    {
+        var history = new SalesHistoryService();
+        var savedSale = (await history.GetSalesAsync(saleId.ToString(CultureInfo.InvariantCulture)))
+            .FirstOrDefault(x => x.SaleId == saleId)
+            ?? throw new InvalidOperationException($"Saved invoice #{saleId} could not be loaded.");
+        var items = await history.GetSaleItemsAsync(saleId);
+        if (items.Count == 0)
+            throw new InvalidOperationException($"Saved invoice #{saleId} has no printable items.");
+
+        var printerService = new PrinterSettingsService();
+        var preferences = await printerService.LoadAsync();
+        if (!string.IsNullOrWhiteSpace(preferences.PreferredPrinter))
+        {
+            var queues = await printerService.GetInstalledAsync();
+            var savedQueue = queues.FirstOrDefault(x =>
+                string.Equals(x.Name, preferences.PreferredPrinter, StringComparison.OrdinalIgnoreCase));
+            if (savedQueue?.IsAvailable == true)
+            {
+                // Only the posted sale ID and persisted sale_items are printed here.
+                var receiptText = EscPosReceiptBuilder.BuildText(savedSale, items, preferences);
+                await printerService.PrintRawAsync(
+                    savedQueue.Name, EscPosReceiptBuilder.BuildBytes(receiptText, preferences));
+                return true;
+            }
+        }
+
+        // First-use or unavailable queue: let the cashier select a printer for
+        // this already-saved invoice; do not send a draft receipt.
+        new PrinterInvoiceWindow(savedSale, items, printImmediately: false)
+            { Owner = this }.ShowDialog();
+        return false;
     }
 
     private void Khata_Click(object sender, RoutedEventArgs e)
@@ -1083,15 +1192,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var update = await updater.CheckForUpdateAsync();
-            if (update is null)
-            {
-                UpdateStatusText.Text = $"Windows version: installed {installed} • GitHub release {latest} has no Windows installer";
-                MessageBox.Show(
-                    $"GitHub ki latest release ({latest}) mein Windows installer aur signed manifest nahi hain. Is liye Windows update abhi available nahi.",
-                    "No Windows update package", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+            var update = await updater.CheckForUpdateAsync()
+                ?? throw new InvalidDataException("Latest release update details could not be loaded.");
             var message = $"Installed version: {installed}\nLatest version: {latest}\n\n{update.ReleaseNotes}";
             UpdateStatusText.Text = $"Update available: installed {installed} • latest {latest}";
             if (!updater.CanInstallSignedUpdates)

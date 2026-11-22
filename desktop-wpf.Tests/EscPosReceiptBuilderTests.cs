@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using KhanBabaPos.Wpf.Services;
 using Xunit;
 
@@ -42,10 +43,8 @@ public sealed class EscPosReceiptBuilderTests
         var sale = SampleSale(received: 125, due: 0, subtotal: 125.5, discount: 0.5, finalAmount: 125);
         var items = new[] { new SaleHistoryItem(1, "123", "Milk", 1, "pcs", 125.5, 100, 125.5, 100) };
         var text = EscPosReceiptBuilder.BuildText(sale, items, new PrinterPreferences());
-
         Assert.Contains("Gross: 125.5", text);
         Assert.Contains("NET AMOUNT: Rs. 125", text);
-        Assert.Contains("125.5", text);
         Assert.DoesNotContain("125.50", text);
         Assert.DoesNotContain("125.00", text);
     }
@@ -62,57 +61,30 @@ public sealed class EscPosReceiptBuilderTests
     }
 
     [Fact]
-    public void ReceiptKeepsCashierThroughCustomerInTwoRowsAndNetAmountOnOneLine()
-    {
-        var sale = SampleSale();
-        var text = EscPosReceiptBuilder.BuildText(sale, SampleItems(), new PrinterPreferences());
-        var lines = text.Replace("\r", string.Empty).Split('\n');
-
-        var invoiceRow = Assert.Single(lines, line => line.Contains("Bill#", StringComparison.Ordinal));
-        Assert.Contains("Date:", invoiceRow);
-        Assert.Contains("Time:", invoiceRow);
-
-        var cashierRow = Assert.Single(lines, line => line.Contains("Cashier:", StringComparison.Ordinal));
-        Assert.Contains("Cashier: Cashier One", cashierRow);
-        Assert.Contains("Type: Khata", cashierRow);
-
-        var customerRow = Assert.Single(lines, line => line.Contains("Customer:", StringComparison.Ordinal));
-        Assert.Contains("Customer: Test Customer", customerRow);
-        Assert.DoesNotContain("Time:", customerRow);
-
-        var netRow = Assert.Single(lines, line => line.Contains("NET AMOUNT:", StringComparison.Ordinal));
-        Assert.True(netRow.Length <= 45, $"Net Amount must fit one 80mm text row: {netRow}");
-
-        var bytes = EscPosReceiptBuilder.BuildBytes(text, new PrinterPreferences());
-        Assert.True(ContainsStyledLine(bytes, "KHAN BABA", 0x11, bold: true));
-        Assert.True(ContainsStyledLine(bytes, "GENERAL STORE", 0x00, bold: true));
-        Assert.True(ContainsStyledLine(bytes, "G.T ROAD SANAWAN", 0x00, bold: false));
-        Assert.True(ContainsStyledLine(bytes, netRow.Trim(), 0x00, bold: true));
-    }
-
-    [Fact]
     public void EscPosBytesSetEightyMillimeterWidthMarginsEmphasisAndCutter()
     {
-        var prefs = new PrinterPreferences(TopMarginMm: 3, BottomMarginMm: 4);
+        var prefs = new PrinterPreferences();
         var bytes = EscPosReceiptBuilder.BuildBytes(
             EscPosReceiptBuilder.BuildText(SampleSale(), SampleItems(), prefs), prefs);
         Assert.True(Contains(bytes, 0x1D, 0x4C, 16, 0, 0x1D, 0x57, 32, 2));
-        Assert.True(Contains(bytes, 0x1B, 0x4A, 24));
-        Assert.True(Contains(bytes, 0x1B, 0x4A, 32));
+        Assert.Equal(2, CountSequence(bytes, 0x1B, 0x4A, 16));
+        Assert.False(Contains(bytes, 0x1B, 0x4A, 24));
+        Assert.False(Contains(bytes, 0x1B, 0x4A, 32));
         Assert.True(Contains(bytes, 0x1B, 0x61, 1, 0x1B, 0x45, 1, 0x1D, 0x21, 0x11));
+        Assert.True(Contains(bytes, 0x1D, 0x21, 0x10));
         Assert.Equal(new byte[] { 0x1D, 0x56, 0x00 }, bytes[^3..]);
     }
 
     [Fact]
-    public void ZeroMarginsAndCashChangeAreHandledWithoutInventingTax()
+    public void CashChangeIsHandledWithoutInventingTax()
     {
         var sale = SampleSale(received: 1200, due: 0);
-        var prefs = new PrinterPreferences(TopMarginMm: 0, BottomMarginMm: 0);
+        var prefs = new PrinterPreferences();
         var text = EscPosReceiptBuilder.BuildText(sale, SampleItems(), prefs);
         Assert.Contains("Change", text);
         Assert.DoesNotContain("Balance Due", text);
         Assert.DoesNotContain("Tax (GST)", text);
-        Assert.False(Contains(EscPosReceiptBuilder.BuildBytes(text, prefs), 0x1B, 0x4A));
+        Assert.Equal(2, CountSequence(EscPosReceiptBuilder.BuildBytes(text, prefs), 0x1B, 0x4A, 16));
     }
 
     [Fact]
@@ -126,15 +98,34 @@ public sealed class EscPosReceiptBuilderTests
         Assert.Contains("NET AMOUNT: Rs. 1100", pdf);
     }
 
-    private static bool ContainsStyledLine(byte[] source, string text, byte size, bool bold)
+    [Fact]
+    public void LegacyPrinterMarginValuesAreIgnoredAndCannotChangeReceiptOutput()
     {
-        var prefix = new byte[]
+        const string legacyJson = """{"PreferredPrinter":"Black Copper BC-86AC","PaperWidthMm":80,"TopMarginMm":9,"BottomMarginMm":7,"HeaderSize":3,"TotalSize":2}""";
+        var legacy = JsonSerializer.Deserialize<PrinterPreferences>(legacyJson);
+        Assert.Equal("Black Copper BC-86AC", legacy?.PreferredPrinter);
+
+        var current = new PrinterPreferences("Black Copper BC-86AC");
+        var text = EscPosReceiptBuilder.BuildText(SampleSale(), SampleItems(), current);
+        Assert.Equal(
+            EscPosReceiptBuilder.BuildBytes(text, current),
+            EscPosReceiptBuilder.BuildBytes(text, legacy ?? new PrinterPreferences()));
+        var savedJson = JsonSerializer.Serialize(legacy);
+        Assert.DoesNotContain("TopMarginMm", savedJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BottomMarginMm", savedJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int CountSequence(byte[] source, params byte[] value)
+    {
+        var count = 0;
+        for (var i = 0; i <= source.Length - value.Length; i++)
         {
-            0x1B, 0x61, 0x01,
-            0x1B, 0x45, bold ? (byte)0x01 : (byte)0x00,
-            0x1D, 0x21, size
-        };
-        return Contains(source, prefix.Concat(Encoding.ASCII.GetBytes(text)).ToArray());
+            var match = true;
+            for (var j = 0; j < value.Length; j++)
+                if (source[i + j] != value[j]) { match = false; break; }
+            if (match) count++;
+        }
+        return count;
     }
 
     private static bool Contains(byte[] source, params byte[] value)

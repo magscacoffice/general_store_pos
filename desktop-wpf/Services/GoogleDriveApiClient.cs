@@ -16,8 +16,8 @@ namespace KhanBabaPos.Wpf.Services;
 /// </summary>
 public sealed class GoogleDriveAuthService
 {
-    private const string ClientId = "707319476515-vtdi3s5vn0tudh3ihnppco14kkrgtk78.apps.googleusercontent.com";
-    private const string Scope = "openid email https://www.googleapis.com/auth/drive.file";
+    internal const string DesktopClientId = "707319476515-vtdi3s5vn0tudh3ihnppco14kkrgtk78.apps.googleusercontent.com";
+    internal const string Scope = "openid email https://www.googleapis.com/auth/drive.file";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(25) };
     private readonly string _tokenPath;
 
@@ -26,10 +26,49 @@ public sealed class GoogleDriveAuthService
         var directory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "KhanBabaPOS");
-        _tokenPath = tokenPath ?? Path.Combine(directory, "drive_tokens.dat");
+        // Refresh tokens are bound to their OAuth client. A new Desktop client must
+        // receive a fresh consent grant rather than trying to refresh an old client's token.
+        _tokenPath = tokenPath ?? Path.Combine(directory, GetTokenCacheFileName(DesktopClientId));
     }
 
     public bool HasSavedCredentials => File.Exists(_tokenPath);
+
+    internal static string GetTokenCacheFileName(string clientId)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+            throw new ArgumentException("OAuth client ID is required.", nameof(clientId));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(clientId)))
+            .ToLowerInvariant()[..16];
+        return $"drive_tokens_{hash}.dat";
+    }
+
+    internal static Dictionary<string, string> CreateRefreshTokenForm(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+        return new Dictionary<string, string>
+        {
+            ["client_id"] = DesktopClientId,
+            ["refresh_token"] = refreshToken,
+            ["grant_type"] = "refresh_token"
+        };
+    }
+
+    internal static Dictionary<string, string> CreateAuthorizationCodeTokenForm(
+        string code, string codeVerifier, string redirectUri)
+    {
+        if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Authorization code is required.", nameof(code));
+        if (string.IsNullOrWhiteSpace(codeVerifier)) throw new ArgumentException("PKCE code verifier is required.", nameof(codeVerifier));
+        if (string.IsNullOrWhiteSpace(redirectUri)) throw new ArgumentException("Loopback redirect URI is required.", nameof(redirectUri));
+        return new Dictionary<string, string>
+        {
+            ["client_id"] = DesktopClientId,
+            ["code"] = code,
+            ["code_verifier"] = codeVerifier,
+            ["grant_type"] = "authorization_code",
+            ["redirect_uri"] = redirectUri
+        };
+    }
 
     public async Task<string> GetAccessTokenAsync(
         bool promptForLogin = false,
@@ -75,9 +114,7 @@ public sealed class GoogleDriveAuthService
         using var response = await Http.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        return document.RootElement.TryGetProperty("email", out var email)
-            ? email.GetString()
-            : null;
+        return document.RootElement.TryGetProperty("email", out var email) ? email.GetString() : null;
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
@@ -89,16 +126,10 @@ public sealed class GoogleDriveAuthService
             {
                 using var revoke = await Http.PostAsync(
                     "https://oauth2.googleapis.com/revoke",
-                    new FormUrlEncodedContent(new Dictionary<string, string>
-                    {
-                        ["token"] = tokens.RefreshToken
-                    }),
+                    new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = tokens.RefreshToken }),
                     cancellationToken);
             }
-            catch
-            {
-                // Local sign-out must still succeed when the PC is offline.
-            }
+            catch { /* Local sign-out must still work while offline. */ }
         }
         if (File.Exists(_tokenPath))
             await Task.Run(() => File.Delete(_tokenPath), cancellationToken);
@@ -107,14 +138,7 @@ public sealed class GoogleDriveAuthService
     private static async Task<DriveTokenSet> RefreshAsync(
         string refreshToken, CancellationToken cancellationToken)
     {
-        var form = new Dictionary<string, string>
-        {
-            ["client_id"] = ClientId,
-            ["refresh_token"] = refreshToken,
-            ["grant_type"] = "refresh_token"
-        };
-        var secret = Environment.GetEnvironmentVariable("GOOGLE_WINDOWS_CLIENT_SECRET");
-        if (!string.IsNullOrWhiteSpace(secret)) form["client_secret"] = secret;
+        var form = CreateRefreshTokenForm(refreshToken);
 
         using var response = await Http.PostAsync(
             "https://oauth2.googleapis.com/token",
@@ -137,7 +161,7 @@ public sealed class GoogleDriveAuthService
         var state = Base64Url(RandomNumberGenerator.GetBytes(32));
         var query = new Dictionary<string, string>
         {
-            ["client_id"] = ClientId,
+            ["client_id"] = DesktopClientId,
             ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
             ["scope"] = Scope,
@@ -230,16 +254,7 @@ public sealed class GoogleDriveAuthService
                     "Google authorization was cancelled or returned an invalid state.");
         }
 
-        var form = new Dictionary<string, string>
-        {
-            ["client_id"] = ClientId,
-            ["code"] = code!,
-            ["code_verifier"] = verifier,
-            ["grant_type"] = "authorization_code",
-            ["redirect_uri"] = redirectUri
-        };
-        var secret = Environment.GetEnvironmentVariable("GOOGLE_WINDOWS_CLIENT_SECRET");
-        if (!string.IsNullOrWhiteSpace(secret)) form["client_secret"] = secret;
+        var form = CreateAuthorizationCodeTokenForm(code!, verifier, redirectUri);
         using var tokenResponse = await Http.PostAsync(
             "https://oauth2.googleapis.com/token",
             new FormUrlEncodedContent(form), cancellationToken);
