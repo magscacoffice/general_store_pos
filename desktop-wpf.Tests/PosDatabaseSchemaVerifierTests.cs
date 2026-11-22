@@ -504,7 +504,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            await SeedSaleAccountAsync(path, "Khata", 3);
             var supplierId = await SeedSupplierAsync(path);
             int productId;
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
@@ -587,7 +587,7 @@ public sealed class PosDatabaseSchemaVerifierTests
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            await SeedSaleAccountAsync(path, "Wholesale", 3);
+            await SeedSaleAccountAsync(path, "Khata", 3);
             var supplierId = await SeedSupplierAsync(path);
             int productId;
             await using (var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
