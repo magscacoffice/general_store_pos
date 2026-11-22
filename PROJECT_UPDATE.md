@@ -1434,10 +1434,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Findings requiring attention
 
-- [ ] **High — Android manual backup may omit live SQLite WAL data.** `lib/backup_screen.dart` reads the live database with `File.readAsBytes()` and sends those bytes to the file picker. It does not checkpoint WAL or use SQLite's online backup API. If committed changes remain in the `-wal` file while the app is open, the exported `.db` may not contain the latest data. Replace the raw read with a consistent SQLite backup/copy procedure and verify the produced database before reporting success. WPF's `DatabaseBackupService` already uses SQLite backup APIs and hash/schema/integrity verification; Android should provide equivalent guarantees.
-- [ ] **High — Gmail account identity is not technically bound to the local store database.** Android and WPF keep the local POS database separate from the Google token, then upload the current database to whichever Google account is connected. The UI warns that a clean database is required when switching to another business, but there is no enforced store/account binding or safe per-store database selection. A user can therefore connect another business's Gmail on an installation containing the previous business's data and upload the wrong store snapshot. Add a verified local store identity/account binding and block cross-store account switches until the correct isolated database is selected; retain same-store Android/Windows pairing.
-- [ ] **Medium — retired wholesale-only product-rate UI remains.** The customer-type selectors and sale-posting validation now use only Walk-in/Khata, and legacy Wholesale customer records are normalized/recalled as Khata. However, Android `lib/inventory_screen.dart` and Windows `desktop-wpf/InventoryWindow.cs` still expose an optional Wholesale sale-price field/column. This conflicts with the earlier tracker instruction to remove the wholesale-only per-item rate editor. Confirm whether this field is also to be retired; if yes, remove only its UI/use while preserving the legacy SQLite column and historical data.
-- [ ] **Medium — verification gap.** Source review does not replace execution. Android analyzer + complete Flutter tests, WPF .NET 10 Release build + all WPF tests, disposable schema-v18 transaction/sync/backup tests, and real Windows OAuth/Drive, scanner, PDF and BC-86AC acceptance still need validation. Do not mark any of these passed based on source inspection alone.
+- [x] **Resolved 2026-11-22 — Android manual backup WAL safety.** `lib/backup_screen.dart` reads the live database with `File.readAsBytes()` and sends those bytes to the file picker. It does not checkpoint WAL or use SQLite's online backup API. If committed changes remain in the `-wal` file while the app is open, the exported `.db` may not contain the latest data. Replace the raw read with a consistent SQLite backup/copy procedure and verify the produced database before reporting success. WPF's `DatabaseBackupService` already uses SQLite backup APIs and hash/schema/integrity verification; Android should provide equivalent guarantees.
+- [x] **Resolved 2026-11-22 — Gmail identity is bound to the local app data profile.** Android and WPF keep the local POS database separate from the Google token, then upload the current database to whichever Google account is connected. The UI warns that a clean database is required when switching to another business, but there is no enforced store/account binding or safe per-store database selection. A user can therefore connect another business's Gmail on an installation containing the previous business's data and upload the wrong store snapshot. Add a verified local store identity/account binding and block cross-store account switches until the correct isolated database is selected; retain same-store Android/Windows pairing.
+- [x] **Resolved 2026-11-22 — retired Wholesale-only product-rate UI removed; legacy DB column retained.** The customer-type selectors and sale-posting validation now use only Walk-in/Khata, and legacy Wholesale customer records are normalized/recalled as Khata. However, Android `lib/inventory_screen.dart` and Windows `desktop-wpf/InventoryWindow.cs` still expose an optional Wholesale sale-price field/column. This conflicts with the earlier tracker instruction to remove the wholesale-only per-item rate editor. Confirm whether this field is also to be retired; if yes, remove only its UI/use while preserving the legacy SQLite column and historical data.
+- [x] **Automated verification completed 2026-11-22:** Android analyzer and 22/22 Flutter tests passed on Windows and Ubuntu; WPF Release build passed with 0 warnings/errors and 97/97 tests. Physical-device OAuth/Drive, scanner, PDF and BC-86AC acceptance remains pending.
 
 ### Confirmed source-level checks
 
@@ -1451,8 +1451,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Review limitations / next verification loop
 
-- [ ] Run the targeted tests after the two high-priority data-safety items are addressed, then rerun the full Android and WPF validation suites.
-- [ ] Inspect and test every remaining service/screen path against the real schema-v18 fixture, especially Drive conflict resolution, archived-party propagation, sale edits/returns, purchase invoice posting, and Android restore recovery.
+- [x] Targeted data-safety fixes and full Android/WPF automated validation rerun completed; see 2026-11-22 validation section.
+- [ ] Continue the remaining schema-v18 service/screen audit. This pass found additional Drive dependency edge cases; see the 2026-11-22 repository-wide review below.
 - [ ] Perform target-device acceptance for account isolation using two separate Google accounts, plus offline recovery and cross-platform round-trip. No real account credentials or production store database were used in this static review.
 - [ ] Keep all changes surgical. No APK, Windows ZIP, installer, release, or artifact generation without separate explicit owner authorization; batch related code and tracker updates into a consolidated change.
 
@@ -1542,3 +1542,36 @@ The source work that can be completed safely without owner hardware, Google test
 - [x] Flutter tests passed on both Ubuntu and Windows: 22 passed on each runner, including the Android/Windows Drive reconciliation integration test.
 - [ ] Physical-device validation is still required for actual Google OAuth, simultaneous Android/Windows network timing, disconnect during a real upload, and deferred-record retries against live Drive data.
 - [ ] No APK, Windows ZIP, installer or other build artifact was generated. Changes remain on feature/complete-project-pendings; main was not merged.
+
+
+## Repository-wide review — 2026-11-22 (PROJECT_UPDATE.md rules applied)
+
+**Review branch:** `feature/complete-project-pendings`  
+**Review baseline:** `4d2132f7e71c6c6cacc47387fc21c86f6c848287`  
+**Scope inspected:** all 221 tracked paths from the recursive repository tree; Android Flutter screens/data/sync/backup, native WPF app/services, schema-v18 verifier and fixtures, Firebase rules/function, installer and GitHub Actions. This was a source review of the branch, not a live-database or physical-device test.
+
+### Reconciled older findings
+
+- [x] Android manual backup now creates a SQLite `VACUUM INTO` snapshot and validates integrity/required tables before export; restore rollback snapshot is created while the live connection is open and verified before the active DB pointer changes.
+- [x] Android and WPF Drive connections now enforce a verified Gmail binding per local app data profile; disconnect does not clear the binding. Separate businesses still require isolated app data/database profiles and separate Gmail accounts.
+- [x] Wholesale customer selection and the Wholesale-only product-rate editor have been removed from both clients; legacy database fields and old records remain for compatibility.
+- [x] Latest recorded CI validation is WPF Release build 0 warnings/0 errors and 97/97 tests, plus Flutter analyze and 22/22 tests on both Ubuntu and Windows. No package artifact was produced.
+- [ ] Physical Android/Windows paired-device, Google OAuth, printer, scanner, PDF, display/DPI and backup/restore acceptance remains owner-side.
+
+### New source-level finding — Drive import dependency accounting
+
+- [ ] **High — WPF Drive merge can accept an incomplete snapshot when a required supplier/customer reference is missing.** In `DriveSnapshotMergeService`, a purchase with a non-empty `supplier_sync_id` can currently be inserted with a null local `supplier_id` when the party cannot be resolved. A sale return can similarly be inserted with a non-empty `party_sync_id` but no matching local customer. These rows must be deferred so the snapshot remains pending and can retry after its parent is available.
+- [ ] **Medium — expenses/reminders without stable sync IDs are silently skipped.** Their merge loop currently continues without incrementing the deferred counter. Such a snapshot can therefore be marked accepted even though those records were not imported. Missing IDs must count as deferred; duplicates with an existing ID remain normal idempotent skips.
+- [ ] Add focused regression coverage using disposable schema-v18 databases or directly tested merge predicates. Verify the snapshot remains unaccepted and a subsequent retry imports the missing rows once the parent/stable ID is available.
+- [ ] Re-run WPF Release build and the complete WPF test suite after the fix. Do not generate APK, ZIP, installer or release artifacts.
+
+### Additional review observations
+
+- [x] WPF uses installed-app OAuth loopback + PKCE, stores tokens using current-user DPAPI, and has a client-specific token cache. Historical notes requiring `GOOGLE_WINDOWS_CLIENT_SECRET` apply to the retired Flutter Windows implementation and are superseded by the native WPF OAuth implementation.
+- [x] Windows Drive sync is currently enabled by the explicit owner-approved source flag; import is enabled and guarded by envelope/hash/schema validation plus a verified pre-merge backup. Historical notes saying Drive imports remain disabled are superseded by the later owner approval and implementation entries.
+- [x] Windows restore stages a new database and atomically changes `.active_database`; Android restore similarly uses a staged file and pointer rollback. Existing live DB files are not overwritten in place.
+- [ ] Production updater/installer remains blocked on the owner's code-signing certificate and pinned publisher thumbprint. The installer workflow is manual-only and can compile/upload an unsigned test installer only when explicitly dispatched; do not dispatch it without separate authorization.
+- [ ] Full real-device cross-platform round-trip, account isolation, out-of-order record retry, duplicate delivery, revoked consent/offline recovery, hardware and owner sign-off remain open.
+- [ ] Continue to follow the PassBook CLAUDE.md rules: document requirements first, surgical changes only, reproduce defects with tests, and report only validation actually run.
+
+**Artifact rule:** This review and follow-up work do not authorize any APK, Windows ZIP, installer, release or other build artifact. Keep work on `feature/complete-project-pendings`; do not merge to `main`.
