@@ -3118,13 +3118,14 @@ class DBHelper {
       final references = partyType == 'customer'
           ? await txn.rawQuery(
               '''SELECT (SELECT COUNT(*) FROM sales WHERE customer_id = ?) +
-                        (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) AS count''',
-              [id, id])
+                        (SELECT COUNT(*) FROM khata_transactions WHERE party_id = ?) +
+                        (SELECT COUNT(*) FROM sale_returns WHERE customer_id = ?) AS count''',
+              [id, id, id])
           : await txn.rawQuery('SELECT COUNT(*) AS count FROM purchases WHERE supplier_id = ?', [id]);
       final referenceCount = (references.first['count'] as num).toInt();
       final balance = (row['balance'] as num?)?.toDouble() ?? 0.0;
       if (balance.abs() > 0.000001) {
-        throw Exception('Is Khata customer ka balance abhi Rs. ${balance.toStringAsFixed(2)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.');
+        throw Exception('Is account ka balance abhi Rs. ${balance.toStringAsFixed(2)} hai. Balance zero hone ke baad hi delete/archive kar sakte hain.');
       }
       if (referenceCount > 0 && partyType == 'customer') {
         await txn.update('parties', {'type': 'archived_customer', 'customer_type': 'Khata'}, where: 'id = ? AND type = ?', whereArgs: [id, 'customer']);
