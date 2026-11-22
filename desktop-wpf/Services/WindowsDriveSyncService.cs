@@ -208,16 +208,38 @@ public sealed class WindowsDriveSyncService
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         _access.RequireAdmin();
-        var databasePath = PosDatabasePath.Resolve(requireExisting: true);
-        var backupDirectory = Path.Combine(Path.GetDirectoryName(databasePath)!, "Backups");
-        SetStatus("Creating verified local backup before disconnecting Google account...");
-        var backupPath = await _backups.CreateBackupAsync(databasePath, backupDirectory, cancellationToken);
-        if (!await _backups.IsVerifiedBackupAsync(backupPath, cancellationToken))
-            throw new InvalidDataException("Verified local backup could not be confirmed; Google account remains connected.");
+
+        // Stop new timer ticks, then wait for any active sync/merge to finish
+        // before taking the disconnect safety backup or deleting OAuth tokens.
         StopAutoSync();
-        await _auth.DisconnectAsync(cancellationToken);
-        LastError = null;
-        SetStatus("Google Drive disconnected. Verified local backup saved; POS remains available offline.");
+        var gateAcquired = false;
+        try
+        {
+            await _syncGate.WaitAsync(cancellationToken);
+            gateAcquired = true;
+
+            var databasePath = PosDatabasePath.Resolve(requireExisting: true);
+            var backupDirectory = Path.Combine(Path.GetDirectoryName(databasePath)!, "Backups");
+            SetStatus("Creating verified local backup before disconnecting Google account...");
+            var backupPath = await _backups.CreateBackupAsync(databasePath, backupDirectory, cancellationToken);
+            if (!await _backups.IsVerifiedBackupAsync(backupPath, cancellationToken))
+                throw new InvalidDataException("Verified local backup could not be confirmed; Google account remains connected.");
+
+            await _auth.DisconnectAsync(cancellationToken);
+            LastError = null;
+            SetStatus("Google Drive disconnected. Verified local backup saved; POS remains available offline.");
+        }
+        catch
+        {
+            // A failed/cancelled backup must leave the account connected and
+            // restore background sync rather than silently pausing cloud sync.
+            if (_auth.HasSavedCredentials) StartAutoSync();
+            throw;
+        }
+        finally
+        {
+            if (gateAcquired) _syncGate.Release();
+        }
     }
 
     public void StartAutoSync()
