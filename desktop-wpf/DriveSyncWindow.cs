@@ -13,6 +13,7 @@ public sealed class DriveSyncWindow : Window
     private readonly WindowsDriveSyncService _sync;
     private readonly ObservableCollection<DriveConflictRow> _conflicts = [];
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(42, 83, 66)) };
+    private readonly TextBlock _account = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), FontWeight = FontWeights.SemiBold };
     private readonly DataGrid _grid = new() { AutoGenerateColumns = false, IsReadOnly = true, SelectionMode = DataGridSelectionMode.Single, Height = 330, Margin = new Thickness(0, 12, 0, 12) };
     private readonly TextBox _localPayload = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MinHeight = 130 };
     private readonly TextBox _remotePayload = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MinHeight = 130 };
@@ -45,6 +46,7 @@ public sealed class DriveSyncWindow : Window
             : "Google Drive sync is disabled in this build.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 5, 0, 10) });
         root.Children.Add(_status);
+        root.Children.Add(_account);
 
         var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
         var connect = Action("Connect & Sync", Connect_Click);
@@ -54,7 +56,7 @@ public sealed class DriveSyncWindow : Window
         syncNow.IsEnabled = _sync.IsEnabled;
         actions.Children.Add(syncNow);
         actions.Children.Add(Action("Refresh Conflicts", Refresh_Click));
-        actions.Children.Add(Action("Disconnect Drive", Disconnect_Click));
+        actions.Children.Add(Action("Disconnect / Switch Gmail", Disconnect_Click));
         root.Children.Add(actions);
         root.Children.Add(new TextBlock { Text = "Pending conflicts — local record aur remote record compare karein", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 16, 0, 0) });
         _grid.Visibility = Visibility.Collapsed;
@@ -84,7 +86,7 @@ public sealed class DriveSyncWindow : Window
         resolutions.Children.Add(useRemote);
         root.Children.Add(resolutions);
         Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
-        Loaded += async (_, _) => await RefreshConflictsAsync();
+        Loaded += async (_, _) => { await RefreshConflictsAsync(); await RefreshAccountAsync(); };
         Closed += (_, _) => _sync.StatusChanged -= Sync_StatusChanged;
     }
 
@@ -118,6 +120,7 @@ public sealed class DriveSyncWindow : Window
                 Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         await RunAsync(() => _sync.ConnectAndSyncAsync());
         await RefreshConflictsAsync();
+        await RefreshAccountAsync();
     }
 
     private async void Sync_Click(object sender, RoutedEventArgs e)
@@ -132,9 +135,10 @@ public sealed class DriveSyncWindow : Window
     private async void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         if (!EnsureAdmin()) return;
-        if (MessageBox.Show("Google Drive disconnect karna hai? Local POS aur database par koi asar nahi hoga.",
-                Title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (MessageBox.Show("Google account disconnect/switch karna hai? Pehle current database ka verified local backup banega. Us ke baad Connect & Sync se doosra Gmail account select kar sakte hain.",
+                Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         await RunAsync(async () => { await _sync.DisconnectAsync(); return new DriveSyncSummary(0, 0, 0, DateTimeOffset.UtcNow); });
+        await RefreshAccountAsync();
     }
 
     private async void KeepWindows_Click(object sender, RoutedEventArgs e)
@@ -180,6 +184,14 @@ public sealed class DriveSyncWindow : Window
         {
             _status.Text = ex.Message;
         }
+    }
+
+    private async Task RefreshAccountAsync()
+    {
+        var email = await _sync.GetConnectedAccountEmailAsync();
+        _account.Text = string.IsNullOrWhiteSpace(email)
+            ? "Google account: not connected"
+            : $"Connected Gmail account: {email}";
     }
 
     private void ShowSelectedPayloads()
