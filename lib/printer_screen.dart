@@ -89,7 +89,12 @@ class _PrinterScreenState extends State<PrinterScreen> {
   double _itemQuantity(Map<String, dynamic> item) =>
       _number(item['quantity'] ?? item['qty']);
 
-  String _money(double amount) => amount.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+
+  String _money(double amount) {
+    final fixed = amount.toStringAsFixed(2);
+    if (fixed.endsWith('.00')) return fixed.substring(0, fixed.length - 3);
+    if (fixed.endsWith('0')) return fixed.substring(0, fixed.length - 1);
+    return fixed;
+  }
 
   int get _receiptLineWidth => ((576 - (_paperMarginMm * 16)) ~/ 12).clamp(40, 48).toInt();
 
