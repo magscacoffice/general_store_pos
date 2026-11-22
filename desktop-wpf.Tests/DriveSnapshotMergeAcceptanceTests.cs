@@ -9,7 +9,28 @@ public sealed class DriveSnapshotMergeAcceptanceTests
     public void AcceptsSnapshotWhenNoConflictsOrDeferredRecordsRemain()
     {
         Assert.True(DriveSnapshotMergeService.IsSnapshotFullyAccepted(0, 0));
+        [Theory]
+    [InlineData(null, null, false)]
+    [InlineData("", null, false)]
+    [InlineData("remote-party", 42L, false)]
+    [InlineData("remote-party", null, true)]
+    public void DetectsMissingRequiredPartyReference(
+        string? remotePartySyncId, long? localPartyId, bool expected)
+    {
+        Assert.Equal(expected, DriveSnapshotMergeService.IsMissingRequiredPartyReference(
+            remotePartySyncId, localPartyId));
     }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("   ", true)]
+    [InlineData("stable-sync-id", false)]
+    public void DetectsMissingStableIds(string? syncId, bool expected)
+    {
+        Assert.Equal(expected, DriveSnapshotMergeService.IsMissingStableId(syncId));
+    }
+}
 
     [Theory]
     [InlineData(1, 0)]
