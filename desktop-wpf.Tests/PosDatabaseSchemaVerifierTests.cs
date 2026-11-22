@@ -1464,7 +1464,9 @@ public sealed class PosDatabaseSchemaVerifierTests
                       (SELECT COUNT(*) FROM drive_sync_tombstones
                        WHERE entity_type='sale_item' AND substr(entity_key,1,length($prefix))=$prefix),
                       (SELECT COUNT(*) FROM drive_sync_tombstones
-                       WHERE entity_type='khata_transaction' AND substr(entity_key,1,length($prefix))=$prefix);
+                       WHERE entity_type='khata_transaction' AND substr(entity_key,1,length($prefix))=$prefix),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_ledger' AND substr(entity_key,1,length($prefix))=$prefix);
                     """;
                 markers.Parameters.AddWithValue("$revision", $"{saleSyncId}|1");
                 markers.Parameters.AddWithValue("$prefix", saleSyncId + "|");
@@ -1473,6 +1475,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 Assert.Equal(1, markerReader.GetInt32(0));
                 Assert.Equal(1, markerReader.GetInt32(1));
                 Assert.Equal(2, markerReader.GetInt32(2));
+                Assert.Equal(2, markerReader.GetInt32(3));
             }
         }
         finally
@@ -2247,6 +2250,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 {
                     ("sale_item", "revision-sale-sync|revision-item-v1"),
                     ("khata_transaction", "revision-sale-sync|revision-ledger-v1"),
+                    ("sale_ledger", "revision-sale-sync|revision-ledger-v2"),
                     ("sale_revision", "revision-sale-sync|1")
                 })
                 {
@@ -2350,6 +2354,14 @@ public sealed class PosDatabaseSchemaVerifierTests
                         """;
                     addConcurrentLedger.Parameters.AddWithValue("$party", sourceCustomerId);
                     await addConcurrentLedger.ExecuteNonQueryAsync();
+                }
+                await using (var concurrentLedgerMarker = source.CreateCommand())
+                {
+                    concurrentLedgerMarker.CommandText = """
+                        INSERT OR REPLACE INTO drive_sync_tombstones(entity_type,entity_key,deleted_at,source_device_id)
+                        VALUES('sale_ledger','revision-sale-sync|revision-ledger-v3','2026-11-22T10:02:00Z','local');
+                        """;
+                    await concurrentLedgerMarker.ExecuteNonQueryAsync();
                 }
             }
             var concurrentPayload = await exporter.ExportAsync(sourcePath);
