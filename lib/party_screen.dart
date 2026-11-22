@@ -37,6 +37,44 @@ class _PartyScreenState extends State<PartyScreen> {
     });
   }
 
+  Future<void> _deleteParty(Map<String, dynamic> party) async {
+    final id = (party['id'] as num).toInt();
+    final isCustomer = widget.type == 'customer';
+    final balance = (party['balance'] as num?)?.toDouble() ?? 0;
+    if (isCustomer && balance.abs() > 0.000001) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete / archive account?'),
+        content: Text(isCustomer
+            ? 'Balance zero hai. Agar purani sales ya Khata history mojood hui to account archive hoga taa-ke history mehfooz rahe; warna delete hoga. Continue?'
+            : 'Is supplier account ko delete karna hai?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Continue')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await DBHelper.deleteParty(id);
+      await _loadParties();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isCustomer
+              ? 'Customer active list se remove ho gaya; historical records mehfooz hain.'
+              : 'Supplier account delete ho gaya.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
+
   Future<void> _sendKhataReminder(Map<String, dynamic> party) async {
     final rawPhone = (party['phone'] ?? '').toString();
     var phone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
@@ -245,18 +283,7 @@ class _PartyScreenState extends State<PartyScreen> {
                                 IconButton(
                                 tooltip: 'Delete / archive account',
                                 icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                onPressed: () async {
-                                  try {
-                                    await DBHelper.deleteParty(id);
-                                    await _loadParties();
-                                  } catch (error) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-                                      );
-                                    }
-                                  }
-                                },
+                                onPressed: () => _deleteParty(party),
                               ),
                             ],
                           )),
@@ -351,15 +378,7 @@ class _PartyScreenState extends State<PartyScreen> {
                           IconButton(
                           tooltip: 'Delete / archive account',
                           icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed: () async {
-                            try {
-                              await DBHelper.deleteParty((party['id'] as num).toInt());
-                              _loadParties();
-                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account delete ho gaya.')));
-                            } catch (e) {
-                              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-                            }
-                          },
+                          onPressed: () => _deleteParty(party),
                         ),
                       ],
                     ),
