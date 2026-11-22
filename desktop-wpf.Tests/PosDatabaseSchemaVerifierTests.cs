@@ -1396,6 +1396,16 @@ public sealed class PosDatabaseSchemaVerifierTests
                     customerId, "Partial", 10, 0, false, "Khata", TestAccess.CurrentSession!.DisplayName, TestAccess.CurrentSession.UserId),
                 path);
             Assert.Equal(26, original.BalanceDue, 2);
+            string saleSyncId;
+            await using (var beforeEdit = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = path, Pooling = false }.ToString()))
+            {
+                await beforeEdit.OpenAsync();
+                await using var findSync = beforeEdit.CreateCommand();
+                findSync.CommandText = "SELECT sync_id FROM sales WHERE id=$id;";
+                findSync.Parameters.AddWithValue("$id", original.SaleId);
+                saleSyncId = Convert.ToString(await findSync.ExecuteScalarAsync())!;
+            }
 
             var updated = await service.UpdateSaleFromRecallAsync(
                 original.SaleId,
@@ -1444,6 +1454,25 @@ public sealed class PosDatabaseSchemaVerifierTests
                 Assert.Equal(2, reader.GetInt32(0));
                 Assert.Equal(48.6, reader.GetDouble(1), 2);
                 Assert.Equal(20, reader.GetDouble(2), 2);
+            }
+            await using (var markers = db.CreateCommand())
+            {
+                markers.CommandText = """
+                    SELECT
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_revision' AND entity_key=$revision),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='sale_item' AND substr(entity_key,1,length($prefix))=$prefix),
+                      (SELECT COUNT(*) FROM drive_sync_tombstones
+                       WHERE entity_type='khata_transaction' AND substr(entity_key,1,length($prefix))=$prefix);
+                    """;
+                markers.Parameters.AddWithValue("$revision", $"{saleSyncId}|1");
+                markers.Parameters.AddWithValue("$prefix", saleSyncId + "|");
+                await using var markerReader = await markers.ExecuteReaderAsync();
+                Assert.True(await markerReader.ReadAsync());
+                Assert.Equal(1, markerReader.GetInt32(0));
+                Assert.Equal(1, markerReader.GetInt32(1));
+                Assert.Equal(2, markerReader.GetInt32(2));
             }
         }
         finally
