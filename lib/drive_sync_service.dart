@@ -577,12 +577,13 @@ class DriveSyncService {
       if (!await currentDatabase.exists()) {
         throw FileSystemException('Windows master database file not found.', databasePath);
       }
-      await DBHelper.closeDatabase();
-      databaseClosed = true;
       final backupName =
           'before_drive_merge_${sourceDeviceId}_${DateTime.now().microsecondsSinceEpoch}.db';
       final backupPath = p.join(databaseDirectory, backupName);
-      await currentDatabase.copy(backupPath);
+      // VACUUM INTO includes committed WAL pages while the SQLite connection is open.
+      await DBHelper.createConsistentBackup(backupPath);
+      await DBHelper.closeDatabase();
+      databaseClosed = true;
       await DBHelper.database;
       databaseClosed = false;
       return backupName;
@@ -845,8 +846,6 @@ class DriveSyncService {
   }
 
   static Future<void> _createVerifiedLocalBackup() async {
-    final databasePath = await DBHelper.getDatabaseFilePath();
-    final database = await DBHelper.database;
     final backupDirectory = Directory(p.join(await DBHelper.getDatabaseDirectory(), 'Backups'));
     await backupDirectory.create(recursive: true);
     final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
