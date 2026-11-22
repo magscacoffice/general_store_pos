@@ -795,6 +795,22 @@ class DBHelper {
       }).toList();
     }
 
+    final khataRows = await db.rawQuery('''
+      SELECT kt.*, s.sync_id AS sale_sync_id
+      FROM khata_transactions kt
+      LEFT JOIN sales s
+        ON kt.note = 'Sale #' || s.id
+        OR kt.note = 'Cash received at sale #' || s.id
+      ORDER BY kt.id ASC
+    ''');
+    final khataSnapshot = khataRows.map((row) {
+      final value = Map<String, dynamic>.from(row)
+        ..remove('id')
+        ..remove('party_id');
+      if (value['sale_sync_id'] == null) value.remove('sale_sync_id');
+      return value;
+    }).toList();
+
     return {
       'schemaVersion': 2,
       'products': await rows('products'),
@@ -802,7 +818,7 @@ class DBHelper {
       'sales': await rows('sales', remove: const ['id', 'customer_id']),
       'sale_items': await rows('sale_items', remove: const ['id', 'sale_id', 'product_id']),
       'purchases': await rows('purchases', remove: const ['id', 'product_id', 'supplier_id', 'invoice_image_path']),
-      'khata_transactions': await rows('khata_transactions', remove: const ['id', 'party_id']),
+      'khata_transactions': khataSnapshot,
       'expenses': await rows('expenses'),
       'reminders': await rows('reminders'),
       'sale_returns': await rows('sale_returns', remove: const ['id', 'sale_id', 'customer_id']),
