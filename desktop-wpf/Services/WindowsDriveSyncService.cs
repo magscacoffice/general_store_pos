@@ -70,6 +70,9 @@ public sealed class WindowsDriveSyncService
             SetStatus("Connecting to Google Drive...");
             LastError = null;
             await _auth.GetAccessTokenAsync(promptForLogin: false, cancellationToken);
+            var accountEmail = await _auth.GetConnectedAccountEmailAsync(cancellationToken)
+                ?? throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
+            await EnforceStoreAccountBindingAsync(path, accountEmail, cancellationToken);
             var folderId = await _drive.EnsureFolderAsync(cancellationToken);
             var deviceId = GetOrCreateDeviceId();
 
@@ -252,6 +255,30 @@ public sealed class WindowsDriveSyncService
     {
         using var document = await _drive.DownloadJsonAsync(fileId, cancellationToken);
         return DriveMasterManifest.Parse(document.RootElement.GetRawText());
+    }
+
+
+    private static async Task EnforceStoreAccountBindingAsync(string databasePath, string accountEmail, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = accountEmail.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedEmail) || !normalizedEmail.Contains('@'))
+            throw new InvalidDataException("Google account email could not be verified. Sync was blocked.");
+        var fullDatabasePath = Path.GetFullPath(databasePath);
+        var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fullDatabasePath.ToUpperInvariant())))
+            .ToLowerInvariant();
+        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KhanBabaPOS");
+        Directory.CreateDirectory(directory);
+        var bindingPath = Path.Combine(directory, $"drive_store_account_{pathHash}.dat");
+        if (File.Exists(bindingPath))
+        {
+            var protectedBytes = await File.ReadAllBytesAsync(bindingPath, cancellationToken);
+            var saved = Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, DeviceEntropy, DataProtectionScope.CurrentUser)).Trim().ToLowerInvariant();
+            if (!string.Equals(saved, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"This POS database is already paired with {saved}. A different Google account cannot be connected to this store database. Use a separate clean database and a separate Gmail account for another business.");
+            return;
+        }
+        var encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(normalizedEmail), DeviceEntropy, DataProtectionScope.CurrentUser);
+        await File.WriteAllBytesAsync(bindingPath, encrypted, cancellationToken);
     }
 
     private static string GetOrCreateDeviceId()
