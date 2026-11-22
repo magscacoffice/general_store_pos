@@ -845,7 +845,12 @@ class DriveSyncService {
     // Keep Drive as the sole business-data provider after disconnect. Local
     // POS operations continue, and Firestore is not silently re-enabled.
     if (Platform.isAndroid) {
-      await GoogleSignIn.instance.disconnect();
+      try {
+        await GoogleSignIn.instance.disconnect();
+      } catch (_) {
+        // Local sign-out must still work if Google revocation is unavailable offline.
+        await GoogleSignIn.instance.signOut();
+      }
       _androidAccount = null;
     }
     connectedAccountEmail = null;
