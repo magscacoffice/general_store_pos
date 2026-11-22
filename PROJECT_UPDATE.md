@@ -1480,3 +1480,6 @@ The source work that can be completed safely without owner hardware, Google test
 - [ ] Full schema-v18 cross-platform parity audit using the same disposable database and fixtures for sale/discount/Khata, stock, returns, update/delete, aliases and tombstones. Automated WPF tests and Android sync tests do not replace this end-to-end acceptance.
 - [ ] Production updater/installer remains blocked until the owner provides the production code-signing certificate and trusted publisher thumbprint, followed by signed installer/data-preservation testing.
 - [ ] Review and approve the feature branch before merging to `main`. Do not generate an APK, Windows ZIP, installer or release artifact without separate explicit authorization.
+
+- [x] Fixed malformed trailing non-YAML content in `.github/workflows/validate-windows-installer.yml`. The installer workflow is valid again and remains `workflow_dispatch`-only; it will not build or upload an installer on ordinary pushes.
+- [x] Latest Android run #45003053357: Ubuntu analyzer and full 22-test suite passed. Windows matrix runner has passed analyzer and is still completing the full test step.
