@@ -114,6 +114,7 @@ class _PartyScreenState extends State<PartyScreen> {
   void _showAddPartyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    String newCustomerType = 'Khata';
 
     showDialog(
       context: context,
@@ -139,6 +140,17 @@ class _PartyScreenState extends State<PartyScreen> {
                 ),
                 if (widget.type == 'customer') ...[
                   const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: newCustomerType,
+                    decoration: const InputDecoration(labelText: 'Customer Type'),
+                    items: const [
+                      DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                      DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      if (value != null) newCustomerType = value;
+                    }),
+                  ),
                 ],
                 const SizedBox(height: 15),
                 OutlinedButton.icon(
@@ -188,7 +200,7 @@ class _PartyScreenState extends State<PartyScreen> {
                       'name': nameController.text.trim(),
                       'phone': phoneController.text.trim(),
                       'type': widget.type,
-                      if (widget.type == 'customer') 'customer_type': 'Khata',
+                      if (widget.type == 'customer') 'customer_type': newCustomerType,
                       'balance': 0.0,
                     });
                     _loadParties();
@@ -202,6 +214,42 @@ class _PartyScreenState extends State<PartyScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _changeCustomerType(Map<String, dynamic> party) async {
+    final id = (party['id'] as num).toInt();
+    final current = party['customer_type']?.toString() ?? 'Khata';
+    String selected = current;
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('Customer Type: ${party['name']}'),
+          content: DropdownButtonFormField<String>(
+            initialValue: selected,
+            items: const [
+              DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+              DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
+            ],
+            onChanged: (value) => setDialogState(() {
+              if (value != null) selected = value;
+            }),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (choice != true || selected == current) return;
+    try {
+      await DBHelper.updateCustomerType(id, selected);
+      await _loadParties();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Customer type changed to $selected.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    }
   }
 
   Widget _buildDesktopParties(bool isCustomer) {
@@ -273,6 +321,12 @@ class _PartyScreenState extends State<PartyScreen> {
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (isCustomer)
+                                IconButton(
+                                  tooltip: 'Change customer type',
+                                  icon: const Icon(Icons.swap_horiz, color: Colors.blueGrey),
+                                  onPressed: () => _changeCustomerType(party),
+                                ),
                               if (isCustomer && overdue != null)
                                 IconButton(
                                   tooltip: 'WhatsApp overdue reminder',
@@ -358,6 +412,7 @@ class _PartyScreenState extends State<PartyScreen> {
                         fontWeight: overdue != null ? FontWeight.w600 : null,
                       ),
                     ),
+                    onTap: isCustomer ? () => _changeCustomerType(party) : null,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

@@ -300,3 +300,31 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Confirm Android-generated backup files can be located/copied to Windows (USB, file transfer, or other user-managed method) and the Windows Restore UI accepts them without requiring Drive sync. Keep this an explicit manual restore operation; do not automatically overwrite or merge data.
 - [ ] Add regression tests for restoring an Android-created backup on Windows, invalid/corrupt backup rejection, backup compatibility, and rollback if activation fails. Test Wholesale customer selection and its sales/rate/accounting behaviour on both platforms.
 - [ ] Do not generate APK, Windows ZIP, installer, or other build artifacts for these documentation-only notes. Implement and validate later as a consolidated change.
+
+
+## Owner follow-up — Wholesale restoration + Android-to-Windows manual backup (2026-11-26)
+
+### Source implementation reviewed
+
+- [x] Wholesale customer type is available in Android Flutter New Sale and Parties screens, and Windows WPF New Sale/customer account management.
+- [x] Customer type switching is blocked while a sale cart contains items, so changing retail/wholesale pricing cannot silently reprice an existing cart.
+- [x] Wholesale defaults use a positive product wholesale rate; otherwise fall back to retail. Default sale rate is not allowed below purchase cost.
+- [x] Wholesale customer filtering, account creation/reclassification, sale customer type, discounts, cash/partial payment, received amount, due balance, Khata receipts and stock posting are covered by regression tests.
+- [x] WPF tests cover Wholesale cash and partial sales, same account balance/receipt reconciliation, purchase cost updates and Wholesale rate floor/fallback.
+- [x] Android manual backup restore supports a user-picked SQLite .db file, validates integrity and required POS tables, stages it, and preserves rollback/safety-copy handling before active-database switching.
+- [x] Windows WPF Restore from File accepts Android/Windows SQLite .db backups; the service validates schema v18/integrity, accepts Android exports without a Windows .sha256 sidecar, makes a verified safety backup of the current Windows DB, stages a separate restore file, verifies the source did not change during staging, and atomically updates .active_database. The live DB is not overwritten.
+- [x] Existing regression tests include Android-style no-sidecar restore, current-database preservation, corrupt sidecar rejection without pointer change, and Wholesale pricing/accounting cases.
+
+### Uploaded backup inspection (reference only; not committed)
+
+- [x] User-provided khan_baba_backup_20261126_1932.db was inspected. PRAGMA integrity_check returned ok; SQLite user_version is 18; expected POS/sync tables are present.
+- [x] The backup retains a Wholesale customer classification and existing product wholesalePrice values, so required feature data is present.
+- [x] Uploaded database was not added to repository or test fixtures; customer/product data is not committed.
+
+### Validation and release status
+
+- [x] WPF source validation succeeded on feature branch (Actions run #45841042200; Release build + test step succeeded; packaging skipped on push validation).
+- [x] Android test/build and Flutter POS tests succeeded on branch commit 934b595d (runs #45840058922 and #45840059000); push validation did not produce APK.
+- [ ] Verify restoring this exact backup on a Windows PC, restart WPF, and check customer/product/sales/Khata data. Physical testing is not covered by CI.
+- [ ] Test Android backup export → USB/file transfer → Windows manual restore → app restart and verify Wholesale defaults/history/Khata.
+- [x] Owner authorized merge to main and Windows EXE + Android APK artifact generation on 2026-11-26. Main-branch CI artifact workflows will generate unsigned test builds; physical acceptance remains pending.
