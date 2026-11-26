@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Branch status (2026-11-22):** WPF migration PR #5 has been merged into `main`. The latest follow-up changes are grouped on `feature/complete-project-pendings` and are not merged yet; keep `main` stable until Android/WPF validation and owner acceptance are complete.
-> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive; Wholesale customer restoration is being implemented. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android analyzer and full Flutter tests passed on both Windows and Ubuntu (Actions run #45003053357; 22/22 each). Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
+> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive; Wholesale customer restoration is coded on the follow-up branch and awaiting validation. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android analyzer and full Flutter tests passed on both Windows and Ubuntu (Actions run #45003053357; 22/22 each). Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
 
 ## Immediate owner priority — Windows cashier-first operation (2026-11-16)
 
@@ -30,7 +30,7 @@ Owner wants Windows WPF to remain usable for daily billing while other Windows m
 - [x] Separate native Windows WPF application exists under `desktop-wpf/`; Release build and 93 WPF tests pass. Android Flutter and shared SQLite remain separate. Full target-PC acceptance and final cutover remain pending.
 - [ ] Preserve business behaviour: sale posting, stock movements, purchase posting, returns, discounts (including percentage discounts), received amounts, customer balances/Khata ledger, profit calculations, invoice totals, and all existing validation rules.
 - [x] Preserve Walk-in and Khata customer types and existing payment/discount behaviour.
-- [ ] Restore Wholesale as a selectable customer classification in both Android Flutter and Windows WPF, with Wholesale pricing and separate customer-account classification. Schema v18 already contains the required customer type and product wholesale-rate fields; no schema migration is planned. Existing Wholesale accounts that were converted to Khata by the old v9 upgrade cannot be automatically identified/reversed, so provide a manual customer-type reclassification option.
+- [x] Wholesale selection, account classification, Wholesale rate defaults and customer reclassification code restored in Android Flutter and Windows WPF; no schema migration is planned. Existing Wholesale accounts converted to Khata by the old v9 upgrade cannot be auto-detected and must be reclassified manually. CI and physical-device acceptance are pending.
 - [x] No SQLite schema version, table/column names, IDs, database path, sync identifiers, tombstone semantics or backup format were changed by this follow-up.
 - [x] Windows remains local-first and uses the existing Windows-master Google Drive snapshot workflow. No Firebase/Firestore business-data sync was added to Windows.
 - [x] Ordinary sales, inventory, purchases, returns, printing, reports and local access remain local; network is used only for approved Drive sync and update checks.
@@ -186,7 +186,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 - [x] Android manual backup now creates a SQLite `VACUUM INTO` snapshot and validates integrity/required tables before export; restore rollback snapshot is created while the live connection is open and verified before the active DB pointer changes.
 - [x] Android and WPF Drive connections now enforce a verified Gmail binding per local app data profile; disconnect does not clear the binding. Separate businesses still require isolated app data/database profiles and separate Gmail accounts.
-- [ ] Wholesale selection is being restored on both clients; wholesale rate fields remain in schema v18 and will be used for default sale pricing when a positive wholesale rate exists (otherwise retail rate, never below purchase cost).
+- [x] Wholesale selection is restored on the follow-up branch; positive wholesale rates are used by default, with retail fallback and a purchase-cost floor. CI and physical acceptance are tracked below.
 - [x] Latest recorded CI validation is WPF Release build 0 warnings/0 errors and 97/97 tests, plus Flutter analyze and 22/22 tests on both Ubuntu and Windows. No package artifact was produced.
 - [ ] Physical Android/Windows paired-device, Google OAuth, printer, scanner, PDF, display/DPI and backup/restore acceptance remains owner-side.
 
@@ -293,11 +293,21 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Stop silently normalizing Wholesale party records to Khata when listing customers. Historical v9 migration remains unchanged for already-upgraded databases.
 - [x] Windows manual Restore accepts Android's raw `.db` export without a Windows `.sha256` sidecar; schema-v18 and SQLite integrity verification, current-database verified safety backup, staged copy and active-pointer switch remain required. The Windows Restore file picker explicitly supports Android and Windows backup sources.
 - [x] Added regression source tests for Wholesale sale posting/classification and Android-style backup import without a hash sidecar.
-- [ ] Run Flutter analyze/tests and WPF Release build/full tests on the branch. No APK, Windows ZIP, installer, or other build artifact is authorized by this task.
+- [x] WPF Release build and tests passed (Actions run #498: 0 warnings/errors; 106/106 tests). Flutter full tests passed (run #6: 23/23); sync/invoice test workflow #135 passed on Ubuntu and Windows with analyzer step success. Full Flutter analyze is queued in Actions run #7. Artifact publish steps were skipped; no APK or Windows ZIP produced.
 - [ ] Physical Android/Windows validation remains required for Wholesale rate selection, account filtering, and manual backup file transfer/restore/restart.
 
 
 ## CI artifact guard — owner authorization required (2026-11-26)
 
 - [x] Push-triggered Android and WPF workflows now run validation only; APK/ZIP publish, version-artifact checks, and upload steps run only on explicit `workflow_dispatch`.
-- [ ] The two workflow runs triggered by the implementation commit before this guard was added were already in progress. The connector does not expose an Actions-run cancellation operation; check/cancel them manually in GitHub Actions if they are still running. Do not download or use their artifacts as releases.
+- [x] Earlier push-triggered artifact runs were cancelled by concurrency before publishing (WPF run #497 and Android run #3). Push workflows now validate only; artifact build/upload steps are manual-dispatch-only. A temporary malformed Android workflow revision failed before jobs started (runs #4/#5); the workflow was rewritten and the corrected run #6 passed tests with APK steps skipped.
+
+
+## Validation record — Wholesale restoration and Android backup compatibility (2026-11-26)
+
+- [x] WPF source/build validation on commit `c06a3022f9c7f4deeb67bfa50939bca2c74a093f`: Actions run #498 succeeded; Release build 0 warnings/0 errors; 106/106 tests passed. Publish and upload steps were skipped.
+- [x] Flutter full test suite on commit `a2fa7672b297b4c90f4ec15e826c049429eac24a`: Actions run #6 succeeded; 23/23 tests passed. APK build, version-check and upload steps were skipped.
+- [x] POS sync/invoice workflow run #135 succeeded on Ubuntu and Windows (23/23 each; analyzer workflow step succeeded) for source commit `316414301a5a7dbdac42c531414415a928cb3c1a`.
+- [ ] Full Flutter analyze step is running in the follow-up workflow after adding it to the push-validation workflow; record its result before marking analyzer validation complete.
+- [ ] The tests verify the Windows backup restore path using a raw database file without a Windows SHA sidecar; physical transfer/restore of a backup generated on a real Android device remains an owner acceptance test.
+- [ ] Do not merge to `main` or publish artifacts until the pending analyzer and physical-device checks are accepted.
