@@ -2061,7 +2061,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await target.OpenAsync();
                 await using var count = target.CreateCommand();
                 count.CommandText = "SELECT COUNT(*) FROM purchases WHERE sync_id='remote-purchase-retry';";
-                Assert.Equal(0, Convert.ToInt32(await count.ExecuteScalar()));
+                Assert.Equal(0, Convert.ToInt32(count.ExecuteScalar()));
                 await using var supplier = target.CreateCommand();
                 supplier.CommandText = """
                     INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
@@ -2155,7 +2155,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             await verify.OpenAsync();
             await using var countRetry = verify.CreateCommand();
             countRetry.CommandText = "SELECT COUNT(*) FROM expenses WHERE sync_id='remote-expense-retry';";
-            Assert.Equal(1, Convert.ToInt32(await countRetry.ExecuteScalar()));
+            Assert.Equal(1, Convert.ToInt32(countRetry.ExecuteScalar()));
         }
         finally
         {
