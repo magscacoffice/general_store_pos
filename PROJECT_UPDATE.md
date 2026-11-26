@@ -323,3 +323,5 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Push-triggered workflows validate only; APK and Windows ZIP build/upload steps are manual-dispatch-only. No artifact was generated.
 - [ ] Additional retry integration test for missing customer references on sale returns, and real Drive/paired-device/accounting acceptance remain pending.
 - [ ] Physical Android-to-Windows backup transfer/restore/restart, printer/scanner, OAuth, updater signing and full parity acceptance remain owner-side gates. Do not merge to `main` or publish a release before acceptance.
+
+- [x] Intermediate WPF test run #500 exposed compile issues in the new retry-test helper (missing fully-qualified JSON encoder and awaited synchronous scalar calls). Fixed in commits `f632e137`, `efb65cae`, and `d8424599`; final #503 passed. The failed run did not publish any package.
