@@ -325,3 +325,31 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Physical Android-to-Windows backup transfer/restore/restart, printer/scanner, OAuth, updater signing and full parity acceptance remain owner-side gates. Do not merge to `main` or publish a release before acceptance.
 
 - [x] Intermediate WPF test run #500 exposed compile issues in the new retry-test helper (missing fully-qualified JSON encoder and awaited synchronous scalar calls). Fixed in commits `f632e137`, `efb65cae`, and `d8424599`; final #503 passed. The failed run did not publish any package.
+
+
+## Owner follow-up — Wholesale restoration + Android-to-Windows manual backup (2026-11-26)
+
+### Source implementation reviewed
+
+- [x] Wholesale customer type is available in Android Flutter New Sale and Parties screens, and Windows WPF New Sale/customer account management.
+- [x] Customer type switching is blocked while a sale cart contains items, so changing retail/wholesale pricing cannot silently reprice an existing cart.
+- [x] Wholesale defaults use a positive product wholesale rate; otherwise fall back to retail. Default sale rate is not allowed below purchase cost.
+- [x] Wholesale customer filtering, account creation/reclassification, sale customer type, discounts, cash/partial payment, received amount, due balance, Khata receipts and stock posting are covered by existing regression tests.
+- [x] WPF tests cover Wholesale cash and partial sales, same account balance/receipt reconciliation, purchase cost updates and Wholesale rate floor/fallback.
+- [x] Android manual backup restore supports a user-picked SQLite `.db` file, validates integrity and required POS tables, stages it, and preserves rollback/safety-copy handling before active-database switching.
+- [x] Windows WPF Restore from File accepts Android/Windows SQLite `.db` backups; the service validates schema v18/integrity, accepts Android exports without a Windows `.sha256` sidecar, makes a verified safety backup of the current Windows DB, stages a separate restore file, verifies the source did not change during staging, and atomically updates `.active_database`. The live DB is not overwritten.
+- [x] Existing regression tests include Android-style no-sidecar restore, current-database preservation, corrupt sidecar rejection without pointer change, and Wholesale pricing/accounting cases.
+
+### Uploaded backup inspection (reference only; not committed)
+
+- [x] The user-provided `khan_baba_backup_20261126_1932.db` was inspected locally. `PRAGMA integrity_check` returned `ok`; SQLite `user_version` is **18**; the expected POS and sync tables are present.
+- [x] The backup retains a Wholesale customer classification and existing product `wholesalePrice` values, so the data needed by the restored feature is present in this backup.
+- [x] The uploaded database was not added to the repository or copied into tests; no customer/product data is committed as a test fixture.
+
+### Validation status and remaining owner acceptance
+
+- [x] Latest WPF source validation workflow on this follow-up branch succeeded (Actions run #45841042200; Release build + test step succeeded; package/publish and artifact upload were skipped because the run was a push validation).
+- [x] Android test/build workflow and Flutter POS test workflow both succeeded on branch commit `934b595d` (Actions runs #45840058922 and #45840059000); no APK was produced by push validation.
+- [ ] Test restore using this exact uploaded backup on a Windows PC, restart WPF, and verify customer/product/sales/Khata data; do this on a disposable test profile or after creating a separate verified safety backup. Physical test is not represented by CI.
+- [ ] Test Android backup export → copy via USB/file transfer → Windows manual restore → app restart, then verify Wholesale sale defaults and existing history/Khata data.
+- [ ] No APK, ZIP, installer, or release artifact was generated or authorized by this follow-up. Keep the work on `feature/complete-project-pendings`; do not merge to `main` until owner acceptance.
