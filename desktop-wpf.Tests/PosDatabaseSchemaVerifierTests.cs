@@ -44,7 +44,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     {
         var options = new JsonSerializerOptions
         {
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             Converters = { new DartCompatibleDoubleConverter() }
         };
         var compactData = JsonSerializer.Serialize(data, options);
