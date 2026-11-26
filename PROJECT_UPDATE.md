@@ -292,8 +292,8 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Restore Wholesale customer creation and manual type reclassification in customer management. Existing customers previously converted from Wholesale to Khata by the historical schema-v9 upgrade are not automatically reversible; owner can manually reclassify them.
 - [x] Stop silently normalizing Wholesale party records to Khata when listing customers. Historical v9 migration remains unchanged for already-upgraded databases.
 - [x] Windows manual Restore accepts Android's raw `.db` export without a Windows `.sha256` sidecar; schema-v18 and SQLite integrity verification, current-database verified safety backup, staged copy and active-pointer switch remain required. The Windows Restore file picker explicitly supports Android and Windows backup sources.
-- [x] Added regression source tests for Wholesale sale posting/classification and Android-style backup import without a hash sidecar.
-- [x] WPF Release build and tests passed (Actions run #498: 0 warnings/errors; 106/106 tests). Flutter full tests passed (run #6: 23/23); sync/invoice test workflow #135 passed on Ubuntu and Windows with analyzer step success. Full Flutter analyze is queued in Actions run #7. Artifact publish steps were skipped; no APK or Windows ZIP produced.
+- [x] Added Wholesale sale classification and pricing-policy tests on both platforms, plus Android-style backup restore without a Windows hash sidecar.
+- [x] Final validation: WPF run #503 succeeded with 0 warnings/errors and 112/112 tests; Flutter run #9 succeeded with full analyzer and 26 tests; sync/invoice run #137 passed 26 tests on Ubuntu and Windows. Publish/upload steps were skipped; no APK or Windows ZIP produced.
 - [ ] Physical Android/Windows validation remains required for Wholesale rate selection, account filtering, and manual backup file transfer/restore/restart.
 
 
@@ -305,9 +305,21 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 ## Validation record — Wholesale restoration and Android backup compatibility (2026-11-26)
 
-- [x] WPF source/build validation on commit `c06a3022f9c7f4deeb67bfa50939bca2c74a093f`: Actions run #498 succeeded; Release build 0 warnings/0 errors; 106/106 tests passed. Publish and upload steps were skipped.
-- [x] Flutter full test suite on commit `a2fa7672b297b4c90f4ec15e826c049429eac24a`: Actions run #6 succeeded; 23/23 tests passed. APK build, version-check and upload steps were skipped.
-- [x] POS sync/invoice workflow run #135 succeeded on Ubuntu and Windows (23/23 each; analyzer workflow step succeeded) for source commit `316414301a5a7dbdac42c531414415a928cb3c1a`.
-- [ ] Full Flutter analyze step is running in the follow-up workflow after adding it to the push-validation workflow; record its result before marking analyzer validation complete.
-- [ ] The tests verify the Windows backup restore path using a raw database file without a Windows SHA sidecar; physical transfer/restore of a backup generated on a real Android device remains an owner acceptance test.
-- [ ] Do not merge to `main` or publish artifacts until the pending analyzer and physical-device checks are accepted.
+- [x] WPF final Release build/tests on commit `d8424599c0aad647acd6f0e060d5abe314f532fb`: Actions run #503 succeeded; 0 warnings/errors; 112/112 tests passed. Publish and upload steps were skipped.
+- [x] Flutter full analyze/tests on commit `934b595d99afc49ce86647012c41d9ffd7bf6831`: Actions run #9 succeeded; 26 tests passed. APK build and upload steps skipped.
+- [x] POS sync/invoice workflow run #137 succeeded on Ubuntu and Windows (26/26 each; analyzer succeeded) for source commit `934b595d99afc49ce86647012c41d9ffd7bf6831`.
+- [x] Full Flutter analyze passed in run #9.
+- [x] Windows restore test verifies raw Android-style schema-v18 `.db` file without SHA sidecar; physical transfer/restore from a real Android device remains an owner acceptance test.
+- [ ] Do not merge to `main` or publish artifacts until physical-device acceptance and remaining sync/accounting scenarios are approved.
+
+
+## Current pending-code reconciliation — 2026-11-26
+
+- [x] Wholesale restoration is implemented on both clients: customer selection/creation/reclassification, preserved sale classification, default Wholesale rate with retail fallback and purchase-cost floor, and customer-account payment modes.
+- [x] Windows manual restore accepts the Android raw schema-v18 `.db` backup without a Windows SHA sidecar; schema/integrity validation, verified safety backup and staged activation are retained.
+- [x] EF Core schema-v18 mappings and compatibility verifier are present; transaction-sensitive sale/purchase/return and sync operations continue using explicit SQL to preserve legacy semantics.
+- [x] WPF Drive import defers unresolved required supplier/customer references and missing stable IDs. Disposable-database retry tests for a missing supplier purchase and a missing expense sync ID were added and passed in WPF run #503 (112 tests total).
+- [x] WPF Release build: 0 warnings/errors, 112/112 tests passed (run #503). Flutter full analyzer and 26 tests passed (run #9). POS sync/invoice tests passed on Ubuntu and Windows (run #137; 26 each).
+- [x] Push-triggered workflows validate only; APK and Windows ZIP build/upload steps are manual-dispatch-only. No artifact was generated.
+- [ ] Additional retry integration test for missing customer references on sale returns, and real Drive/paired-device/accounting acceptance remain pending.
+- [ ] Physical Android-to-Windows backup transfer/restore/restart, printer/scanner, OAuth, updater signing and full parity acceptance remain owner-side gates. Do not merge to `main` or publish a release before acceptance.
