@@ -32,6 +32,7 @@ jobs:
           dotnet build desktop-wpf/KhanBabaPos.Wpf.csproj --configuration Release --no-restore
           dotnet test desktop-wpf.Tests/KhanBabaPos.Wpf.Tests.csproj --configuration Release
       - name: Publish unsigned self-contained Windows x64 test app
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
           dotnet publish desktop-wpf/KhanBabaPos.Wpf.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
@@ -46,6 +47,7 @@ jobs:
           '@ | Set-Content artifacts/publish/TEST-INSTRUCTIONS.txt
           Compress-Archive -Path artifacts/publish/win-x64/*,artifacts/publish/TEST-INSTRUCTIONS.txt -DestinationPath artifacts/KhanBabaPOS-Windows-x64-v1.0.1-test.zip -Force
       - name: Upload Windows x64 test package
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: KhanBabaPOS-Windows-x64-v1.0.1-test

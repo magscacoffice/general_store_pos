@@ -295,3 +295,9 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Added regression source tests for Wholesale sale posting/classification and Android-style backup import without a hash sidecar.
 - [ ] Run Flutter analyze/tests and WPF Release build/full tests on the branch. No APK, Windows ZIP, installer, or other build artifact is authorized by this task.
 - [ ] Physical Android/Windows validation remains required for Wholesale rate selection, account filtering, and manual backup file transfer/restore/restart.
+
+
+## CI artifact guard — owner authorization required (2026-11-26)
+
+- [x] Push-triggered Android and WPF workflows now run validation only; APK/ZIP publish, version-artifact checks, and upload steps run only on explicit `workflow_dispatch`.
+- [ ] The two workflow runs triggered by the implementation commit before this guard was added were already in progress. The connector does not expose an Actions-run cancellation operation; check/cancel them manually in GitHub Actions if they are still running. Do not download or use their artifacts as releases.
