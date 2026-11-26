@@ -141,7 +141,7 @@ class _PartyScreenState extends State<PartyScreen> {
                 if (widget.type == 'customer') ...[
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: newCustomerType,
+                    initialValue: newCustomerType,
                     decoration: const InputDecoration(labelText: 'Customer Type'),
                     items: const [
                       DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
@@ -226,7 +226,7 @@ class _PartyScreenState extends State<PartyScreen> {
         builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text('Customer Type: ${party['name']}'),
           content: DropdownButtonFormField<String>(
-            value: selected,
+            initialValue: selected,
             items: const [
               DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
               DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
