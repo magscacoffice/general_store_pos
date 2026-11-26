@@ -291,3 +291,12 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Verify the two GitHub Actions runs and download/inspect the resulting artifacts before calling the test release delivered.
 - [ ] Old branch deletion remains pending; the available GitHub repository connection in this session does not expose a branch/ref deletion operation. Do not claim old branches were deleted.
 - [ ] Production signing and physical device/Google Drive acceptance remain pending.
+
+
+## Owner-requested follow-up — restore Wholesale customer option & cross-platform manual backup restore (2026-11-26)
+
+- [ ] **Restore the Wholesale customer option** that was previously removed from both Android Flutter and Windows WPF. Reinstate Wholesale as a selectable customer type in the sales/customer workflow, while retaining legacy database compatibility and ensuring it does not corrupt existing Walk-in/Khata behaviour. Review the prior Wholesale-specific rate behaviour and restore it only where intended; confirm discount, payment, customer balance and sale-posting logic remain correct.
+- [ ] **Manual cross-platform backup restore:** A database backup exported from Android must be selectable and manually restored/imported on Windows WPF. Support the existing backup format and schema-v18 compatibility checks; validate the selected backup before switching the active database, and create a verified safety backup of the current Windows database first. Use the existing staged/atomic restore flow (including integrity/hash/schema validation and rollback protection); never overwrite the currently open/live database directly.
+- [ ] Confirm Android-generated backup files can be located/copied to Windows (USB, file transfer, or other user-managed method) and the Windows Restore UI accepts them without requiring Drive sync. Keep this an explicit manual restore operation; do not automatically overwrite or merge data.
+- [ ] Add regression tests for restoring an Android-created backup on Windows, invalid/corrupt backup rejection, backup compatibility, and rollback if activation fails. Test Wholesale customer selection and its sales/rate/accounting behaviour on both platforms.
+- [ ] Do not generate APK, Windows ZIP, installer, or other build artifacts for these documentation-only notes. Implement and validate later as a consolidated change.
