@@ -2537,11 +2537,11 @@ class DBHelper {
     final customerId = saleData['customer_id'];
     final customerType = saleData['customer_type']?.toString() ??
         (customerId == null ? 'Walk-in' : 'Khata');
-    if (!const {'Walk-in', 'Khata'}.contains(customerType)) {
-      throw Exception('Customer type must be Walk-in or Khata.');
+    if (!const {'Walk-in', 'Khata', 'Wholesale'}.contains(customerType)) {
+      throw Exception('Customer type must be Walk-in, Khata or Wholesale.');
     }
     if ((customerType == 'Walk-in') != (customerId == null)) {
-      throw Exception('Walk-in sale must not have a customer account; Khata sale requires a selected customer.');
+      throw Exception('Walk-in sale must not have a customer account; Khata/Wholesale sale requires a selected customer.');
     }
     final saleFinalAmount = (saleData['final_amount'] as num?)?.toDouble() ??
         (saleData['total_amount'] as num?)?.toDouble() ?? 0.0;
@@ -3117,8 +3117,8 @@ class DBHelper {
   }
 
   static Future<void> updateCustomerType(int id, String customerType) async {
-    if (customerType != 'Khata') {
-      throw Exception('Only Khata customer accounts are supported.');
+    if (!const {'Khata', 'Wholesale'}.contains(customerType)) {
+      throw Exception('Customer type must be Khata or Wholesale.');
     }
     final db = await database;
     await db.transaction((txn) async {
@@ -3144,28 +3144,6 @@ class DBHelper {
 
   static Future<List<Map<String, dynamic>>> getParties(String type) async {
     final db = await database;
-    if (type == 'customer') {
-      var normalizedLegacyRows = false;
-      await db.transaction((txn) async {
-        final legacy = await txn.query(
-          'parties',
-          columns: ['id'],
-          where: "type = 'customer' AND customer_type = 'Wholesale'",
-        );
-        normalizedLegacyRows = legacy.isNotEmpty;
-        for (final row in legacy) {
-          final id = (row['id'] as num).toInt();
-          await txn.update('parties', {'customer_type': 'Khata'},
-              where: 'id = ?', whereArgs: [id]);
-          final updated = await txn.query('parties',
-              where: 'id = ?', whereArgs: [id], limit: 1);
-          if (updated.isNotEmpty) {
-            await _queueRow(txn, 'parties', Map<String, dynamic>.from(updated.first));
-          }
-        }
-      });
-      if (normalizedLegacyRows) unawaited(syncPendingChanges());
-    }
     return await db.query(
       'parties',
       where: 'type = ?',

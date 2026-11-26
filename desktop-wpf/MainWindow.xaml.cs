@@ -69,6 +69,7 @@ public partial class MainWindow : Window
 
         SaleTypeBox.Items.Add("Walk-in");
         SaleTypeBox.Items.Add("Khata");
+        SaleTypeBox.Items.Add("Wholesale");
         SaleTypeBox.SelectedItem = "Walk-in";
 
         PaymentModeBox.Items.Add("Cash");
@@ -508,7 +509,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var safePrice = Math.Max(product.Price, product.PurchasePrice);
+        var requestedPrice = SaleTypeBox.SelectedItem?.ToString() == "Wholesale" && product.WholesalePrice > 0
+            ? product.WholesalePrice
+            : product.Price;
+        var safePrice = Math.Max(requestedPrice, product.PurchasePrice);
         if (existing is null)
             CartLines.Add(new CartLine(product.Name, product.Barcode, safePrice, 1,
                 product.PurchasePrice, product.StockUnit, product.Quantity));
@@ -655,7 +659,7 @@ public partial class MainWindow : Window
         foreach (var line in bill.Cart)
             CartLines.Add(new CartLine(line.Name, line.Barcode, line.SalePrice, line.Quantity,
                 line.PurchasePrice, line.StockUnit, int.MaxValue));
-        SaleTypeBox.SelectedItem = bill.SelectedSaleType == "Wholesale" ? "Khata" : bill.SelectedSaleType;
+        SaleTypeBox.SelectedItem = bill.SelectedSaleType;
         ApplyCustomerTypeFilter();
         CustomerBox.SelectedValue = bill.SelectedCustomerId ?? 0;
         PaymentModeBox.SelectedItem = bill.CustomerPaymentMode;
@@ -842,7 +846,7 @@ public partial class MainWindow : Window
             foreach (var item in items)
                 CartLines.Add(new CartLine(item.ProductName, item.Barcode, item.SalePrice, item.Quantity,
                     item.PurchasePrice, item.StockUnit, int.MaxValue));
-            SaleTypeBox.SelectedItem = selected.CustomerType == "Wholesale" ? "Khata" : selected.CustomerType;
+            SaleTypeBox.SelectedItem = selected.CustomerType;
             ApplyCustomerTypeFilter();
             CustomerBox.SelectedValue = selected.CustomerId ?? 0;
             PaymentModeBox.SelectedItem = selected.PaymentType == "Khata" ? "Credit" :

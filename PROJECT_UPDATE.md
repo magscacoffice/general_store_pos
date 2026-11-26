@@ -5,7 +5,7 @@
 > **Windows platform retirement:** Flutter Windows runner and its GitHub build/release workflow are being removed. Android Flutter remains the supported Flutter client; all future Windows UI, hardware, sync, and release work belongs in `desktop-wpf/`.
 > **Repository:** https://github.com/magscacoffice/general_store_pos
 > **Branch status (2026-11-22):** WPF migration PR #5 has been merged into `main`. The latest follow-up changes are grouped on `feature/complete-project-pendings` and are not merged yet; keep `main` stable until Android/WPF validation and owner acceptance are complete.
-> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive, and Wholesale customer removal. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android analyzer and full Flutter tests passed on both Windows and Ubuntu (Actions run #45003053357; 22/22 each). Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
+> **Current status (2026-11-22):** WPF migration is in `main`; the current follow-up branch now includes the cashier Save & Print/Save Only workflow, fixed 80mm receipt profile, per-user Gmail account UI, safe Khata archive; Wholesale customer restoration is being implemented. WPF Release build passed with 0 warnings/0 errors and 93/93 tests on Actions run #45002502830; this was validation-only and uploaded no artifact. Android analyzer and full Flutter tests passed on both Windows and Ubuntu (Actions run #45003053357; 22/22 each). Real two-Gmail cross-device sync, SpeedX SP60D, BC-86AC, PDF/backup, display/DPI and final Flutter/WPF parity acceptance remain owner-side gates. Production updater install remains blocked until the owner provides a code-signing certificate/thumbprint. Current follow-up work stays on `feature/complete-project-pendings`; do not merge until validation and owner acceptance are complete.
 
 ## Immediate owner priority — Windows cashier-first operation (2026-11-16)
 
@@ -29,7 +29,8 @@ Owner wants Windows WPF to remain usable for daily billing while other Windows m
 - [x] Keep Android's Flutter implementation, Android validation workflow, and existing mobile user experience intact; Android analyzer and test validation passed after the test harness fix.
 - [x] Separate native Windows WPF application exists under `desktop-wpf/`; Release build and 93 WPF tests pass. Android Flutter and shared SQLite remain separate. Full target-PC acceptance and final cutover remain pending.
 - [ ] Preserve business behaviour: sale posting, stock movements, purchase posting, returns, discounts (including percentage discounts), received amounts, customer balances/Khata ledger, profit calculations, invoice totals, and all existing validation rules.
-- [x] Preserve Walk-in and Khata customer types. **Wholesale customer option is retired in both Android Flutter and Windows WPF**; legacy customer classifications are mapped to Khata while historical sales/ledger rows remain intact. Payment method remains separate and existing discount/percentage behavior is preserved.
+- [x] Preserve Walk-in and Khata customer types and existing payment/discount behaviour.
+- [ ] Restore Wholesale as a selectable customer classification in both Android Flutter and Windows WPF, with Wholesale pricing and separate customer-account classification. Schema v18 already contains the required customer type and product wholesale-rate fields; no schema migration is planned. Existing Wholesale accounts that were converted to Khata by the old v9 upgrade cannot be automatically identified/reversed, so provide a manual customer-type reclassification option.
 - [x] No SQLite schema version, table/column names, IDs, database path, sync identifiers, tombstone semantics or backup format were changed by this follow-up.
 - [x] Windows remains local-first and uses the existing Windows-master Google Drive snapshot workflow. No Firebase/Firestore business-data sync was added to Windows.
 - [x] Ordinary sales, inventory, purchases, returns, printing, reports and local access remain local; network is used only for approved Drive sync and update checks.
@@ -185,7 +186,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 - [x] Android manual backup now creates a SQLite `VACUUM INTO` snapshot and validates integrity/required tables before export; restore rollback snapshot is created while the live connection is open and verified before the active DB pointer changes.
 - [x] Android and WPF Drive connections now enforce a verified Gmail binding per local app data profile; disconnect does not clear the binding. Separate businesses still require isolated app data/database profiles and separate Gmail accounts.
-- [x] Wholesale customer selection and the Wholesale-only product-rate editor have been removed from both clients; legacy database fields and old records remain for compatibility.
+- [ ] Wholesale selection is being restored on both clients; wholesale rate fields remain in schema v18 and will be used for default sale pricing when a positive wholesale rate exists (otherwise retail rate, never below purchase cost).
 - [x] Latest recorded CI validation is WPF Release build 0 warnings/0 errors and 97/97 tests, plus Flutter analyze and 22/22 tests on both Ubuntu and Windows. No package artifact was produced.
 - [ ] Physical Android/Windows paired-device, Google OAuth, printer, scanner, PDF, display/DPI and backup/restore acceptance remains owner-side.
 
@@ -282,3 +283,15 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [ ] Dispatch the manual unsigned Windows installer validation workflow only for this explicitly authorized test release; production signing is not included.
 - [ ] Verify both platform workflows on `main` after merge. This is an unsigned acceptance release only; it is not production approval.
 - [ ] Physical Android/Windows and Google Drive acceptance remains pending.
+
+
+## Owner-requested restoration — Wholesale customers & Android backup import on Windows (2026-11-26)
+
+- [x] Restore the Wholesale customer type in Android and Windows sale screens; retain separate customer filtering and sale record classification.
+- [x] Default item rate for Wholesale sales uses the product's positive `wholesalePrice`; if missing/zero, fall back to retail `price`; the final rate must not fall below `purchasePrice`. Cash, Credit and Partial payment choices remain supported for customer-account sales.
+- [x] Restore Wholesale customer creation and manual type reclassification in customer management. Existing customers previously converted from Wholesale to Khata by the historical schema-v9 upgrade are not automatically reversible; owner can manually reclassify them.
+- [x] Stop silently normalizing Wholesale party records to Khata when listing customers. Historical v9 migration remains unchanged for already-upgraded databases.
+- [x] Windows manual Restore accepts Android's raw `.db` export without a Windows `.sha256` sidecar; schema-v18 and SQLite integrity verification, current-database verified safety backup, staged copy and active-pointer switch remain required. The Windows Restore file picker explicitly supports Android and Windows backup sources.
+- [x] Added regression source tests for Wholesale sale posting/classification and Android-style backup import without a hash sidecar.
+- [ ] Run Flutter analyze/tests and WPF Release build/full tests on the branch. No APK, Windows ZIP, installer, or other build artifact is authorized by this task.
+- [ ] Physical Android/Windows validation remains required for Wholesale rate selection, account filtering, and manual backup file transfer/restore/restart.

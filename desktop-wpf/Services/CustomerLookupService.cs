@@ -19,7 +19,7 @@ public sealed class CustomerLookupService
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT id, name, COALESCE(phone, ''), COALESCE(balance, 0), CASE WHEN COALESCE(customer_type, 'Khata') = 'Wholesale' THEN 'Khata' ELSE COALESCE(customer_type, 'Khata') END
+            SELECT id, name, COALESCE(phone, ''), COALESCE(balance, 0), COALESCE(customer_type, 'Khata')
             FROM parties
             WHERE type = 'customer'
             ORDER BY name COLLATE NOCASE;

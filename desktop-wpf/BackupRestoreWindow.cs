@@ -125,7 +125,7 @@ public sealed class BackupRestoreWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Select a verified Khan Baba POS SQLite v18 backup",
+            Title = "Select an Android or Windows Khan Baba POS SQLite v18 backup",
             Filter = "Khan Baba POS database (*.db)|*.db|SQLite database (*.sqlite;*.sqlite3)|*.sqlite;*.sqlite3|All files (*.*)|*.*",
             CheckFileExists = true,
             Multiselect = false

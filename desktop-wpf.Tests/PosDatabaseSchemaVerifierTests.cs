@@ -107,7 +107,7 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task BackupAndRestoreKeepsCurrentDatabaseAndActivatesVerifiedStagedCopy()
+    public async Task BackupAndRestoreAcceptsAndroidStyleDatabaseWithoutShaSidecarAndPreservesCurrentDatabase()
     {
         var currentFixture = await CreateFixtureAsync();
         var restoreFixture = await CreateFixtureAsync();
@@ -118,7 +118,8 @@ public sealed class PosDatabaseSchemaVerifierTests
         try
         {
             File.Copy(currentFixture, currentPath);
-            File.Copy(restoreFixture, selectedBackup);
+            File.Copy(restoreFixture, selectedBackup); // Android manual export is a raw .db file without a Windows SHA sidecar.
+            Assert.False(File.Exists(selectedBackup + ".sha256"));
             await AddProductAsync(currentPath, "Current Database", "CURRENT-1");
             await AddProductAsync(selectedBackup, "Restore Source", "RESTORE-1");
             var currentHash = await Sha256Async(currentPath);
@@ -248,13 +249,13 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task WpfWholesalePartialAndCashSalesPostReceiptsToSameKhataAccount()
+    public async Task WpfWholesalePartialAndCashSalesPostReceiptsToSameWholesaleAccount()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Khata", 10);
+            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 10);
             var service = new SalePostingService(TestAccess);
             var partial = await service.CompleteSaleAsync(
                 new SaleCheckoutRequest(
@@ -264,7 +265,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     10,
                     10,
                     true,
-                    "Khata",
+                    "Wholesale",
                     "Local Windows User"),
                 path);
             Assert.Equal(36, partial.Subtotal, 2);
@@ -281,7 +282,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                     null,
                     0,
                     false,
-                    "Khata",
+                    "Wholesale",
                     "Local Windows User"),
                 path);
             Assert.Equal(18, cash.ReceivedAmount, 2);
@@ -295,7 +296,7 @@ public sealed class PosDatabaseSchemaVerifierTests
             await connection.OpenAsync();
             await using (var sales = connection.CreateCommand())
             {
-                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Khata' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
+                sales.CommandText = "SELECT COUNT(*), SUM(CASE WHEN customer_type='Wholesale' THEN 1 ELSE 0 END), SUM(received_amount), SUM(balance_due) FROM sales;";
                 await using var reader = await sales.ExecuteReaderAsync();
                 Assert.True(await reader.ReadAsync());
                 Assert.Equal(2, reader.GetInt32(0));
@@ -415,44 +416,49 @@ public sealed class PosDatabaseSchemaVerifierTests
     }
 
     [Fact]
-    public async Task WpfRetiredWholesaleSaleTypeIsRejectedBeforeChangingStock()
+    public async Task WpfWholesaleCustomerTypeCanPostCashSaleAndPreservesClassification()
     {
         var path = await CreateDisposableDatabaseAsync();
         var directory = Path.GetDirectoryName(path)!;
         try
         {
-            var customerId = await SeedSaleAccountAsync(path, "Khata", 5);
+            var customerId = await SeedSaleAccountAsync(path, "Wholesale", 5);
             var service = new SalePostingService(TestAccess);
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.CompleteSaleAsync(
-                    new SaleCheckoutRequest(
-                        [new SaleLineInput("WPF-WH-1", 1, 18)],
-                        customerId,
-                        "Cash",
-                        null,
-                        0,
-                        false,
-                        "Wholesale"),
-                    path));
+            var result = await service.CompleteSaleAsync(
+                new SaleCheckoutRequest(
+                    [new SaleLineInput("WPF-WH-1", 1, 18)],
+                    customerId,
+                    "Cash",
+                    null,
+                    0,
+                    false,
+                    "Wholesale",
+                    "Local Windows User"),
+                path);
+            Assert.Equal(18, result.FinalAmount, 2);
+            Assert.Equal(18, result.ReceivedAmount, 2);
+            Assert.Equal(0, result.BalanceDue, 2);
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = path,
                 Pooling = false
             }.ToString());
             await connection.OpenAsync();
+            await using var sale = connection.CreateCommand();
+            sale.CommandText = "SELECT customer_type, customer_id FROM sales LIMIT 1;";
+            await using var reader = await sale.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("Wholesale", reader.GetString(0));
+            Assert.Equal(customerId, reader.GetInt32(1));
             await using var stock = connection.CreateCommand();
             stock.CommandText = "SELECT quantity FROM products WHERE barcode='WPF-WH-1';";
-            Assert.Equal(5, Convert.ToInt32(await stock.ExecuteScalarAsync()));
-            await using var sales = connection.CreateCommand();
-            sales.CommandText = "SELECT COUNT(*) FROM sales;";
-            Assert.Equal(0, Convert.ToInt32(await sales.ExecuteScalarAsync()));
+            Assert.Equal(4, Convert.ToInt32(await stock.ExecuteScalarAsync()));
         }
         finally
         {
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
     }
-
     [Fact]
     public async Task WpfPurchaseUpdatesStockCostAndKeepsWholesaleRateAboveNewCost()
     {

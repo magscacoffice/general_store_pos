@@ -73,7 +73,11 @@ class SalesScreenState extends State<SalesScreen> {
     final purchasePrice = purchasePriceOverride ??
         (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
     final retailPrice = (product['price'] as num?)?.toDouble() ?? purchasePrice;
-    return retailPrice < purchasePrice ? purchasePrice : retailPrice;
+    final wholesalePrice = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
+    final requestedPrice = selectedSaleType == 'Wholesale' && wholesalePrice > 0
+        ? wholesalePrice
+        : retailPrice;
+    return requestedPrice < purchasePrice ? purchasePrice : requestedPrice;
   }
 
   Future<void> _loadCustomers() async {
@@ -161,7 +165,7 @@ class SalesScreenState extends State<SalesScreen> {
           'salePrice': (row['sale_price'] as num?)?.toDouble() ?? 0,
           'stockUnit': row['stock_unit']?.toString() ?? 'pcs', 'quantity': (row['quantity'] as num?)?.toInt() ?? 1,
         }).toList();
-        selectedSaleType = selected['customer_type']?.toString() == 'Wholesale' ? 'Khata' : (selected['customer_type']?.toString() ?? 'Walk-in');
+        selectedSaleType = selected['customer_type']?.toString() ?? 'Walk-in';
         selectedCustomerId = customer == null ? null : partyId;
         overallDiscount = (selected['discount'] as num?)?.toDouble() ?? 0;
         isPercentageDiscount = false;
@@ -337,7 +341,7 @@ class SalesScreenState extends State<SalesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   subtitle: Text(
-                                    'Barcode: ${product['barcode'] ?? '—'}  |  Stock: $stock ${product['stock_unit'] ?? 'pcs'}  |  Rate: Rs. ${product['price'] ?? 0}',
+                                    'Barcode: ${product['barcode'] ?? '—'}  |  Stock: $stock ${product['stock_unit'] ?? 'pcs'}  |  Rate: Rs. ${_salePriceForProduct(product)}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -1018,6 +1022,7 @@ class SalesScreenState extends State<SalesScreen> {
                             items: const [
                               DropdownMenuItem(value: 'Walk-in', child: Text('Walk-in / Retail')),
                               DropdownMenuItem(value: 'Khata', child: Text('Khata Customer')),
+                              DropdownMenuItem(value: 'Wholesale', child: Text('Wholesale Customer')),
                             ],
                             onChanged: (value) {
                               if (value != null) _setSaleType(value);
@@ -1037,7 +1042,7 @@ class SalesScreenState extends State<SalesScreen> {
                       DropdownButtonFormField<int>(
                         value: selectedCustomerId,
                         decoration: InputDecoration(
-                          labelText: 'Select Khata Customer',
+                          labelText: 'Select Customer',
                           isDense: true,
                           border: const OutlineInputBorder(),
                         ),
@@ -1058,7 +1063,7 @@ class SalesScreenState extends State<SalesScreen> {
                         padding: EdgeInsets.only(top: 6),
                         child: Text('Walk-in sale: cash payment.', style: TextStyle(color: Colors.black54)),
                       ),
-                    if (selectedSaleType == 'Khata') ...[
+                    if (selectedSaleType != 'Walk-in') ...[
                       const SizedBox(height: 8),
                       const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
