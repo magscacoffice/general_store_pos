@@ -14,3 +14,5 @@ public static class SalePricingPolicy
         return Math.Max(requestedPrice, purchasePrice);
     }
 }
+
+// Authorized main-branch test artifact build trigger: 2026-11-26.
