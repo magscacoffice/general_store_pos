@@ -13,3 +13,5 @@ class SalePriceCalculator {
     return requestedPrice < purchasePrice ? purchasePrice : requestedPrice;
   }
 }
+
+// Authorized main-branch test artifact build trigger: 2026-11-26.
