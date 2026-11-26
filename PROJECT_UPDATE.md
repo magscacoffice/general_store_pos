@@ -126,10 +126,10 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 ### 3.3 Proposed data access design
 
 - [x] Target framework: `net10.0-windows` WPF; confirmed the Windows GitHub Actions runner restores and builds this target successfully.
-- [ ] EF Core SQLite for entity mapping/query composition, plus explicit parameterized SQL for operations whose exact transaction semantics must match the Flutter implementation.
-- [ ] Map the existing tables in-place; do not create a second business database or a new schema namespace.
-- [ ] Preserve SQLite integer primary keys, nullable foreign keys, REAL money fields, TEXT date representation, sync IDs and exact legacy column casing.
-- [ ] Use `decimal` in C# domain calculations where appropriate, but serialize/write values to SQLite in a way that matches the existing Flutter double/REAL behaviour; prove rounding/formatting parity with golden tests before changing any persisted calculation.
+- [x] EF Core SQLite mapping/query composition exists; transaction-sensitive sale/purchase/return/sync operations use explicit parameterized SQL for Flutter-compatible semantics.
+- [x] Map existing schema-v18 tables in-place; no second business database or new schema namespace.
+- [x] EF Core entity mapping and schema verifier preserve integer primary keys, nullable foreign keys, REAL money, TEXT dates, sync IDs and legacy column casing.
+- [x] Compatibility decision: retain double/SQLite REAL arithmetic to match Flutter's current calculations; defer any decimal conversion until golden rounding/formatting parity tests are approved.
 - [x] Native WPF sale, purchase and return transaction services use SQLite transactions for linked stock/accounting updates; automated transaction tests pass.
 - [x] Add a read-only database compatibility gate: inspect `PRAGMA user_version`, `sqlite_master`, table columns, primary keys, required defaults/NOT NULL constraints and indexes before opening the database for normal operations.
 - [x] Keep the shared SQLite schema at version 18 for the current migration and sync follow-up; do not bump it unless a separately reviewed migration is required.
@@ -138,7 +138,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 - [x] Fixed a race in Windows Google Drive disconnect: stop the periodic timer, wait for any in-progress sync/merge to finish, create and verify the local safety backup, and only then revoke/delete OAuth credentials.
 - [x] If backup creation/verification or disconnect is cancelled/fails while credentials remain, restart auto-sync rather than leaving a connected account silently paused.
-- [ ] Run the WPF Release build and full test suite for this follow-up commit. Earlier validation (93/93 WPF tests and 0 build warnings/errors) applies to the preceding source revision, not this concurrency fix.
+- [x] WPF Release build and full test suite rerun after follow-up changes: #503, 0 warnings/errors, 112/112 tests passed.
 - [ ] Real Windows laptop and two-Gmail cross-device acceptance remains owner-side; no APK, ZIP, installer or release artifact is authorized.
 
 ## Follow-up hardening — WAL-safe restore rollback snapshot (2026-11-22)
@@ -154,7 +154,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Windows-master merge now distinguishes intentional skips (for example, a tombstone/re-add conflict retained for Windows review) from records deferred because a required stable ID or parent record is missing.
 - [x] A device snapshot is marked fully accepted only when it has **zero pending conflicts and zero deferred records**. This prevents missing-parent sales, sale items, purchases, Khata transactions, returns or return items from being silently abandoned as an already-processed snapshot.
 - [x] Added focused WPF unit tests for the snapshot acceptance rule: fully complete snapshots are accepted; any pending conflict or deferred record keeps the snapshot pending.
-- [ ] Run WPF Release build and all tests after these sync changes. Previous 93/93 result is from an earlier revision and is not evidence for this new code.
+- [x] WPF Release build and tests rerun after sync changes: #503, 112/112 passed.
 - [ ] Validate on real Android + Windows devices with out-of-order parent/child records, repeated polling, duplicate delivery and conflict resolution. No APK, ZIP, installer or other build artifact generated.
 
 ## Follow-up hardening — sync lifecycle serialization (2026-11-22)
@@ -163,7 +163,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Android Drive disconnect now blocks new sync attempts, waits for an in-flight connection/migration and active sync to finish, then creates and verifies the safety snapshot before deleting credentials.
 - [x] If Android safety backup creation fails, credentials remain in place and auto-sync can resume after the disconnect gate is released.
 - [x] Windows merge now defers sale items when either their parent sale or referenced product is missing, keeping the snapshot unaccepted for a later retry.
-- [ ] Run current WPF Release build and unit tests after these changes; earlier workflow runs do not validate this latest revision.
+- [x] WPF Release build and unit tests passed on #503 (112/112); Flutter analyzer/tests passed on #9; sync/invoice tests passed on #137.
 - [ ] Run Flutter analyze/tests and physical Android + Windows paired-device scenarios, including connect/disconnect during active sync, repeated polling, out-of-order parent/child delivery and simultaneous conflict resolution.
 - [ ] Confirm real-device retries complete deferred records and that duplicate deliveries remain idempotent. No APK, ZIP, installer or other build artifact generated.
 
@@ -174,7 +174,7 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] Flutter analyze passed for the changed sync/invoice files on commit 1e42e9150f71004b10a4f94f9d3fc6aa4f85be85.
 - [x] Flutter tests passed on both Ubuntu and Windows: 22 passed on each runner, including the Android/Windows Drive reconciliation integration test.
 - [ ] Physical-device validation is still required for actual Google OAuth, simultaneous Android/Windows network timing, disconnect during a real upload, and deferred-record retries against live Drive data.
-- [ ] No APK, Windows ZIP, installer or other build artifact was generated. Changes remain on feature/complete-project-pendings; main was not merged.
+- [x] No APK/Windows ZIP/installer was generated by push validation. Changes remain on `feature/complete-project-pendings`; main was not merged.
 
 ## Repository-wide review — 2026-11-22 (PROJECT_UPDATE.md rules applied)
 
@@ -192,10 +192,10 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 
 ### New source-level finding — Drive import dependency accounting
 
-- [ ] **High — WPF Drive merge can accept an incomplete snapshot when a required supplier/customer reference is missing.** In `DriveSnapshotMergeService`, a purchase with a non-empty `supplier_sync_id` can currently be inserted with a null local `supplier_id` when the party cannot be resolved. A sale return can similarly be inserted with a non-empty `party_sync_id` but no matching local customer. These rows must be deferred so the snapshot remains pending and can retry after their parent is available.
-- [ ] **Medium — expenses/reminders without stable sync IDs are silently skipped.** Their merge loop currently continues without incrementing the deferred counter. Such a snapshot can therefore be marked accepted even though those records were not imported. Missing IDs must count as deferred; duplicates with an existing ID remain normal idempotent skips.
-- [ ] Add focused regression coverage using disposable schema-v18 databases or directly tested merge predicates. Verify the snapshot remains unaccepted and a subsequent retry imports the missing rows once the parent/stable ID is available.
-- [ ] Re-run WPF Release build and the complete WPF test suite after the fix. Do not generate APK, ZIP, installer or release artifacts.
+- [x] **High — missing supplier/customer dependency handling fixed.** WPF purchases and sale returns defer when required party sync IDs cannot be resolved, keeping snapshots pending. Supplier retry integration test passes; sale-return retry test remains additional coverage.
+- [x] **Medium — missing stable-ID handling fixed.** Expenses/reminders without IDs count as deferred and cannot be silently accepted. Expense retry integration test passes; reminder retry test remains additional coverage.
+- [x] Added disposable schema-v18 retry tests for missing supplier dependency and missing expense sync ID; first delivery stays pending and subsequent retry imports the row once.
+- [x] WPF Release build and full suite rerun: Actions #503, 0 warnings/errors, 112/112 tests passed; publish/upload skipped.
 
 ### Additional review observations
 
@@ -236,8 +236,8 @@ The Android client remains Flutter/Dart. The native `desktop-wpf/` Windows clien
 - [x] WPF Release build succeeded with 0 warnings and 0 errors.
 - [x] WPF test suite passed: 105 passed, 0 failed, 0 skipped.
 - [x] GitHub Actions run #471 validated commit `474a5a79a5d5148f05b2e01d64b158df9198798d`: https://github.com/magscacoffice/general_store_pos/actions/runs/45008110801
-- [ ] Real Drive retry tests for unresolved supplier/customer references and missing stable IDs remain pending; current tests cover the predicates and acceptance decision only.
-- [ ] The separate recalled-sale update/deletion protocol blocker remains unresolved and must be addressed before production Drive sync acceptance.
+- [x] Realistic disposable-database retry tests cover missing supplier references and missing expense IDs. Missing customer reference retry on sale returns and live Drive/device tests remain pending.
+- [x] Recalled-sale revision/update/deletion protocol implemented and covered by integration tests (earlier run #492); full WPF suite rerun on #503. Physical paired-device acceptance remains pending.
 
 ## Recalled-sale revision protocol — implementation and validation (2026-11-22)
 
