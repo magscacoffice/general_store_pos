@@ -509,10 +509,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var requestedPrice = SaleTypeBox.SelectedItem?.ToString() == "Wholesale" && product.WholesalePrice > 0
-            ? product.WholesalePrice
-            : product.Price;
-        var safePrice = Math.Max(requestedPrice, product.PurchasePrice);
+        var safePrice = SalePricingPolicy.DefaultPrice(
+            SaleTypeBox.SelectedItem?.ToString() ?? "Walk-in",
+            product.Price,
+            product.WholesalePrice,
+            product.PurchasePrice);
         if (existing is null)
             CartLines.Add(new CartLine(product.Name, product.Barcode, safePrice, 1,
                 product.PurchasePrice, product.StockUnit, product.Quantity));

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'db_helper.dart';
+import 'sale_price_calculator.dart';
 
 class ScannerScreen extends StatefulWidget {
   final bool captureBarcodeOnly;
@@ -34,10 +35,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
     final cost = purchasePriceOverride ?? (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-    final retail = (product['price'] as num?)?.toDouble() ?? cost;
-    final wholesale = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-    final requested = widget.customerType == 'Wholesale' && wholesale > 0 ? wholesale : retail;
-    return requested < cost ? cost : requested;
+    return SalePriceCalculator.defaultPrice(
+      customerType: widget.customerType,
+      retailPrice: (product['price'] as num?)?.toDouble() ?? cost,
+      wholesalePrice: (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0,
+      purchasePrice: cost,
+    );
   }
 
   @override

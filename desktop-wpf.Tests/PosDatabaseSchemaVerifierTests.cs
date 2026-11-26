@@ -106,6 +106,18 @@ public sealed class PosDatabaseSchemaVerifierTests
         await command.ExecuteNonQueryAsync();
     }
 
+    [Theory]
+    [InlineData("Wholesale", 22d, 18d, 10d, 18d)]
+    [InlineData("Wholesale", 22d, 0d, 10d, 22d)]
+    [InlineData("Khata", 22d, 18d, 10d, 22d)]
+    [InlineData("Wholesale", 22d, 15d, 20d, 20d)]
+    public void WpfSalePricingPolicyUsesWholesaleFallbackAndCostFloor(
+        string customerType, double retailPrice, double wholesalePrice, double purchasePrice, double expected)
+    {
+        Assert.Equal(expected, SalePricingPolicy.DefaultPrice(
+            customerType, retailPrice, wholesalePrice, purchasePrice), 2);
+    }
+
     [Fact]
     public async Task BackupAndRestoreAcceptsAndroidStyleDatabaseWithoutShaSidecarAndPreservesCurrentDatabase()
     {

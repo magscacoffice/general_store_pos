@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 
 import 'db_helper.dart';
+import 'sale_price_calculator.dart';
 import 'scanner_screen.dart';
 import 'printer_screen.dart';
 
@@ -70,14 +71,14 @@ class SalesScreenState extends State<SalesScreen> {
   }
 
   double _salePriceForProduct(Map<String, dynamic> product, {double? purchasePriceOverride}) {
-    final purchasePrice = purchasePriceOverride ??
-        (product['purchasePrice'] as num?)?.toDouble() ?? 0.0;
-    final retailPrice = (product['price'] as num?)?.toDouble() ?? purchasePrice;
-    final wholesalePrice = (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0;
-    final requestedPrice = selectedSaleType == 'Wholesale' && wholesalePrice > 0
-        ? wholesalePrice
-        : retailPrice;
-    return requestedPrice < purchasePrice ? purchasePrice : requestedPrice;
+    return SalePriceCalculator.defaultPrice(
+      customerType: selectedSaleType,
+      retailPrice: (product['price'] as num?)?.toDouble() ?? purchasePriceOverride ??
+          (product['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+      wholesalePrice: (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0,
+      purchasePrice: purchasePriceOverride ??
+          (product['purchasePrice'] as num?)?.toDouble() ?? 0.0,
+    );
   }
 
   Future<void> _loadCustomers() async {
