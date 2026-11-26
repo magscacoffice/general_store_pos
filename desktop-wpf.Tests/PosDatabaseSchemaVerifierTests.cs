@@ -39,6 +39,27 @@ public sealed class PosDatabaseSchemaVerifierTests
         throw new DirectoryNotFoundException("Could not locate the repository's lib/db_helper.dart schema source.");
     }
 
+    private static ValidatedDriveSnapshot ValidateMutatedSnapshot(
+        string deviceId, Dictionary<string, object?> data)
+    {
+        var options = new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new DartCompatibleDoubleConverter() }
+        };
+        var compactData = JsonSerializer.Serialize(data, options);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(compactData)))
+            .ToLowerInvariant();
+        var envelope = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 2,
+            deviceId,
+            snapshotHash = hash,
+            data
+        }, options);
+        return DriveSnapshotEnvelopeValidator.ValidateDeviceEnvelope(envelope);
+    }
+
     private static async Task<string> CreateFixtureAsync(string? replacement = null)
     {
         var root = FindRepositoryRoot();
@@ -1980,6 +2001,168 @@ public sealed class PosDatabaseSchemaVerifierTests
         }
     }
 
+
+    [Fact]
+    public async Task DriveMergeDefersPurchaseUntilSupplierReferenceExistsThenRetries()
+    {
+        var sourceFixture = await CreateFixtureAsync();
+        var sourceDirectory = Path.Combine(Path.GetTempPath(), "khan-baba-drive-supplier-retry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sourceDirectory);
+        var sourcePath = Path.Combine(sourceDirectory, "source.db");
+        File.Copy(sourceFixture, sourcePath);
+        File.Delete(sourceFixture);
+        var targetPath = await CreateDisposableDatabaseAsync();
+        var targetDirectory = Path.GetDirectoryName(targetPath)!;
+        try
+        {
+            await AddProductAsync(sourcePath, "Supplier Retry Product", "DRIVE-SUP-RETRY-1");
+            var sourceSupplierId = await SeedSupplierAsync(sourcePath, "Supplier Retry Account");
+            long sourceProductId;
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = sourcePath, Pooling = false
+            }.ToString()))
+            {
+                await source.OpenAsync();
+                await using var product = source.CreateCommand();
+                product.CommandText = "SELECT id FROM products WHERE barcode='DRIVE-SUP-RETRY-1' LIMIT 1;";
+                sourceProductId = Convert.ToInt64(await product.ExecuteScalarAsync());
+                await using var purchase = source.CreateCommand();
+                purchase.CommandText = """
+                    INSERT INTO purchases(product_id,product_name,barcode,quantity,unit_cost,total_cost,
+                        supplier_id,sync_id,supplier_sync_id,date)
+                    VALUES($product,'Supplier Retry Product','DRIVE-SUP-RETRY-1',2,5,10,
+                        $supplier,'remote-purchase-retry','wpf-supplier-sync','2026-11-26 09:00:00');
+                    """;
+                purchase.Parameters.AddWithValue("$product", sourceProductId);
+                purchase.Parameters.AddWithValue("$supplier", sourceSupplierId);
+                await purchase.ExecuteNonQueryAsync();
+            }
+
+            var exported = await new DriveSnapshotExportService().ExportAsync(sourcePath);
+            var data = new Dictionary<string, object?>(exported.Data);
+            var parties = (System.Collections.IList)data["parties"]!;
+            for (var i = parties.Count - 1; i >= 0; i--)
+            {
+                if (parties[i] is Dictionary<string, object?> party &&
+                    string.Equals(Convert.ToString(party["sync_id"]), "wpf-supplier-sync", StringComparison.Ordinal))
+                    parties.RemoveAt(i);
+            }
+            var snapshot = ValidateMutatedSnapshot("supplier-dependency-device", data);
+            var mergeService = new DriveSnapshotMergeService();
+
+            var first = await mergeService.MergeAsync(snapshot, snapshot.DeviceId, targetPath);
+            Assert.False(first.SnapshotFullyAccepted);
+            await using (var target = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Pooling = false
+            }.ToString()))
+            {
+                await target.OpenAsync();
+                await using var count = target.CreateCommand();
+                count.CommandText = "SELECT COUNT(*) FROM purchases WHERE sync_id='remote-purchase-retry';";
+                Assert.Equal(0, Convert.ToInt32(await count.ExecuteScalar()));
+                await using var supplier = target.CreateCommand();
+                supplier.CommandText = """
+                    INSERT INTO parties(name,phone,type,customer_type,sync_id,balance)
+                    VALUES('Supplier Retry Account','03001112222','supplier',NULL,'wpf-supplier-sync',0);
+                    """;
+                await supplier.ExecuteNonQueryAsync();
+            }
+
+            var retry = await mergeService.MergeAsync(snapshot, snapshot.DeviceId, targetPath);
+            Assert.True(retry.SnapshotFullyAccepted);
+            await using var verify = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Pooling = false
+            }.ToString());
+            await verify.OpenAsync();
+            await using var purchaseCheck = verify.CreateCommand();
+            purchaseCheck.CommandText = """
+                SELECT COUNT(*), MIN(supplier_id), MIN(supplier_sync_id)
+                FROM purchases WHERE sync_id='remote-purchase-retry';
+                """;
+            await using var reader = await purchaseCheck.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(1, reader.GetInt32(0));
+            Assert.False(reader.IsDBNull(1));
+            Assert.Equal("wpf-supplier-sync", reader.GetString(2));
+        }
+        finally
+        {
+            if (Directory.Exists(sourceDirectory)) Directory.Delete(sourceDirectory, recursive: true);
+            if (Directory.Exists(targetDirectory)) Directory.Delete(targetDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DriveMergeDefersExpenseWithoutStableIdAndImportsOnRetryAfterIdIsAssigned()
+    {
+        var sourceFixture = await CreateFixtureAsync();
+        var sourceDirectory = Path.Combine(Path.GetTempPath(), "khan-baba-drive-expense-retry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sourceDirectory);
+        var sourcePath = Path.Combine(sourceDirectory, "source.db");
+        File.Copy(sourceFixture, sourcePath);
+        File.Delete(sourceFixture);
+        var targetPath = await CreateDisposableDatabaseAsync();
+        var targetDirectory = Path.GetDirectoryName(targetPath)!;
+        try
+        {
+            await using (var source = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = sourcePath, Pooling = false
+            }.ToString()))
+            {
+                await source.OpenAsync();
+                await using var expense = source.CreateCommand();
+                expense.CommandText = """
+                    INSERT INTO expenses(title,amount,date)
+                    VALUES('Deferred Expense Retry',9,'2026-11-26 09:10:00');
+                    """;
+                await expense.ExecuteNonQueryAsync();
+            }
+
+            var exported = await new DriveSnapshotExportService().ExportAsync(sourcePath);
+            var data = new Dictionary<string, object?>(exported.Data);
+            var expenses = (System.Collections.IList)data["expenses"]!;
+            Assert.Single(expenses);
+            var row = (Dictionary<string, object?>)expenses[0]!;
+            row["sync_id"] = "";
+            var missingIdSnapshot = ValidateMutatedSnapshot("expense-retry-device", data);
+            var mergeService = new DriveSnapshotMergeService();
+
+            var first = await mergeService.MergeAsync(missingIdSnapshot, missingIdSnapshot.DeviceId, targetPath);
+            Assert.False(first.SnapshotFullyAccepted);
+            await using (var target = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Pooling = false
+            }.ToString()))
+            {
+                await target.OpenAsync();
+                await using var count = target.CreateCommand();
+                count.CommandText = "SELECT COUNT(*) FROM expenses WHERE title='Deferred Expense Retry';";
+                Assert.Equal(0, Convert.ToInt32(await count.ExecuteScalar()));
+            }
+
+            row["sync_id"] = "remote-expense-retry";
+            var retrySnapshot = ValidateMutatedSnapshot("expense-retry-device", data);
+            var retry = await mergeService.MergeAsync(retrySnapshot, retrySnapshot.DeviceId, targetPath);
+            Assert.True(retry.SnapshotFullyAccepted);
+            await using var verify = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = targetPath, Pooling = false
+            }.ToString());
+            await verify.OpenAsync();
+            await using var countRetry = verify.CreateCommand();
+            countRetry.CommandText = "SELECT COUNT(*) FROM expenses WHERE sync_id='remote-expense-retry';";
+            Assert.Equal(1, Convert.ToInt32(await countRetry.ExecuteScalar()));
+        }
+        finally
+        {
+            if (Directory.Exists(sourceDirectory)) Directory.Delete(sourceDirectory, recursive: true);
+            if (Directory.Exists(targetDirectory)) Directory.Delete(targetDirectory, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task DriveSnapshotRoundTripImportsAllBusinessCollectionsMapsPartyAliasesAndIsIdempotent()
