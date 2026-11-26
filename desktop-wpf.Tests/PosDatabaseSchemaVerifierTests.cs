@@ -2141,7 +2141,7 @@ public sealed class PosDatabaseSchemaVerifierTests
                 await target.OpenAsync();
                 await using var count = target.CreateCommand();
                 count.CommandText = "SELECT COUNT(*) FROM expenses WHERE title='Deferred Expense Retry';";
-                Assert.Equal(0, Convert.ToInt32(await count.ExecuteScalar()));
+                Assert.Equal(0, Convert.ToInt32(count.ExecuteScalar()));
             }
 
             row["sync_id"] = "remote-expense-retry";
